@@ -1,0 +1,427 @@
+:root {
+  color: #18202f;
+  background: #f7f5ef;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: #0b6b7a;
+  text-decoration: none;
+}
+
+.app-shell {
+  max-width: 1260px;
+  margin: 0 auto;
+  padding: 28px 22px 44px;
+}
+
+.topbar {
+  align-items: flex-end;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0 0 5px;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  line-height: 1;
+  margin: 0;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 12px;
+}
+
+.view-tabs,
+.toolbar,
+.link-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.view-tabs {
+  background: #ffffff;
+  border: 1px solid #dedbd0;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.view-tabs button,
+.icon-button,
+.upload-button,
+.primary-button {
+  align-items: center;
+  border: 0;
+  border-radius: 7px;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+.view-tabs button {
+  background: transparent;
+  color: #475467;
+}
+
+.view-tabs button.active,
+.primary-button {
+  background: #18202f;
+  color: #ffffff;
+}
+
+.metric-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.metric,
+.toolbar,
+.table-wrap,
+.detail-block,
+.investor-card,
+.notice {
+  background: #ffffff;
+  border: 1px solid #dedbd0;
+  border-radius: 8px;
+}
+
+.metric {
+  align-items: center;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: 36px 1fr;
+  padding: 14px;
+}
+
+.metric-icon {
+  align-items: center;
+  background: #e8f3f1;
+  border-radius: 7px;
+  color: #0b6b7a;
+  display: flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.metric span {
+  color: #667085;
+  font-size: 0.82rem;
+}
+
+.metric strong {
+  font-size: 1.35rem;
+}
+
+.notice {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+.toolbar {
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.toolbar-title {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-right: 4px;
+}
+
+input,
+select,
+textarea {
+  background: #fbfaf7;
+  border: 1px solid #d7d3c8;
+  border-radius: 7px;
+  color: #18202f;
+  min-height: 38px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.toolbar input,
+.toolbar select {
+  max-width: 180px;
+}
+
+.icon-button,
+.upload-button {
+  background: #e8f3f1;
+  color: #0b6b7a;
+}
+
+.upload-button input {
+  display: none;
+}
+
+.table-wrap {
+  overflow: hidden;
+}
+
+.table-header,
+.company-summary {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 2.1fr 1fr 1.2fr 1fr 78px;
+  width: 100%;
+}
+
+.table-header {
+  background: #f0eee6;
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 10px 16px 10px 46px;
+  text-transform: uppercase;
+}
+
+.company-row + .company-row {
+  border-top: 1px solid #ece7dc;
+}
+
+.company-summary {
+  background: #ffffff;
+  border: 0;
+  color: inherit;
+  min-height: 72px;
+  padding: 12px 16px;
+  text-align: left;
+}
+
+.company-summary span {
+  min-width: 0;
+}
+
+.company-summary small,
+dd,
+dt {
+  color: #667085;
+}
+
+.company-summary strong,
+.company-summary small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  color: #667085;
+  margin-left: -4px;
+  position: absolute;
+}
+
+.status-pill {
+  background: #fff2d7;
+  border-radius: 999px;
+  color: #8a5b0c;
+  display: inline-flex;
+  font-size: 0.82rem;
+  justify-content: center;
+  padding: 6px 10px;
+}
+
+.score {
+  align-items: center;
+  background: #18202f;
+  border-radius: 7px;
+  color: #ffffff;
+  display: flex;
+  font-weight: 800;
+  height: 38px;
+  justify-content: center;
+  width: 44px;
+}
+
+.detail-grid {
+  background: #fbfaf7;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.15fr 0.85fr;
+  padding: 14px;
+}
+
+.detail-block {
+  padding: 14px;
+}
+
+.detail-block.wide {
+  grid-column: 1 / -1;
+}
+
+.detail-block p {
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.link-row a {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+dl {
+  display: grid;
+  gap: 6px 14px;
+  grid-template-columns: 90px 1fr;
+  margin: 14px 0 0;
+}
+
+dt {
+  font-weight: 700;
+}
+
+dd {
+  margin: 0;
+}
+
+label {
+  color: #475467;
+  display: grid;
+  font-size: 0.85rem;
+  font-weight: 700;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.score-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 10px;
+}
+
+.score-input input {
+  text-align: center;
+}
+
+.total-box {
+  align-items: center;
+  background: #e8f3f1;
+  border-radius: 7px;
+  color: #0b6b7a;
+  display: grid;
+  justify-items: center;
+  min-height: 66px;
+}
+
+.total-box span {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.total-box strong {
+  font-size: 1.45rem;
+}
+
+.investor-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.investor-card {
+  padding: 14px;
+}
+
+.investor-card-header {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 92px;
+}
+
+.empty {
+  color: #667085;
+  margin: 0;
+  padding: 28px;
+}
+
+@media (max-width: 920px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .metric-grid,
+  .detail-grid,
+  .investor-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .table-header {
+    display: none;
+  }
+
+  .company-summary {
+    grid-template-columns: 1fr;
+    padding-left: 44px;
+  }
+
+  .detail-block.wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .app-shell {
+    padding: 18px 12px 34px;
+  }
+
+  .metric-grid,
+  .detail-grid,
+  .investor-grid,
+  .score-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar input,
+  .toolbar select,
+  .upload-button {
+    max-width: none;
+    width: 100%;
+  }
+}
