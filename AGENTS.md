@@ -72,6 +72,14 @@ Never commit:
 - Scraping is not allowed unless explicitly requested.
 - Prioritize automation that saves human research time and avoids unnecessary Crunchbase export usage.
 
+## Action Queue Rules
+
+- Agent outputs should inform action items, but action items must remain human-in-the-loop.
+- Never send outreach automatically.
+- Avoid duplicate open action items for the same target and action type.
+- Preserve user-entered action notes, statuses, due dates, and outreach drafts when rebuilding queues.
+- Prioritize actions that create useful conversations or unblock outreach.
+
 ## Done Means
 
 A feature is done when:

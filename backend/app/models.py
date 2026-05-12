@@ -57,6 +57,7 @@ class InvestorUpdate(BaseModel):
     contact_path: str = ""
     relationship_strength: str = "Unknown"
     enrichment_status: str = "New"
+    recommended_research_task: str = ""
     next_action: str = ""
     priority_score: int = Field(default=0, ge=0, le=100)
     notes: str = ""
@@ -64,3 +65,11 @@ class InvestorUpdate(BaseModel):
     last_enriched_at: str = ""
     enrichment_warnings: str | list[str] = ""
     missing_fields: str | list[str] = ""
+
+
+class ActionUpdate(BaseModel):
+    status: str = "New"
+    due_date: str = ""
+    notes: str = ""
+    recommended_action: str = ""
+    outreach_draft: str = ""

@@ -153,9 +153,11 @@ curl -X POST http://127.0.0.1:8000/imports/crunchbase/confirm \
 - `GET /debug/db`
 - `GET /companies`
 - `GET /companies/{company_id}`
+- `DELETE /companies/{company_id}`
 - `GET /api/health`
 - `GET /api/companies`
 - `GET /api/companies/{company_id}`
+- `DELETE /api/companies/{company_id}`
 - `PATCH /api/companies/{company_id}`
 - `POST /api/import/companies`
 - `GET /api/filter-options`
@@ -207,6 +209,34 @@ From the UI:
 Priority score is 0-100. The engine adds weight for lead investments, high-fit companies, repeated appearances, target-sector overlap, Seed/Series A/Series B focus, contact paths, and relevant partners. It subtracts weight when an investor has no firm URL data or no relationship data.
 
 Research shortcuts are generated links only. They point to Google, LinkedIn search, Crunchbase search, portfolio search, partner/sector search, and funding-round search for the top tracked company. The app does not scrape these pages; the links just save time and avoid burning extra Crunchbase export rows.
+
+Companies can be deleted from an expanded company row. Deleting a company also removes saved agent runs for that company, but it does not delete investor records; rebuild investor profiles afterward if you want derived portfolio counts to reflect the deletion.
+
+## Weekly Action Queue
+
+The Weekly Action Queue turns existing local company, investor, and agent-run data into prioritized research and networking tasks. It helps answer what to research next, which investor profiles need enrichment, which companies need hiring validation, what missing fields block outreach, and which targets are ready for a human-reviewed outreach step.
+
+Rebuild the weekly queue:
+
+```bash
+curl -X POST http://127.0.0.1:8000/actions/rebuild-weekly
+```
+
+View open weekly actions:
+
+```bash
+curl http://127.0.0.1:8000/actions/weekly
+```
+
+Generate an editable outreach draft for one action:
+
+```bash
+curl -X POST http://127.0.0.1:8000/actions/1/generate-outreach-draft
+```
+
+From the UI, open `This Week`, click `Rebuild Weekly Queue`, then mark actions in progress, done, or skipped. Outreach drafts are deterministic text helpers saved into the action item; the app never sends outreach automatically.
+
+Priority scores use local signals: high-fit companies, actions that unblock outreach, lead investors, investors appearing across multiple tracked companies, Crunchbase CSV source data, Seed/Series A/Series B stage, saved contact paths, missing critical fields, and low data quality. Research links are generated shortcuts only and do not scrape any page.
 
 ## AI Agent Workflows
 

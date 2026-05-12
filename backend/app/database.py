@@ -91,6 +91,7 @@ def init_db() -> None:
                 contact_path TEXT DEFAULT '',
                 relationship_strength TEXT DEFAULT 'Unknown',
                 enrichment_status TEXT DEFAULT 'New',
+                recommended_research_task TEXT DEFAULT '',
                 next_action TEXT DEFAULT '',
                 priority_score INTEGER DEFAULT 0,
                 notes TEXT DEFAULT '',
@@ -112,10 +113,31 @@ def init_db() -> None:
                 status TEXT NOT NULL DEFAULT 'completed',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS action_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action_type TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id INTEGER DEFAULT 0,
+                target_name TEXT DEFAULT '',
+                priority_score INTEGER DEFAULT 0,
+                reason TEXT DEFAULT '',
+                recommended_action TEXT DEFAULT '',
+                status TEXT DEFAULT 'New',
+                due_date TEXT DEFAULT '',
+                source TEXT DEFAULT 'System',
+                research_links TEXT DEFAULT '',
+                outreach_draft TEXT DEFAULT '',
+                notes TEXT DEFAULT '',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                completed_at TEXT DEFAULT ''
+            );
             """
         )
         ensure_company_columns(conn)
         ensure_investor_columns(conn)
+        ensure_action_item_columns(conn)
         ensure_indexes(conn)
 
 
@@ -171,6 +193,7 @@ def ensure_investor_columns(conn: sqlite3.Connection) -> None:
         "talent_or_platform_contact": "TEXT DEFAULT ''",
         "relationship_strength": "TEXT DEFAULT 'Unknown'",
         "enrichment_status": "TEXT DEFAULT 'New'",
+        "recommended_research_task": "TEXT DEFAULT ''",
         "next_action": "TEXT DEFAULT ''",
         "data_source": "TEXT DEFAULT ''",
         "last_enriched_at": "TEXT DEFAULT ''",
@@ -182,6 +205,33 @@ def ensure_investor_columns(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE investors ADD COLUMN {column} {definition}")
 
 
+def ensure_action_item_columns(conn: sqlite3.Connection) -> None:
+    existing_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(action_items)").fetchall()
+    }
+    migrations = {
+        "action_type": "TEXT DEFAULT ''",
+        "target_type": "TEXT DEFAULT 'General'",
+        "target_id": "INTEGER DEFAULT 0",
+        "target_name": "TEXT DEFAULT ''",
+        "priority_score": "INTEGER DEFAULT 0",
+        "reason": "TEXT DEFAULT ''",
+        "recommended_action": "TEXT DEFAULT ''",
+        "status": "TEXT DEFAULT 'New'",
+        "due_date": "TEXT DEFAULT ''",
+        "source": "TEXT DEFAULT 'System'",
+        "research_links": "TEXT DEFAULT ''",
+        "outreach_draft": "TEXT DEFAULT ''",
+        "notes": "TEXT DEFAULT ''",
+        "created_at": "TEXT DEFAULT ''",
+        "updated_at": "TEXT DEFAULT ''",
+        "completed_at": "TEXT DEFAULT ''",
+    }
+    for column, definition in migrations.items():
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE action_items ADD COLUMN {column} {definition}")
+
+
 def ensure_indexes(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
@@ -191,6 +241,9 @@ def ensure_indexes(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_companies_latest_funding_round ON companies(latest_funding_round);
         CREATE INDEX IF NOT EXISTS idx_investors_investor_name ON investors(investor_name);
         CREATE INDEX IF NOT EXISTS idx_agent_runs_target ON agent_runs(target_type, target_id, agent_type);
+        CREATE INDEX IF NOT EXISTS idx_action_items_target ON action_items(target_type, target_id, action_type);
+        CREATE INDEX IF NOT EXISTS idx_action_items_status ON action_items(status);
+        CREATE INDEX IF NOT EXISTS idx_action_items_priority ON action_items(priority_score);
         """
     )
 

@@ -416,6 +416,25 @@ label {
   justify-content: flex-end;
 }
 
+.detail-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.danger-button {
+  align-items: center;
+  background: #fff2f0;
+  border: 0;
+  border-radius: 7px;
+  color: #b42318;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
 .agent-subsection {
   border-top: 1px solid #ece7dc;
   margin-top: 18px;
@@ -739,6 +758,79 @@ label {
   padding: 7px 10px;
 }
 
+.weekly-dashboard {
+  display: grid;
+  gap: 14px;
+}
+
+.weekly-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.weekly-table {
+  overflow-x: auto;
+}
+
+.action-table-header,
+.action-summary {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 80px 150px 1fr 1.2fr 1.4fr 132px 110px;
+  min-width: 1120px;
+}
+
+.action-table-header {
+  background: #f0eee6;
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 10px 14px;
+  text-transform: uppercase;
+}
+
+.action-row + .action-row {
+  border-top: 1px solid #ece7dc;
+}
+
+.action-summary {
+  background: #ffffff;
+  border: 0;
+  color: inherit;
+  padding: 12px 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.action-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.action-summary small {
+  color: #667085;
+  display: block;
+}
+
+.action-row-actions {
+  align-items: center;
+  background: #fbfaf7;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.action-detail {
+  background: #fbfaf7;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 14px;
+}
+
 .run-history {
   margin-top: 14px;
 }
@@ -765,7 +857,9 @@ label {
   .investor-grid,
   .import-metrics,
   .enrichment-metrics,
+  .weekly-metrics,
   .investor-detail-grid,
+  .action-detail,
   .brief-sections {
     grid-template-columns: 1fr 1fr;
   }
@@ -815,7 +909,9 @@ label {
   .score-grid,
   .import-metrics,
   .enrichment-metrics,
+  .weekly-metrics,
   .investor-detail-grid,
+  .action-detail,
   .brief-sections {
     grid-template-columns: 1fr;
   }

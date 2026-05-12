@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .agents import generate_company_networking_brief, generate_investor_mapping_brief
 from .database import DB_PATH, get_connection, init_db, seed_if_empty
-from .models import CompanyUpdate, InvestorUpdate
+from .models import ActionUpdate, CompanyUpdate, InvestorUpdate
 
 app = FastAPI(title="Startup Networking Tracker")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
@@ -141,6 +141,7 @@ INVESTOR_PROFILE_FIELDS = [
     "contact_path",
     "relationship_strength",
     "enrichment_status",
+    "recommended_research_task",
     "next_action",
     "priority_score",
     "notes",
@@ -175,6 +176,16 @@ TARGET_INVESTOR_SECTORS = {
     "operations",
 }
 
+OPEN_ACTION_STATUSES = {"New", "Planned", "In Progress", "Waiting"}
+OUTREACH_UNBLOCKING_ACTIONS = {
+    "Find Partner",
+    "Find Contact Path",
+    "Check Hiring",
+    "Draft Outreach",
+    "Send Outreach",
+    "Review Missing Data",
+}
+
 COMPANY_SELECT = """
     SELECT *,
         market_fit_score + personal_fit_score + hiring_fit_score + network_fit_score AS total_score
@@ -199,7 +210,14 @@ COMPANY_LIST_SELECT = """
         network_fit_score,
         market_fit_score + personal_fit_score + hiring_fit_score + network_fit_score AS total_score,
         data_source,
-        data_quality_score
+        data_quality_score,
+        (
+            SELECT COUNT(*)
+            FROM action_items
+            WHERE action_items.target_type = 'Company'
+                AND action_items.target_id = companies.id
+                AND action_items.status NOT IN ('Done', 'Skipped')
+        ) AS open_action_count
     FROM companies
 """
 
@@ -246,6 +264,12 @@ def investor_row_to_dict(row: Any) -> dict[str, Any]:
         data,
         data["missing_fields"],
     )
+    return data
+
+
+def action_row_to_dict(row: Any) -> dict[str, Any]:
+    data = dict(row)
+    data["research_links"] = parse_json_dict(data.get("research_links") or "")
     return data
 
 
@@ -820,6 +844,7 @@ def build_investor_profile_data(
         "contact_path": (existing or {}).get("contact_path") or "",
         "relationship_strength": (existing or {}).get("relationship_strength") or "Unknown",
         "enrichment_status": enrichment_status,
+        "recommended_research_task": recommended_task,
         "next_action": (existing or {}).get("next_action") or recommended_task,
         "priority_score": priority,
         "notes": (existing or {}).get("notes") or "",
@@ -997,6 +1022,18 @@ def parse_json_list(value: str) -> list[str]:
     return [str(parsed)]
 
 
+def parse_json_dict(value: str) -> dict[str, str]:
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except Exception:
+        return {}
+    if isinstance(parsed, dict):
+        return {str(key): str(val) for key, val in parsed.items()}
+    return {}
+
+
 def build_research_links(investor: dict[str, Any]) -> dict[str, str]:
     name = investor.get("investor_name") or ""
     top_company = split_tags(investor.get("top_tracked_companies") or "")[:1]
@@ -1056,6 +1093,335 @@ def recommend_research_task_from_investor_row(
     if investor.get("sector_focus"):
         return f"Look for portfolio companies similar to {investor['sector_focus']}."
     return investor.get("next_action") or "Review investor profile and add relationship context."
+
+
+def latest_agent_outputs(conn: Any, agent_type: str) -> dict[int, dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT target_id, output_json, created_at, id
+        FROM agent_runs
+        WHERE agent_type = ? AND target_type = ?
+        ORDER BY target_id ASC, created_at DESC, id DESC
+        """,
+        (agent_type, "company"),
+    ).fetchall()
+    latest: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        if row["target_id"] in latest:
+            continue
+        try:
+            output = json.loads(row["output_json"])
+        except Exception:
+            output = {}
+        latest[row["target_id"]] = output
+    return latest
+
+
+def generate_weekly_action_queue(conn: Any) -> dict[str, Any]:
+    companies = [row_to_dict(row) for row in conn.execute(COMPANY_SELECT).fetchall()]
+    investors = [row_to_dict(row) for row in conn.execute("SELECT * FROM investors").fetchall()]
+    company_briefs = latest_agent_outputs(conn, "company_networking_brief")
+    investor_maps = latest_agent_outputs(conn, "investor_mapping_brief")
+    created = 0
+    updated = 0
+    skipped = 0
+
+    for company in companies:
+        for action in build_company_actions(company, company_briefs, investor_maps):
+            result = upsert_action_item(conn, action)
+            created += 1 if result == "created" else 0
+            updated += 1 if result == "updated" else 0
+            skipped += 1 if result == "skipped" else 0
+
+    for investor in investors:
+        for action in build_investor_actions(investor):
+            result = upsert_action_item(conn, action)
+            created += 1 if result == "created" else 0
+            updated += 1 if result == "updated" else 0
+            skipped += 1 if result == "skipped" else 0
+
+    top_actions = list_actions_query(conn, status=None, action_type=None, target_type=None, min_priority=None, source=None, weekly=True)[:10]
+    return {
+        "actions_created": created,
+        "actions_updated": updated,
+        "actions_skipped": skipped,
+        "top_actions": top_actions,
+    }
+
+
+def build_company_actions(
+    company: dict[str, Any],
+    company_briefs: dict[int, dict[str, Any]],
+    investor_maps: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    actions = []
+    company_id = int(company.get("id") or 0)
+    total_score = int(company.get("total_score") or 0)
+    has_investors = bool(company.get("lead_investors") or company.get("other_investors"))
+    high_fit = total_score >= 16
+    base = {
+        "target_type": "Company",
+        "target_id": company_id,
+        "target_name": company.get("company_name") or "",
+        "research_links": build_company_research_links(company),
+    }
+
+    if high_fit and company_id not in company_briefs:
+        actions.append(make_action(base, "Run Company Brief Agent", "High-fit company does not have a Company Networking Brief yet.", "Generate a company brief and review missing information.", "System", company, None, critical_missing=False))
+    if has_investors and company_id not in investor_maps:
+        actions.append(make_action(base, "Run Investor Map Agent", "Company has investor data but no Investor Mapping Agent run yet.", "Generate an investor map to choose the best networking path.", "System", company, None, critical_missing=False))
+    if high_fit and not company.get("careers_url"):
+        actions.append(make_action(base, "Check Hiring", "High-fit company is missing a careers URL or hiring validation.", "Find current roles or hiring signals before outreach.", "System", company, None, critical_missing=True))
+    if company.get("data_source") == "Crunchbase CSV" and not company.get("notes"):
+        actions.append(make_action(base, "Research Company", "Imported Crunchbase company has no research notes yet.", "Do a focused research pass and add notes, role relevance, and traction signals.", "Import Review", company, None, critical_missing=True))
+    if int(company.get("network_fit_score") or 0) >= 4 and has_investors:
+        actions.append(make_action(base, "Draft Outreach", "Company has strong network fit and visible investor data.", "Draft a concise outreach angle to a founder, operator, or investor path.", "System", company, None, critical_missing=False))
+    if company.get("data_source") == "Crunchbase CSV" and int(company.get("data_quality_score") or 0) < 5:
+        actions.append(make_action(base, "Review Missing Data", "Imported company has low data quality.", "Review missing Crunchbase fields before spending outreach time.", "Import Review", company, None, critical_missing=True))
+
+    brief = company_briefs.get(company_id) or {}
+    missing_information = brief.get("missing_information") or []
+    if missing_information:
+        actions.append(make_action(base, "Review Missing Data", "Latest Company Brief Agent run found missing information.", "Resolve: " + ", ".join(missing_information[:4]), "Company Brief Agent", company, None, critical_missing=True))
+    if brief.get("recommended_next_action"):
+        actions.append(make_action(base, infer_action_type_from_text(brief["recommended_next_action"]), "Company Brief Agent recommended a next action.", brief["recommended_next_action"], "Company Brief Agent", company, None, critical_missing=False))
+
+    investor_map = investor_maps.get(company_id) or {}
+    missing_relationship_data = investor_map.get("missing_relationship_data") or []
+    if missing_relationship_data:
+        actions.append(make_action(base, "Review Missing Data", "Latest Investor Mapping Agent run found missing relationship data.", "Resolve: " + ", ".join(missing_relationship_data[:4]), "Investor Mapping Agent", company, None, critical_missing=True))
+    if investor_map.get("recommended_next_action"):
+        actions.append(make_action(base, infer_action_type_from_text(investor_map["recommended_next_action"]), "Investor Mapping Agent recommended a next action.", investor_map["recommended_next_action"], "Investor Mapping Agent", company, None, critical_missing=False))
+    return actions
+
+
+def build_investor_actions(investor: dict[str, Any]) -> list[dict[str, Any]]:
+    actions = []
+    priority = int(investor.get("priority_score") or 0)
+    tracked_count = int(investor.get("tracked_company_count") or 0)
+    base = {
+        "target_type": "Investor",
+        "target_id": int(investor.get("id") or 0),
+        "target_name": investor.get("investor_name") or "",
+        "research_links": build_research_links(investor),
+    }
+    if priority >= 30 and not investor.get("relevant_partner"):
+        actions.append(make_action(base, "Find Partner", "Priority investor is missing a relevant partner.", investor.get("recommended_research_task") or "Find the partner most connected to the tracked portfolio company.", "Investor Enrichment", None, investor, critical_missing=True))
+    if priority >= 30 and not investor.get("contact_path"):
+        actions.append(make_action(base, "Find Contact Path", "Priority investor is missing a warm contact path.", "Find a warm intro route through alumni, advisors, portfolio founders, or known operators.", "Investor Enrichment", None, investor, critical_missing=True))
+    if tracked_count >= 2:
+        actions.append(make_action(base, "Research Investor", f"Investor appears across {tracked_count} tracked companies.", "Review portfolio overlap and decide whether this investor is worth a networking pass.", "Investor Enrichment", None, investor, critical_missing=False))
+    if investor.get("relevant_partner") and investor.get("contact_path"):
+        actions.append(make_action(base, "Draft Outreach", "Investor has both partner and contact path data.", "Draft a short perspective-seeking note using tracked portfolio overlap.", "Investor Enrichment", None, investor, critical_missing=False))
+    if investor.get("enrichment_status") == "Ready for Outreach":
+        actions.append(make_action(base, "Send Outreach", "Investor is marked Ready for Outreach.", "Send a human-reviewed outreach note or ask for a warm intro.", "Investor Enrichment", None, investor, critical_missing=False))
+    return actions
+
+
+def infer_action_type_from_text(text: str) -> str:
+    lower = text.lower()
+    if "brief" in lower:
+        return "Run Company Brief Agent"
+    if "investor map" in lower or "map" in lower:
+        return "Run Investor Map Agent"
+    if "partner" in lower:
+        return "Find Partner"
+    if "contact path" in lower or "warm" in lower or "intro" in lower:
+        return "Find Contact Path"
+    if "career" in lower or "hiring" in lower or "roles" in lower:
+        return "Check Hiring"
+    if "draft" in lower or "note" in lower or "outreach" in lower:
+        return "Draft Outreach"
+    return "Research Company"
+
+
+def make_action(
+    base: dict[str, Any],
+    action_type: str,
+    reason: str,
+    recommended_action: str,
+    source: str,
+    company: dict[str, Any] | None,
+    investor: dict[str, Any] | None,
+    critical_missing: bool,
+) -> dict[str, Any]:
+    priority = calculate_action_priority(action_type, company, investor, critical_missing)
+    return {
+        **base,
+        "action_type": action_type,
+        "priority_score": priority,
+        "reason": reason,
+        "recommended_action": recommended_action,
+        "status": "New",
+        "due_date": "",
+        "source": source,
+        "outreach_draft": "",
+        "notes": "",
+    }
+
+
+def calculate_action_priority(
+    action_type: str,
+    company: dict[str, Any] | None,
+    investor: dict[str, Any] | None,
+    critical_missing: bool,
+) -> int:
+    score = 20
+    if company and int(company.get("total_score") or 0) >= 16:
+        score += 30
+    if action_type in OUTREACH_UNBLOCKING_ACTIONS:
+        score += 20
+    if investor and int(investor.get("lead_investment_count") or 0) >= 1:
+        score += 15
+    if investor and int(investor.get("tracked_company_count") or 0) >= 2:
+        score += 15
+    if company and company.get("data_source") == "Crunchbase CSV":
+        score += 10
+    stage = ((company or {}).get("latest_funding_round") or (investor or {}).get("stage_focus") or "").lower()
+    if any(token in stage for token in ["seed", "series a", "series b"]):
+        score += 10
+    if investor and investor.get("contact_path"):
+        score += 10
+    if critical_missing:
+        score -= 15
+    if company and int(company.get("data_quality_score") or 0) and int(company.get("data_quality_score") or 0) < 5:
+        score -= 10
+    return max(0, min(score, 100))
+
+
+def upsert_action_item(conn: Any, action: dict[str, Any]) -> str:
+    existing = conn.execute(
+        """
+        SELECT *
+        FROM action_items
+        WHERE target_type = ? AND target_id = ? AND action_type = ?
+            AND status NOT IN ('Done', 'Skipped')
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (action["target_type"], action["target_id"], action["action_type"]),
+    ).fetchone()
+    links_json = json.dumps(action.get("research_links") or {})
+    if existing:
+        conn.execute(
+            """
+            UPDATE action_items
+            SET target_name = ?, priority_score = ?, reason = ?, recommended_action = ?,
+                source = ?, research_links = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                action["target_name"],
+                action["priority_score"],
+                action["reason"],
+                action["recommended_action"],
+                action["source"],
+                links_json,
+                existing["id"],
+            ),
+        )
+        return "updated"
+    conn.execute(
+        """
+        INSERT INTO action_items (
+            action_type, target_type, target_id, target_name, priority_score,
+            reason, recommended_action, status, due_date, source, research_links,
+            outreach_draft, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            action["action_type"],
+            action["target_type"],
+            action["target_id"],
+            action["target_name"],
+            action["priority_score"],
+            action["reason"],
+            action["recommended_action"],
+            action["status"],
+            action["due_date"],
+            action["source"],
+            links_json,
+            action["outreach_draft"],
+            action["notes"],
+        ),
+    )
+    return "created"
+
+
+def list_actions_query(
+    conn: Any,
+    status: str | None,
+    action_type: str | None,
+    target_type: str | None,
+    min_priority: int | None,
+    source: str | None,
+    weekly: bool = False,
+) -> list[dict[str, Any]]:
+    clauses = []
+    params: list[Any] = []
+    if weekly:
+        clauses.append("status NOT IN ('Done', 'Skipped')")
+    elif status:
+        clauses.append("status = ?")
+        params.append(status)
+    if action_type:
+        clauses.append("action_type = ?")
+        params.append(action_type)
+    if target_type:
+        clauses.append("target_type = ?")
+        params.append(target_type)
+    if min_priority is not None:
+        clauses.append("priority_score >= ?")
+        params.append(min_priority)
+    if source:
+        clauses.append("source = ?")
+        params.append(source)
+    query = "SELECT * FROM action_items"
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+    query += " ORDER BY priority_score DESC, updated_at DESC, id DESC"
+    return [action_row_to_dict(row) for row in conn.execute(query, params).fetchall()]
+
+
+def build_company_research_links(company: dict[str, Any]) -> dict[str, str]:
+    name = company.get("company_name") or ""
+    investors = parse_investor_list(company.get("lead_investors") or company.get("other_investors") or "")
+    links = {
+        "Google": f"https://www.google.com/search?q={quote_plus(name)}",
+        "LinkedIn Search": f"https://www.linkedin.com/search/results/all/?keywords={quote_plus(name)}",
+        "Careers Search": f"https://www.google.com/search?q={quote_plus(name + ' careers jobs')}",
+    }
+    if company.get("crunchbase_url"):
+        links["Crunchbase"] = company["crunchbase_url"]
+    if company.get("website"):
+        links["Website"] = company["website"]
+    if investors:
+        links["Investor + Funding"] = f"https://www.google.com/search?q={quote_plus(investors[0] + ' ' + name + ' funding')}"
+    return links
+
+
+def generate_outreach_draft_for_action(action: dict[str, Any], target: dict[str, Any] | None) -> str:
+    target = target or {}
+    if action.get("target_type") == "Investor":
+        investor_name = action.get("target_name") or target.get("investor_name") or "there"
+        companies = split_tags(target.get("top_tracked_companies") or target.get("portfolio_companies") or "")[:2]
+        company_text = ", ".join(companies) if companies else "a few companies I am tracking"
+        category = target.get("sector_focus") or target.get("thesis_tags") or "startup networking"
+        return (
+            f"Hi {investor_name}, I am mapping {category} companies and noticed your connection to {company_text}. "
+            "My background is CS + Econ with VC diligence, AI/product work, and a strong interest in sports, wearables, and health. "
+            "Would you be open to a short conversation so I can learn how you think about this category?"
+        )
+    company_name = action.get("target_name") or target.get("company_name") or "your company"
+    sector = target.get("sector") or "your market"
+    funding = " ".join([target.get("latest_funding_round") or "", target.get("funding_amount") or ""]).strip()
+    investors = ", ".join([target.get("lead_investors") or "", target.get("other_investors") or ""]).strip(" ,")
+    signal = funding or investors or "the recent company momentum"
+    return (
+        f"Hi {company_name} team, I have been researching {sector} startups and noticed {signal}. "
+        "My background is CS + Econ with VC diligence, AI/product work, and a strong interest in sports, wearables, and health. "
+        "Would someone on the team be open to a short conversation about what you are building and where help might be useful?"
+    )
 
 
 @app.get("/health")
@@ -1335,6 +1701,21 @@ def get_company(company_id: int) -> dict[str, Any]:
     return row_to_dict(row)
 
 
+@app.delete("/companies/{company_id}")
+@app.delete("/api/companies/{company_id}")
+def delete_company(company_id: int) -> dict[str, Any]:
+    with get_connection() as conn:
+        row = conn.execute("SELECT id, company_name FROM companies WHERE id = ?", (company_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Company not found")
+        conn.execute(
+            "DELETE FROM agent_runs WHERE target_type = ? AND target_id = ?",
+            ("company", company_id),
+        )
+        conn.execute("DELETE FROM companies WHERE id = ?", (company_id,))
+    return {"deleted": True, "id": company_id, "company_name": row["company_name"]}
+
+
 @app.patch("/api/companies/{company_id}")
 def update_company(company_id: int, payload: CompanyUpdate) -> dict[str, Any]:
     with get_connection() as conn:
@@ -1464,6 +1845,95 @@ def get_investor_enrichment_queue() -> list[dict[str, Any]]:
         return build_enrichment_queue_rows(conn)
 
 
+@app.post("/actions/rebuild-weekly")
+def rebuild_weekly_actions() -> dict[str, Any]:
+    with get_connection() as conn:
+        return generate_weekly_action_queue(conn)
+
+
+@app.get("/actions")
+def list_actions(
+    status: str | None = None,
+    action_type: str | None = None,
+    target_type: str | None = None,
+    min_priority: int | None = None,
+    source: str | None = None,
+) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        return list_actions_query(conn, status, action_type, target_type, min_priority, source)
+
+
+@app.get("/actions/weekly")
+def list_weekly_actions() -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        return list_actions_query(conn, None, None, None, None, None, weekly=True)
+
+
+@app.patch("/actions/{action_id}")
+def update_action(action_id: int, payload: ActionUpdate) -> dict[str, Any]:
+    completed_at = datetime.now(timezone.utc).isoformat() if payload.status in {"Done", "Skipped"} else ""
+    with get_connection() as conn:
+        exists = conn.execute("SELECT id FROM action_items WHERE id = ?", (action_id,)).fetchone()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Action not found")
+        conn.execute(
+            """
+            UPDATE action_items
+            SET status = ?, due_date = ?, notes = ?, recommended_action = ?,
+                outreach_draft = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                payload.status,
+                payload.due_date,
+                payload.notes,
+                payload.recommended_action,
+                payload.outreach_draft,
+                completed_at,
+                action_id,
+            ),
+        )
+        row = conn.execute("SELECT * FROM action_items WHERE id = ?", (action_id,)).fetchone()
+    return action_row_to_dict(row)
+
+
+@app.delete("/actions/{action_id}")
+def delete_action(action_id: int) -> dict[str, Any]:
+    with get_connection() as conn:
+        row = conn.execute("SELECT id FROM action_items WHERE id = ?", (action_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Action not found")
+        conn.execute("DELETE FROM action_items WHERE id = ?", (action_id,))
+    return {"deleted": True, "id": action_id}
+
+
+@app.post("/actions/{action_id}/generate-outreach-draft")
+def generate_action_outreach_draft(action_id: int) -> dict[str, Any]:
+    with get_connection() as conn:
+        action = conn.execute("SELECT * FROM action_items WHERE id = ?", (action_id,)).fetchone()
+        if action is None:
+            raise HTTPException(status_code=404, detail="Action not found")
+        action_data = action_row_to_dict(action)
+        target = None
+        if action_data["target_type"] == "Company":
+            target_row = conn.execute(COMPANY_SELECT + " WHERE id = ?", (action_data["target_id"],)).fetchone()
+            target = row_to_dict(target_row) if target_row else {}
+        elif action_data["target_type"] == "Investor":
+            target_row = conn.execute("SELECT * FROM investors WHERE id = ?", (action_data["target_id"],)).fetchone()
+            target = investor_row_to_dict(target_row) if target_row else {}
+        draft = generate_outreach_draft_for_action(action_data, target)
+        conn.execute(
+            """
+            UPDATE action_items
+            SET outreach_draft = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (draft, action_id),
+        )
+        row = conn.execute("SELECT * FROM action_items WHERE id = ?", (action_id,)).fetchone()
+    return action_row_to_dict(row)
+
+
 @app.get("/investors")
 @app.get("/api/investors")
 @timed_endpoint("/investors")
@@ -1475,6 +1945,7 @@ def list_investors() -> list[dict[str, Any]]:
         ]
 
 
+@app.post("/investors")
 @app.post("/api/investors")
 def create_investor(payload: InvestorUpdate) -> dict[str, Any]:
     canonical = canonicalize_investor_name(payload.investor_name)
@@ -1500,6 +1971,7 @@ def create_investor(payload: InvestorUpdate) -> dict[str, Any]:
     return investor_row_to_dict(row)
 
 
+@app.patch("/investors/{investor_id}")
 @app.patch("/api/investors/{investor_id}")
 def update_investor(investor_id: int, payload: InvestorUpdate) -> dict[str, Any]:
     canonical = canonicalize_investor_name(payload.investor_name)

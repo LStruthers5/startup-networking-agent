@@ -134,6 +134,18 @@ function App() {
     }
   }
 
+  async function deleteCompany(companyId) {
+    try {
+      const deleted = await fetchJson(`/companies/${companyId}`, { method: "DELETE" });
+      setCompanies((current) => current.filter((company) => company.id !== companyId));
+      setExpandedId(null);
+      await Promise.all([loadCompanies(), loadInvestors()]);
+      setMessage(`${deleted.company_name} deleted.`);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   async function updateInvestor(investorId, payload) {
     try {
       const updated = await fetchJson(`/api/investors/${investorId}`, {
@@ -178,6 +190,9 @@ function App() {
           <h1>Startup Networking Tracker</h1>
         </div>
         <nav className="view-tabs" aria-label="Primary">
+          <button className={view === "week" ? "active" : ""} onClick={() => setView("week")}>
+            <ClipboardList size={17} /> This Week
+          </button>
           <button className={view === "companies" ? "active" : ""} onClick={() => setView("companies")}>
             <Building2 size={17} /> Companies
           </button>
@@ -212,7 +227,9 @@ function App() {
         </div>
       )}
 
-      {view === "companies" ? (
+      {view === "week" ? (
+        <ThisWeek fetchJson={fetchJson} setMessage={setMessage} />
+      ) : view === "companies" ? (
         <>
           <section className="toolbar">
             <div className="toolbar-title">
@@ -289,6 +306,7 @@ function App() {
                   expanded={expandedId === company.id}
                   onToggle={() => setExpandedId(expandedId === company.id ? null : company.id)}
                   onSave={updateCompany}
+                  onDelete={deleteCompany}
                 />
               ))
             )}
@@ -322,7 +340,7 @@ function Metric({ label, value, icon }) {
   );
 }
 
-function CompanyRow({ company, expanded, onToggle, onSave }) {
+function CompanyRow({ company, expanded, onToggle, onSave, onDelete }) {
   return (
     <article className="company-row">
       <button className="company-summary" onClick={onToggle}>
@@ -339,12 +357,12 @@ function CompanyRow({ company, expanded, onToggle, onSave }) {
         <span className="status-pill">{company.status}</span>
         <span className="score">{company.total_score}</span>
       </button>
-      {expanded && <CompanyDetail company={company} onSave={onSave} />}
+      {expanded && <CompanyDetail company={company} onSave={onSave} onDelete={onDelete} />}
     </article>
   );
 }
 
-function CompanyDetail({ company, onSave }) {
+function CompanyDetail({ company, onSave, onDelete }) {
   const [form, setForm] = useState({
     market_fit_score: company.market_fit_score,
     personal_fit_score: company.personal_fit_score,
@@ -458,6 +476,8 @@ function CompanyDetail({ company, onSave }) {
           <dd>{[company.lead_investors, company.other_investors].filter(Boolean).join(", ") || "No investors listed"}</dd>
           <dt>Employees</dt>
           <dd>{company.employee_count || "Unknown"}</dd>
+          <dt>Open actions</dt>
+          <dd>{company.open_action_count ?? 0}</dd>
         </dl>
       </section>
 
@@ -497,7 +517,19 @@ function CompanyDetail({ company, onSave }) {
           Outreach angle
           <textarea value={form.outreach_angle} onChange={(event) => change("outreach_angle", event.target.value)} rows="3" />
         </label>
-        <button className="primary-button" onClick={() => onSave(company.id, form)}>Save research</button>
+        <div className="detail-actions">
+          <button className="primary-button" onClick={() => onSave(company.id, form)}>Save research</button>
+          <button
+            className="danger-button"
+            onClick={() => {
+              if (window.confirm(`Delete ${company.company_name}? This also removes saved agent runs for this company.`)) {
+                onDelete(company.id);
+              }
+            }}
+          >
+            Delete company
+          </button>
+        </div>
       </section>
 
       <section className="detail-block wide">
@@ -770,6 +802,257 @@ function Score({ label, value, onChange }) {
       {label}
       <input type="number" min="1" max="5" value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
+  );
+}
+
+const ACTION_STATUSES = ["New", "Planned", "In Progress", "Waiting", "Done", "Skipped"];
+const ACTION_TYPES = [
+  "Research Company",
+  "Research Investor",
+  "Find Partner",
+  "Find Contact Path",
+  "Check Hiring",
+  "Draft Outreach",
+  "Send Outreach",
+  "Follow Up",
+  "Run Company Brief Agent",
+  "Run Investor Map Agent",
+  "Review Missing Data",
+];
+
+function ThisWeek({ fetchJson, setMessage }) {
+  const [actions, setActions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    status: "",
+    action_type: "",
+    target_type: "",
+    min_priority: "",
+    source: "",
+  });
+
+  async function loadActions(nextFilters = filters) {
+    const params = new URLSearchParams();
+    Object.entries(nextFilters).forEach(([key, value]) => {
+      if (value !== "") params.set(key, value);
+    });
+    const path = params.toString() ? `/actions?${params.toString()}` : "/actions/weekly";
+    setLoading(true);
+    try {
+      setActions(await fetchJson(path));
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadActions();
+  }, []);
+
+  function updateFilter(key, value) {
+    const next = { ...filters, [key]: value };
+    setFilters(next);
+    loadActions(next);
+  }
+
+  async function rebuildQueue() {
+    setLoading(true);
+    try {
+      const result = await fetchJson("/actions/rebuild-weekly", { method: "POST" });
+      await loadActions();
+      setMessage(`Weekly queue rebuilt: ${result.actions_created} created, ${result.actions_updated} updated.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateAction(action, payload) {
+    try {
+      const updated = await fetchJson(`/actions/${action.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: payload.status ?? action.status,
+          due_date: payload.due_date ?? action.due_date ?? "",
+          notes: payload.notes ?? action.notes ?? "",
+          recommended_action: payload.recommended_action ?? action.recommended_action ?? "",
+          outreach_draft: payload.outreach_draft ?? action.outreach_draft ?? "",
+        }),
+      });
+      setActions((current) => current.map((item) => (item.id === action.id ? updated : item)));
+      setMessage("Action updated.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function generateDraft(action) {
+    try {
+      const updated = await fetchJson(`/actions/${action.id}/generate-outreach-draft`, { method: "POST" });
+      setActions((current) => current.map((item) => (item.id === action.id ? updated : item)));
+      setMessage("Outreach draft generated.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  const metrics = {
+    top: actions.filter((action) => Number(action.priority_score || 0) >= 70).length,
+    companies: actions.filter((action) => action.target_type === "Company" && action.action_type.includes("Research")).length,
+    investors: actions.filter((action) => action.target_type === "Investor" && action.action_type.includes("Research")).length,
+    drafts: actions.filter((action) => action.outreach_draft).length,
+    missing: actions.filter((action) => action.action_type === "Review Missing Data").length,
+    followups: actions.filter((action) => action.action_type === "Follow Up").length,
+  };
+
+  return (
+    <section className="weekly-dashboard">
+      <div className="section-heading">
+        <div>
+          <h2>This Week</h2>
+          <p>Prioritized research and networking actions generated from local company, investor, and agent data.</p>
+        </div>
+        <button className="primary-button" onClick={rebuildQueue} disabled={loading}>
+          <RefreshCw size={16} />
+          {loading ? "Rebuilding..." : "Rebuild Weekly Queue"}
+        </button>
+      </div>
+
+      <div className="weekly-metrics">
+        <Metric label="Top Actions" value={metrics.top} icon={<Lightbulb size={18} />} />
+        <Metric label="Companies" value={metrics.companies} icon={<Building2 size={18} />} />
+        <Metric label="Investors" value={metrics.investors} icon={<UsersRound size={18} />} />
+        <Metric label="Drafts Ready" value={metrics.drafts} icon={<ClipboardList size={18} />} />
+        <Metric label="Missing Data" value={metrics.missing} icon={<Search size={18} />} />
+        <Metric label="Follow-ups" value={metrics.followups} icon={<RefreshCw size={18} />} />
+      </div>
+
+      <section className="toolbar">
+        <div className="toolbar-title">
+          <Filter size={18} />
+          <strong>Action Filters</strong>
+        </div>
+        <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}>
+          <option value="">Open weekly</option>
+          {ACTION_STATUSES.map((status) => (
+            <option key={status} value={status}>{status}</option>
+          ))}
+        </select>
+        <select value={filters.action_type} onChange={(event) => updateFilter("action_type", event.target.value)}>
+          <option value="">Any action</option>
+          {ACTION_TYPES.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
+        <select value={filters.target_type} onChange={(event) => updateFilter("target_type", event.target.value)}>
+          <option value="">Any target</option>
+          <option value="Company">Company</option>
+          <option value="Investor">Investor</option>
+          <option value="General">General</option>
+        </select>
+        <select value={filters.min_priority} onChange={(event) => updateFilter("min_priority", event.target.value)}>
+          <option value="">Any priority</option>
+          {[40, 50, 60, 70, 80].map((score) => (
+            <option key={score} value={score}>{score}+</option>
+          ))}
+        </select>
+        <input value={filters.source} onChange={(event) => updateFilter("source", event.target.value)} placeholder="Source" />
+      </section>
+
+      <section className="table-wrap weekly-table">
+        <div className="action-table-header">
+          <span>Priority</span>
+          <span>Action</span>
+          <span>Target</span>
+          <span>Reason</span>
+          <span>Recommended</span>
+          <span>Status</span>
+          <span>Due</span>
+        </div>
+        {loading ? (
+          <p className="empty">Loading actions...</p>
+        ) : actions.length === 0 ? (
+          <p className="empty">No actions yet. Rebuild the weekly queue to generate priorities.</p>
+        ) : (
+          actions.map((action) => (
+            <ActionRow key={action.id} action={action} onUpdate={updateAction} onGenerateDraft={generateDraft} />
+          ))
+        )}
+      </section>
+    </section>
+  );
+}
+
+function ActionRow({ action, onUpdate, onGenerateDraft }) {
+  const [open, setOpen] = useState(false);
+  const [notes, setNotes] = useState(action.notes || "");
+  const [dueDate, setDueDate] = useState(action.due_date || "");
+  const [draft, setDraft] = useState(action.outreach_draft || "");
+
+  useEffect(() => {
+    setNotes(action.notes || "");
+    setDueDate(action.due_date || "");
+    setDraft(action.outreach_draft || "");
+  }, [action]);
+
+  return (
+    <article className="action-row">
+      <button className="action-summary" onClick={() => setOpen(!open)}>
+        <span className="score wide-score">{action.priority_score || 0}</span>
+        <span>{action.action_type}</span>
+        <span>
+          <strong>{action.target_name || action.target_type}</strong>
+          <small>{action.target_type} · {action.source}</small>
+        </span>
+        <span>{action.reason}</span>
+        <span>{action.recommended_action}</span>
+        <span className="status-pill">{action.status}</span>
+        <span>{action.due_date || "-"}</span>
+      </button>
+      <div className="action-row-actions">
+        <button className="icon-button" onClick={() => onUpdate(action, { status: "In Progress" })}>In Progress</button>
+        <button className="icon-button" onClick={() => onUpdate(action, { status: "Done" })}>Done</button>
+        <button className="icon-button" onClick={() => onUpdate(action, { status: "Skipped" })}>Skip</button>
+        <button className="icon-button" onClick={() => onGenerateDraft(action)}>Generate Outreach Draft</button>
+      </div>
+      {open && (
+        <div className="action-detail">
+          <section className="detail-block">
+            <h2>Notes</h2>
+            <label>
+              Due date
+              <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+            </label>
+            <label>
+              Notes
+              <textarea rows="3" value={notes} onChange={(event) => setNotes(event.target.value)} />
+            </label>
+            <button className="primary-button" onClick={() => onUpdate(action, { notes, due_date: dueDate })}>Save notes</button>
+          </section>
+          <section className="detail-block">
+            <h2>Research Links</h2>
+            <div className="research-links">
+              {Object.entries(action.research_links || {}).map(([label, href]) => (
+                <a key={label} href={href} target="_blank" rel="noreferrer">{label} <ExternalLink size={13} /></a>
+              ))}
+            </div>
+          </section>
+          <section className="detail-block wide">
+            <h2>Outreach Draft</h2>
+            <textarea
+              rows="4"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+            <button className="primary-button" onClick={() => onUpdate(action, { outreach_draft: draft })}>Save draft</button>
+          </section>
+        </div>
+      )}
+    </article>
   );
 }
 
