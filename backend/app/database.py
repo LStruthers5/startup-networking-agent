@@ -36,6 +36,17 @@ def init_db() -> None:
                 employee_count TEXT DEFAULT '',
                 crunchbase_url TEXT DEFAULT '',
                 careers_url TEXT DEFAULT '',
+                linkedin_url TEXT DEFAULT '',
+                founders TEXT DEFAULT '',
+                founded_date TEXT DEFAULT '',
+                operating_status TEXT DEFAULT '',
+                cb_rank TEXT DEFAULT '',
+                total_funding_amount TEXT DEFAULT '',
+                number_of_funding_rounds TEXT DEFAULT '',
+                data_source TEXT DEFAULT '',
+                last_synced_at TEXT DEFAULT '',
+                data_quality_score INTEGER DEFAULT 0,
+                data_warnings TEXT DEFAULT '',
                 market_fit_score INTEGER DEFAULT 3,
                 personal_fit_score INTEGER DEFAULT 3,
                 hiring_fit_score INTEGER DEFAULT 3,
@@ -60,8 +71,42 @@ def init_db() -> None:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS agent_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent_type TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id INTEGER NOT NULL,
+                input_snapshot TEXT NOT NULL,
+                output_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'completed',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
+        ensure_company_columns(conn)
+
+
+def ensure_company_columns(conn: sqlite3.Connection) -> None:
+    existing_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(companies)").fetchall()
+    }
+    migrations = {
+        "linkedin_url": "TEXT DEFAULT ''",
+        "founders": "TEXT DEFAULT ''",
+        "founded_date": "TEXT DEFAULT ''",
+        "operating_status": "TEXT DEFAULT ''",
+        "cb_rank": "TEXT DEFAULT ''",
+        "total_funding_amount": "TEXT DEFAULT ''",
+        "number_of_funding_rounds": "TEXT DEFAULT ''",
+        "data_source": "TEXT DEFAULT ''",
+        "last_synced_at": "TEXT DEFAULT ''",
+        "data_quality_score": "INTEGER DEFAULT 0",
+        "data_warnings": "TEXT DEFAULT ''",
+    }
+    for column, definition in migrations.items():
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE companies ADD COLUMN {column} {definition}")
 
 
 def seed_if_empty() -> None:

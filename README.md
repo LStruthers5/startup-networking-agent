@@ -42,10 +42,12 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --reload-dir app --port 8000
 ```
 
 The API runs at `http://127.0.0.1:8000`.
+
+The `--reload-dir app` flag keeps the backend watcher focused on application code and prevents reload churn from `.venv` or generated files.
 
 The SQLite database is created at `data/networking_tracker.db` on first startup.
 
@@ -78,6 +80,36 @@ company_name,sector,description,location,website,latest_funding_round,funding_am
 
 Only `company_name` is required. Existing companies are updated by case-insensitive company name. New investor names found in `lead_investors` or `other_investors` are added to the Investors section.
 
+## Crunchbase CSV Import Workflow
+
+Use the Import Center for real Crunchbase exports:
+
+1. Build a Crunchbase search or list for the sectors you care about.
+2. Export the result as a CSV.
+3. Save the raw CSV locally in `data/imports/`.
+4. Do not commit raw Crunchbase exports. `data/imports/*.csv` is ignored.
+5. Start the app and open `Import Center`.
+6. Upload the CSV and click `Preview Import`.
+7. Review detected columns, proposed mappings, duplicates, investors to create, row quality scores, and warnings.
+8. Click `Confirm Import` to upsert companies and investor records.
+9. Go back to Companies and run the Company Networking Brief Agent or Investor Mapping Agent on imported companies.
+
+The import maps common Crunchbase columns such as `Organization Name`, `Industries`, `Headquarters Location`, `Last Funding Type`, `Lead Investors`, `Top 5 Investors`, `LinkedIn`, `Founders`, `CB Rank (Company)`, and `Crunchbase URL` into local company fields. Imported rows are labeled with `data_source = "Crunchbase CSV"`, `last_synced_at`, `data_quality_score`, and saved warnings when data is incomplete.
+
+Preview from the API:
+
+```bash
+curl -X POST http://127.0.0.1:8000/imports/crunchbase/preview \
+  -F "file=@../data/imports/crunchbase_first_batch.csv"
+```
+
+Confirm from the API:
+
+```bash
+curl -X POST http://127.0.0.1:8000/imports/crunchbase/confirm \
+  -F "file=@../data/imports/crunchbase_first_batch.csv"
+```
+
 ## API Endpoints
 
 - `GET /api/health`
@@ -89,6 +121,78 @@ Only `company_name` is required. Existing companies are updated by case-insensit
 - `GET /api/investors`
 - `POST /api/investors`
 - `PATCH /api/investors/{investor_id}`
+- `POST /agents/company-brief/{company_id}`
+- `GET /agents/company-brief/{company_id}/runs`
+- `POST /agents/investor-map/company/{company_id}`
+- `GET /agents/investor-map/company/{company_id}/runs`
+- `POST /imports/crunchbase/preview`
+- `POST /imports/crunchbase/confirm`
+
+## AI Agent Workflows
+
+### Company Networking Brief Agent
+
+The Company Networking Brief Agent generates a structured networking brief from one saved company record. It uses the company profile, funding fields, investors, scores, notes, next action, and outreach angle to produce:
+
+- Company snapshot
+- Thesis fit
+- Investor networking path
+- Hiring signal
+- Suggested outreach angle
+- Smart questions
+- Recommended next action
+- Missing information
+- Confidence score
+
+The first version is deterministic and template-based. It does not call an LLM provider, scrape websites, send email, or automate LinkedIn. Each generated run is saved in the `agent_runs` table with the input snapshot and output JSON for later review.
+
+To run it from the UI:
+
+1. Start the backend and frontend.
+2. Expand a company row.
+3. Click `Generate Networking Brief`.
+4. Review the latest brief and previous runs in the company detail panel.
+
+To test it from the API:
+
+```bash
+curl -X POST http://127.0.0.1:8000/agents/company-brief/1
+curl http://127.0.0.1:8000/agents/company-brief/1/runs
+```
+
+Later, this workflow can be upgraded by replacing the deterministic `generate_company_networking_brief(company)` function with a real LLM provider call. The endpoint and database shape can stay mostly the same: gather a company snapshot, send it to the provider with a structured-output schema, validate the response, save the run, and show it in the same UI.
+
+For imported Crunchbase companies, the brief discloses that source context, includes the Crunchbase URL when available, uses saved data warnings as missing information, and lowers confidence when the import quality score is low.
+
+### Investor Mapping Agent
+
+The Investor Mapping Agent turns one company's funding and investor data into a control-tower-style relationship map for networking decisions. It classifies the company by sector, likely investor thesis, stage signal, and networking relevance, then ranks investor paths and highlights what relationship data is still missing.
+
+It is inspired by market-mapping products like BCG's FinTech Control Tower, but narrowed for a job-search workflow:
+
+- Taxonomy-style classification of sector, thesis, and stage
+- Funding relationship tracing from company to lead and other investors
+- Relationship-map output showing investor -> why they matter -> next action
+- Deep-profile context from company notes, fit scores, and linked investor records
+- Strategic next-step recommendations that remain human-in-the-loop
+
+To run it from the UI:
+
+1. Start the backend and frontend.
+2. Expand a company row.
+3. Click `Generate Investor Map`.
+4. Review the latest investor map and previous runs in the company detail panel.
+
+To test it from the API:
+
+```bash
+curl -X POST http://127.0.0.1:8000/agents/investor-map/company/1
+curl http://127.0.0.1:8000/agents/investor-map/company/1/runs
+```
+
+The Investor Mapping Agent differs from the Company Networking Brief Agent by focusing specifically on investor and portfolio paths: which investor matters most, why that investor matters, what first networking move is most useful, and what relationship data should be researched before outreach.
+
+For imported Crunchbase companies, the map uses saved lead and other investor data, discloses import quality, and treats missing relationship details as research tasks before outreach.
 
 ## Next Product Steps
 
