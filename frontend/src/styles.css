@@ -160,6 +160,17 @@ h2 {
   padding: 12px 14px;
 }
 
+.error-notice {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.error-notice span {
+  color: #667085;
+}
+
 .toolbar {
   margin-bottom: 14px;
   padding: 12px;
@@ -620,6 +631,114 @@ label {
   padding-left: 18px;
 }
 
+.enrichment-dashboard {
+  display: grid;
+  gap: 14px;
+}
+
+.enrichment-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.check-filter {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  margin: 0;
+  min-height: 38px;
+}
+
+.check-filter input {
+  min-height: auto;
+  width: auto;
+}
+
+.enrichment-table {
+  overflow-x: auto;
+}
+
+.investor-table-header,
+.investor-summary {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1.35fr 76px 76px 64px 1fr 1.1fr 150px 1.35fr;
+  min-width: 1060px;
+}
+
+.investor-table-header {
+  background: #f0eee6;
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 10px 14px;
+  text-transform: uppercase;
+}
+
+.investor-row + .investor-row {
+  border-top: 1px solid #ece7dc;
+}
+
+.investor-summary {
+  background: #ffffff;
+  border: 0;
+  color: inherit;
+  padding: 12px 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.investor-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.investor-summary small {
+  color: #667085;
+  display: block;
+}
+
+.wide-score {
+  width: 54px;
+}
+
+.investor-row-actions {
+  align-items: center;
+  background: #fbfaf7;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.investor-detail-grid {
+  background: #fbfaf7;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 14px;
+}
+
+.research-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.research-links a {
+  align-items: center;
+  background: #e8f3f1;
+  border-radius: 999px;
+  color: #0b6b7a;
+  display: inline-flex;
+  font-size: 0.84rem;
+  font-weight: 700;
+  gap: 4px;
+  padding: 7px 10px;
+}
+
 .run-history {
   margin-top: 14px;
 }
@@ -645,6 +764,8 @@ label {
   .detail-grid,
   .investor-grid,
   .import-metrics,
+  .enrichment-metrics,
+  .investor-detail-grid,
   .brief-sections {
     grid-template-columns: 1fr 1fr;
   }
@@ -693,6 +814,8 @@ label {
   .investor-grid,
   .score-grid,
   .import-metrics,
+  .enrichment-metrics,
+  .investor-detail-grid,
   .brief-sections {
     grid-template-columns: 1fr;
   }

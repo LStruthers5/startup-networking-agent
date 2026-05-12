@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import "./styles.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const FETCH_TIMEOUT_MS = 10000;
 const STATUSES = [
   "New",
   "Researching",
@@ -42,15 +43,33 @@ function App() {
   });
   const [expandedId, setExpandedId] = useState(null);
   const [message, setMessage] = useState("");
+  const [fetchError, setFetchError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function fetchJson(path, init) {
-    const response = await fetch(`${API_URL}${path}`, init);
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data.detail || "Request failed");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${API_URL}${path}`, {
+        ...init,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || `Request failed: ${response.status}`);
+      }
+      return response.json();
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error(`Request timed out after ${FETCH_TIMEOUT_MS / 1000}s: ${path}`);
+      }
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        throw new Error(`Failed to fetch ${API_URL}${path}. Check that the backend is running.`);
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
     }
-    return response.json();
   }
 
   async function loadCompanies(nextFilters = filters) {
@@ -60,14 +79,16 @@ function App() {
     });
     const query = params.toString() ? `?${params.toString()}` : "";
     setLoading(true);
+    setFetchError("");
     try {
       const [companyData, optionData] = await Promise.all([
-        fetchJson(`/api/companies${query}`),
-        fetchJson("/api/filter-options"),
+        fetchJson(`/companies${query}`),
+        fetchJson("/filter-options"),
       ]);
       setCompanies(companyData);
       setOptions(optionData);
     } catch (error) {
+      setFetchError(error.message);
       setMessage(error.message);
     } finally {
       setLoading(false);
@@ -76,7 +97,7 @@ function App() {
 
   async function loadInvestors() {
     try {
-      setInvestors(await fetchJson("/api/investors"));
+      setInvestors(await fetchJson("/investors"));
     } catch (error) {
       setMessage(error.message);
     }
@@ -122,8 +143,10 @@ function App() {
       });
       setInvestors((current) => current.map((investor) => (investor.id === investorId ? updated : investor)));
       setMessage("Investor notes saved.");
+      return updated;
     } catch (error) {
       setMessage(error.message);
+      throw error;
     }
   }
 
@@ -175,6 +198,19 @@ function App() {
       </section>
 
       {message && <div className="notice">{message}</div>}
+      {fetchError && (
+        <div className="notice error-notice">
+          <strong>Backend request failed.</strong>
+          <span>{fetchError}</span>
+          <span>API: {API_URL}</span>
+          <button className="icon-button" onClick={() => {
+            loadCompanies();
+            loadInvestors();
+          }}>
+            <RefreshCw size={16} /> Retry
+          </button>
+        </div>
+      )}
 
       {view === "companies" ? (
         <>
@@ -259,7 +295,13 @@ function App() {
           </section>
         </>
       ) : view === "investors" ? (
-        <Investors investors={investors} onSave={updateInvestor} />
+        <Investors
+          investors={investors}
+          fetchJson={fetchJson}
+          onSave={updateInvestor}
+          onRefresh={loadInvestors}
+          setMessage={setMessage}
+        />
       ) : (
         <ImportCenter fetchJson={fetchJson} onImported={() => {
           loadCompanies();
@@ -731,17 +773,192 @@ function Score({ label, value, onChange }) {
   );
 }
 
-function Investors({ investors, onSave }) {
+const ENRICHMENT_STATUSES = [
+  "New",
+  "Needs Research",
+  "Partially Enriched",
+  "Contact Path Found",
+  "Ready for Outreach",
+  "Contacted",
+  "Passed",
+];
+
+const RELATIONSHIP_STRENGTHS = ["Unknown", "Cold", "Weak Tie", "Warm Path", "Direct"];
+
+function Investors({ investors, fetchJson, onSave, onRefresh, setMessage }) {
+  const [queue, setQueue] = useState([]);
+  const [expandedInvestorId, setExpandedInvestorId] = useState(null);
+  const [filters, setFilters] = useState({
+    minPriority: "",
+    status: "",
+    thesis: "",
+    missingContact: false,
+    leadOnly: false,
+  });
+  const [loading, setLoading] = useState(false);
+
+  async function loadQueue() {
+    try {
+      setQueue(await fetchJson("/investors/enrichment-queue"));
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  useEffect(() => {
+    loadQueue();
+  }, [investors]);
+
+  async function rebuildProfiles() {
+    setLoading(true);
+    try {
+      const result = await fetchJson("/investors/rebuild-profiles", { method: "POST" });
+      await onRefresh();
+      await loadQueue();
+      setMessage(`Investor profiles rebuilt: ${result.investors_created} created, ${result.investors_updated} updated.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function quickStatus(investor, enrichment_status) {
+    const updated = await onSave(investor.id, { ...investor, enrichment_status });
+    setQueue((current) => current.map((item) => (item.id === investor.id ? { ...item, ...updated } : item)));
+  }
+
+  const filteredQueue = queue.filter((investor) => {
+    if (filters.minPriority && Number(investor.priority_score || 0) < Number(filters.minPriority)) return false;
+    if (filters.status && investor.enrichment_status !== filters.status) return false;
+    if (filters.thesis && !(investor.thesis_tags || "").toLowerCase().includes(filters.thesis.toLowerCase())) return false;
+    if (filters.missingContact && investor.contact_path && investor.relevant_partner) return false;
+    if (filters.leadOnly && Number(investor.lead_investment_count || 0) === 0) return false;
+    return true;
+  });
+
+  const metrics = {
+    total: queue.length || investors.length,
+    priority: queue.filter((investor) => Number(investor.priority_score || 0) >= 60).length,
+    needsResearch: queue.filter((investor) => ["New", "Needs Research", "Partially Enriched"].includes(investor.enrichment_status)).length,
+    contactPath: queue.filter((investor) => investor.contact_path).length,
+    ready: queue.filter((investor) => investor.enrichment_status === "Ready for Outreach").length,
+  };
+
   return (
-    <section className="investor-grid">
-      {investors.map((investor) => (
-        <InvestorCard key={investor.id} investor={investor} onSave={onSave} />
-      ))}
+    <section className="enrichment-dashboard">
+      <div className="section-heading">
+        <div>
+          <h2>Investor Enrichment</h2>
+          <p>Ranked investor profiles derived from saved company, funding, and fit data.</p>
+        </div>
+        <button className="primary-button" onClick={rebuildProfiles} disabled={loading}>
+          <RefreshCw size={16} />
+          {loading ? "Rebuilding..." : "Rebuild Investor Profiles"}
+        </button>
+      </div>
+
+      <div className="enrichment-metrics">
+        <Metric label="Total Investors" value={metrics.total} icon={<UsersRound size={18} />} />
+        <Metric label="Priority" value={metrics.priority} icon={<Lightbulb size={18} />} />
+        <Metric label="Needs Research" value={metrics.needsResearch} icon={<Search size={18} />} />
+        <Metric label="Contact Path" value={metrics.contactPath} icon={<ExternalLink size={18} />} />
+        <Metric label="Ready" value={metrics.ready} icon={<BriefcaseBusiness size={18} />} />
+      </div>
+
+      <section className="toolbar">
+        <div className="toolbar-title">
+          <Filter size={18} />
+          <strong>Enrichment Filters</strong>
+        </div>
+        <select value={filters.minPriority} onChange={(event) => setFilters((current) => ({ ...current, minPriority: event.target.value }))}>
+          <option value="">Any priority</option>
+          {[40, 50, 60, 70, 80].map((score) => (
+            <option key={score} value={score}>{score}+</option>
+          ))}
+        </select>
+        <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+          <option value="">Any status</option>
+          {ENRICHMENT_STATUSES.map((status) => (
+            <option key={status} value={status}>{status}</option>
+          ))}
+        </select>
+        <input
+          value={filters.thesis}
+          onChange={(event) => setFilters((current) => ({ ...current, thesis: event.target.value }))}
+          placeholder="Thesis tag"
+        />
+        <label className="check-filter">
+          <input
+            type="checkbox"
+            checked={filters.missingContact}
+            onChange={(event) => setFilters((current) => ({ ...current, missingContact: event.target.checked }))}
+          />
+          Missing partner/path
+        </label>
+        <label className="check-filter">
+          <input
+            type="checkbox"
+            checked={filters.leadOnly}
+            onChange={(event) => setFilters((current) => ({ ...current, leadOnly: event.target.checked }))}
+          />
+          Lead investors only
+        </label>
+      </section>
+
+      <section className="table-wrap enrichment-table">
+        <div className="investor-table-header">
+          <span>Investor</span>
+          <span>Priority</span>
+          <span>Tracked</span>
+          <span>Lead</span>
+          <span>Thesis</span>
+          <span>Missing Data</span>
+          <span>Status</span>
+          <span>Next Action</span>
+        </div>
+        {filteredQueue.length === 0 ? (
+          <p className="empty">No investors match those filters. Rebuild profiles if the queue is empty.</p>
+        ) : (
+          filteredQueue.map((investor) => (
+            <article className="investor-row" key={investor.id}>
+              <button className="investor-summary" onClick={() => setExpandedInvestorId(expandedInvestorId === investor.id ? null : investor.id)}>
+                <span>
+                  <strong>{investor.investor_name}</strong>
+                  <small>{investor.canonical_name || investor.display_name}</small>
+                </span>
+                <span className="score wide-score">{investor.priority_score || 0}</span>
+                <span>{investor.tracked_company_count || 0}</span>
+                <span>{investor.lead_investment_count || 0}</span>
+                <span>{investor.thesis_tags || investor.sector_focus || "-"}</span>
+                <span>{(investor.missing_fields || []).slice(0, 3).join(", ") || "None"}</span>
+                <span className="status-pill">{investor.enrichment_status || "New"}</span>
+                <span>{investor.next_action || investor.recommended_research_task || "-"}</span>
+              </button>
+              <div className="investor-row-actions">
+                <button className="icon-button" onClick={() => setExpandedInvestorId(investor.id)}>Open Detail</button>
+                <button className="icon-button" onClick={() => quickStatus(investor, "Needs Research")}>Needs Research</button>
+                <button className="icon-button" onClick={() => quickStatus(investor, "Contact Path Found")}>Contact Path Found</button>
+                <button className="icon-button" onClick={() => quickStatus(investor, "Ready for Outreach")}>Ready</button>
+              </div>
+              {expandedInvestorId === investor.id && (
+                <InvestorDetail
+                  investor={investor}
+                  onSave={async (payload) => {
+                    const updated = await onSave(investor.id, payload);
+                    setQueue((current) => current.map((item) => (item.id === investor.id ? { ...item, ...updated } : item)));
+                  }}
+                />
+              )}
+            </article>
+          ))
+        )}
+      </section>
     </section>
   );
 }
 
-function InvestorCard({ investor, onSave }) {
+function InvestorDetail({ investor, onSave }) {
   const [form, setForm] = useState({ ...investor });
 
   useEffect(() => {
@@ -752,37 +969,125 @@ function InvestorCard({ investor, onSave }) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  const links = investor.research_links || {};
+
   return (
-    <article className="investor-card">
-      <div className="investor-card-header">
-        <input value={form.investor_name} onChange={(event) => change("investor_name", event.target.value)} />
+    <div className="investor-detail-grid">
+      <section className="detail-block">
+        <h2>Profile</h2>
+        <dl>
+          <dt>Priority</dt>
+          <dd>{investor.priority_score || 0}/100</dd>
+          <dt>Stage</dt>
+          <dd>{investor.stage_focus || "Unknown"}</dd>
+          <dt>Sector</dt>
+          <dd>{investor.sector_focus || "Unknown"}</dd>
+          <dt>Status</dt>
+          <dd>{investor.enrichment_status || "New"}</dd>
+        </dl>
         <label>
-          Priority
-          <input type="number" min="1" max="5" value={form.priority_score} onChange={(event) => change("priority_score", Number(event.target.value))} />
+          Thesis tags
+          <input value={form.thesis_tags || ""} onChange={(event) => change("thesis_tags", event.target.value)} />
         </label>
-      </div>
-      <label>
-        Thesis tags
-        <input value={form.thesis_tags || ""} onChange={(event) => change("thesis_tags", event.target.value)} />
-      </label>
-      <label>
-        Portfolio companies
-        <textarea rows="2" value={form.portfolio_companies || ""} onChange={(event) => change("portfolio_companies", event.target.value)} />
-      </label>
-      <label>
-        Relevant partner
-        <input value={form.relevant_partner || ""} onChange={(event) => change("relevant_partner", event.target.value)} />
-      </label>
-      <label>
-        Contact path
-        <textarea rows="2" value={form.contact_path || ""} onChange={(event) => change("contact_path", event.target.value)} />
-      </label>
-      <label>
-        Notes
-        <textarea rows="3" value={form.notes || ""} onChange={(event) => change("notes", event.target.value)} />
-      </label>
-      <button className="primary-button" onClick={() => onSave(investor.id, form)}>Save investor</button>
-    </article>
+        <label>
+          Website
+          <input value={form.website || ""} onChange={(event) => change("website", event.target.value)} />
+        </label>
+        <label>
+          LinkedIn URL
+          <input value={form.linkedin_url || ""} onChange={(event) => change("linkedin_url", event.target.value)} />
+        </label>
+        <label>
+          Crunchbase URL
+          <input value={form.crunchbase_url || ""} onChange={(event) => change("crunchbase_url", event.target.value)} />
+        </label>
+      </section>
+
+      <section className="detail-block">
+        <h2>Portfolio Overlap</h2>
+        <p>{investor.portfolio_overlap_summary || "No derived portfolio summary yet."}</p>
+        <dl>
+          <dt>Tracked</dt>
+          <dd>{investor.tracked_company_count || 0}</dd>
+          <dt>Lead</dt>
+          <dd>{investor.lead_investment_count || 0}</dd>
+          <dt>Co</dt>
+          <dd>{investor.co_investment_count || 0}</dd>
+          <dt>High-fit</dt>
+          <dd>{investor.high_fit_company_count || 0}</dd>
+          <dt>Avg fit</dt>
+          <dd>{investor.average_company_fit_score || 0}</dd>
+        </dl>
+        <p><strong>Top tracked:</strong> {investor.top_tracked_companies || investor.portfolio_companies || "None yet"}</p>
+      </section>
+
+      <section className="detail-block">
+        <h2>Networking</h2>
+        <label>
+          Relevant partner
+          <input value={form.relevant_partner || ""} onChange={(event) => change("relevant_partner", event.target.value)} />
+        </label>
+        <label>
+          Partner LinkedIn
+          <input value={form.partner_linkedin_url || ""} onChange={(event) => change("partner_linkedin_url", event.target.value)} />
+        </label>
+        <label>
+          Talent / platform contact
+          <input value={form.talent_or_platform_contact || ""} onChange={(event) => change("talent_or_platform_contact", event.target.value)} />
+        </label>
+        <label>
+          Contact path
+          <textarea rows="2" value={form.contact_path || ""} onChange={(event) => change("contact_path", event.target.value)} />
+        </label>
+        <label>
+          Relationship strength
+          <select value={form.relationship_strength || "Unknown"} onChange={(event) => change("relationship_strength", event.target.value)}>
+            {RELATIONSHIP_STRENGTHS.map((strength) => (
+              <option key={strength} value={strength}>{strength}</option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      <section className="detail-block">
+        <h2>Next Enrichment</h2>
+        <p>{investor.recommended_research_task || investor.next_action || "Review and add relationship context."}</p>
+        <label>
+          Enrichment status
+          <select value={form.enrichment_status || "New"} onChange={(event) => change("enrichment_status", event.target.value)}>
+            {ENRICHMENT_STATUSES.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Next action
+          <input value={form.next_action || ""} onChange={(event) => change("next_action", event.target.value)} />
+        </label>
+        <label>
+          Notes
+          <textarea rows="3" value={form.notes || ""} onChange={(event) => change("notes", event.target.value)} />
+        </label>
+      </section>
+
+      <section className="detail-block">
+        <h2>Missing Data</h2>
+        <ImportList items={investor.missing_fields || []} empty="No missing fields detected." />
+      </section>
+
+      <section className="detail-block">
+        <h2>Research Shortcuts</h2>
+        <div className="research-links">
+          {Object.entries(links).map(([label, href]) => (
+            <a key={label} href={href} target="_blank" rel="noreferrer">{label} <ExternalLink size={13} /></a>
+          ))}
+        </div>
+      </section>
+
+      <section className="detail-block wide">
+        <button className="primary-button" onClick={() => onSave(form)}>Save investor profile</button>
+      </section>
+    </div>
   );
 }
 

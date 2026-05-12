@@ -278,8 +278,10 @@ def score_path_strength(
         if investor_record.get("relevant_partner"):
             score += 1
         if investor_record.get("contact_path"):
+            score += 2
+        if int(investor_record.get("tracked_company_count") or 0) >= 2:
             score += 1
-        if int(investor_record.get("priority_score") or 0) >= 4:
+        if int(investor_record.get("priority_score") or 0) >= 70:
             score += 1
     if score >= 7:
         return "High"
@@ -298,22 +300,32 @@ def build_investor_mapping_path(
     strength = score_path_strength(investor_name, company, investor_record, is_lead)
     partner = investor_record.get("relevant_partner") if investor_record else ""
     contact_path = investor_record.get("contact_path") if investor_record else ""
+    priority_score = int(investor_record.get("priority_score") or 0) if investor_record else 0
+    tracked_count = int(investor_record.get("tracked_company_count") or 0) if investor_record else 0
+    overlap_summary = investor_record.get("portfolio_overlap_summary") if investor_record else ""
 
     if partner and contact_path:
         reason = f"{investor_name} has a saved partner ({partner}) and contact path."
         first_step = f"Validate {partner}'s relationship to {company.get('company_name')} and use the saved contact path."
+    elif contact_path:
+        reason = f"{investor_name} has a saved warm path: {contact_path}."
+        first_step = "Use the saved contact path after confirming the right partner or portfolio operator."
     elif partner:
         reason = f"{investor_name} has a saved relevant partner: {partner}."
         first_step = f"Research {partner}'s portfolio work and look for a warm path."
-    elif contact_path:
-        reason = f"{investor_name} has a saved contact path."
-        first_step = "Use the saved contact path after confirming the right partner or portfolio operator."
     elif is_lead:
         reason = f"{investor_name} is listed as a lead investor, so it is probably the highest-leverage investor path."
         first_step = "Identify the partner who led or announced the round."
     else:
         reason = f"{investor_name} is connected to the round but needs more relationship detail."
         first_step = "Research portfolio overlap and find the most relevant partner or operator."
+
+    if tracked_count >= 2:
+        reason += f" It also appears across {tracked_count} tracked companies."
+    if priority_score >= 70:
+        reason += f" Its enriched investor priority score is high ({priority_score}/100)."
+    if overlap_summary:
+        first_step += f" Portfolio context: {overlap_summary}"
 
     return {
         "investor_name": investor_name,
@@ -352,6 +364,14 @@ def identify_missing_relationship_data(
             missing.append(f"Contact path for {investor_name}")
         if not record.get("portfolio_companies"):
             missing.append(f"Portfolio overlap for {investor_name}")
+        for saved_missing in record.get("missing_fields") or []:
+            label = f"{investor_name}: {saved_missing}"
+            if label not in missing:
+                missing.append(label)
+        for warning in record.get("enrichment_warnings") or []:
+            label = f"{investor_name}: {warning}"
+            if label not in missing:
+                missing.append(label)
     if not company.get("careers_url"):
         missing.append("Careers URL or hiring signal")
     if not company.get("notes"):
@@ -395,9 +415,9 @@ def build_portfolio_overlap_angle(
     linked_investors: list[dict[str, Any]],
 ) -> dict[str, Any]:
     portfolio_mentions = [
-        f"{investor.get('investor_name')}: {investor.get('portfolio_companies')}"
+        f"{investor.get('investor_name')}: {investor.get('portfolio_overlap_summary') or investor.get('portfolio_companies')}"
         for investor in linked_investors
-        if investor.get("portfolio_companies")
+        if investor.get("portfolio_companies") or investor.get("portfolio_overlap_summary")
     ]
     if portfolio_mentions:
         summary = "Saved portfolio data can anchor a warm-intro hypothesis: " + "; ".join(portfolio_mentions)
@@ -431,11 +451,18 @@ def build_warm_intro_hypotheses(
     for path in investor_paths[:3]:
         record = find_linked_investor(path["investor_name"], linked_investors)
         contact_path = record.get("contact_path") if record else ""
+        relevant_partner = record.get("relevant_partner") if record else ""
+        if contact_path:
+            research_needed = contact_path
+        elif relevant_partner:
+            research_needed = f"Validate whether {relevant_partner} led the round or knows the relevant portfolio operators."
+        else:
+            research_needed = "Find relevant partner, portfolio founder, or operator connection before outreach."
         hypotheses.append(
             {
                 "path": f"{path['investor_name']} -> portfolio or partner route",
                 "why_it_might_work": path["reason"],
-                "research_needed": contact_path or "Find relevant partner, portfolio founder, or operator connection before outreach.",
+                "research_needed": research_needed,
             }
         )
     return hypotheses
@@ -471,6 +498,15 @@ def build_investor_research_steps(
         steps.append("Find investor names from the funding announcement or Crunchbase export.")
     if linked_investors:
         steps.append("Review saved contact paths and portfolio companies for warm-intro routes.")
+        high_priority = [
+            investor
+            for investor in linked_investors
+            if int(investor.get("priority_score") or 0) >= 70
+        ]
+        if high_priority:
+            steps.append(
+                f"Prioritize enriched high-score investor profile: {high_priority[0].get('investor_name')}."
+            )
     else:
         steps.append("Create investor records for the listed investors and add partner/contact-path notes.")
     if company.get("careers_url"):

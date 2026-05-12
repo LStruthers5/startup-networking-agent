@@ -64,6 +64,14 @@ Never commit:
 - Save agent inputs and outputs so runs can be audited later.
 - Agent outputs should be structured, saved to `agent_runs`, action-oriented, and transparent about missing information.
 
+## Investor Enrichment Rules
+
+- Do not overwrite manually entered relationship fields unless they are blank.
+- Derived investor fields such as tracked company counts, lead counts, sector focus, stage focus, overlap summaries, missing fields, warnings, and priority scores can be recalculated.
+- Research links are allowed because they are user-clicked shortcuts.
+- Scraping is not allowed unless explicitly requested.
+- Prioritize automation that saves human research time and avoids unnecessary Crunchbase export usage.
+
 ## Done Means
 
 A feature is done when:

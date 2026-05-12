@@ -62,12 +62,42 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS investors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 investor_name TEXT NOT NULL UNIQUE,
+                display_name TEXT DEFAULT '',
+                canonical_name TEXT DEFAULT '',
+                aliases TEXT DEFAULT '',
+                dedupe_review_needed INTEGER DEFAULT 0,
+                investor_type TEXT DEFAULT '',
                 thesis_tags TEXT DEFAULT '',
+                stage_focus TEXT DEFAULT '',
+                sector_focus TEXT DEFAULT '',
+                location TEXT DEFAULT '',
+                website TEXT DEFAULT '',
+                linkedin_url TEXT DEFAULT '',
+                crunchbase_url TEXT DEFAULT '',
                 portfolio_companies TEXT DEFAULT '',
+                tracked_company_count INTEGER DEFAULT 0,
+                lead_investment_count INTEGER DEFAULT 0,
+                co_investment_count INTEGER DEFAULT 0,
+                high_fit_company_count INTEGER DEFAULT 0,
+                average_company_fit_score REAL DEFAULT 0,
+                top_tracked_companies TEXT DEFAULT '',
+                sectors_from_portfolio TEXT DEFAULT '',
+                stages_from_portfolio TEXT DEFAULT '',
+                last_seen_funding_date TEXT DEFAULT '',
+                portfolio_overlap_summary TEXT DEFAULT '',
                 relevant_partner TEXT DEFAULT '',
+                partner_linkedin_url TEXT DEFAULT '',
+                talent_or_platform_contact TEXT DEFAULT '',
                 contact_path TEXT DEFAULT '',
-                priority_score INTEGER DEFAULT 3,
+                relationship_strength TEXT DEFAULT 'Unknown',
+                enrichment_status TEXT DEFAULT 'New',
+                next_action TEXT DEFAULT '',
+                priority_score INTEGER DEFAULT 0,
                 notes TEXT DEFAULT '',
+                data_source TEXT DEFAULT '',
+                last_enriched_at TEXT DEFAULT '',
+                enrichment_warnings TEXT DEFAULT '',
+                missing_fields TEXT DEFAULT '',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -85,6 +115,8 @@ def init_db() -> None:
             """
         )
         ensure_company_columns(conn)
+        ensure_investor_columns(conn)
+        ensure_indexes(conn)
 
 
 def ensure_company_columns(conn: sqlite3.Connection) -> None:
@@ -107,6 +139,60 @@ def ensure_company_columns(conn: sqlite3.Connection) -> None:
     for column, definition in migrations.items():
         if column not in existing_columns:
             conn.execute(f"ALTER TABLE companies ADD COLUMN {column} {definition}")
+
+
+def ensure_investor_columns(conn: sqlite3.Connection) -> None:
+    existing_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(investors)").fetchall()
+    }
+    migrations = {
+        "display_name": "TEXT DEFAULT ''",
+        "canonical_name": "TEXT DEFAULT ''",
+        "aliases": "TEXT DEFAULT ''",
+        "dedupe_review_needed": "INTEGER DEFAULT 0",
+        "investor_type": "TEXT DEFAULT ''",
+        "stage_focus": "TEXT DEFAULT ''",
+        "sector_focus": "TEXT DEFAULT ''",
+        "location": "TEXT DEFAULT ''",
+        "website": "TEXT DEFAULT ''",
+        "linkedin_url": "TEXT DEFAULT ''",
+        "crunchbase_url": "TEXT DEFAULT ''",
+        "tracked_company_count": "INTEGER DEFAULT 0",
+        "lead_investment_count": "INTEGER DEFAULT 0",
+        "co_investment_count": "INTEGER DEFAULT 0",
+        "high_fit_company_count": "INTEGER DEFAULT 0",
+        "average_company_fit_score": "REAL DEFAULT 0",
+        "top_tracked_companies": "TEXT DEFAULT ''",
+        "sectors_from_portfolio": "TEXT DEFAULT ''",
+        "stages_from_portfolio": "TEXT DEFAULT ''",
+        "last_seen_funding_date": "TEXT DEFAULT ''",
+        "portfolio_overlap_summary": "TEXT DEFAULT ''",
+        "partner_linkedin_url": "TEXT DEFAULT ''",
+        "talent_or_platform_contact": "TEXT DEFAULT ''",
+        "relationship_strength": "TEXT DEFAULT 'Unknown'",
+        "enrichment_status": "TEXT DEFAULT 'New'",
+        "next_action": "TEXT DEFAULT ''",
+        "data_source": "TEXT DEFAULT ''",
+        "last_enriched_at": "TEXT DEFAULT ''",
+        "enrichment_warnings": "TEXT DEFAULT ''",
+        "missing_fields": "TEXT DEFAULT ''",
+    }
+    for column, definition in migrations.items():
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE investors ADD COLUMN {column} {definition}")
+
+
+def ensure_indexes(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_companies_company_name ON companies(company_name);
+        CREATE INDEX IF NOT EXISTS idx_companies_status ON companies(status);
+        CREATE INDEX IF NOT EXISTS idx_companies_sector ON companies(sector);
+        CREATE INDEX IF NOT EXISTS idx_companies_latest_funding_round ON companies(latest_funding_round);
+        CREATE INDEX IF NOT EXISTS idx_investors_investor_name ON investors(investor_name);
+        CREATE INDEX IF NOT EXISTS idx_agent_runs_target ON agent_runs(target_type, target_id, agent_type);
+        """
+    )
 
 
 def seed_if_empty() -> None:

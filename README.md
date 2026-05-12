@@ -51,6 +51,43 @@ The `--reload-dir app` flag keeps the backend watcher focused on application cod
 
 The SQLite database is created at `data/networking_tracker.db` on first startup.
 
+## Debugging Backend/Database Issues
+
+Start the backend:
+
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --reload-dir app --port 8000
+```
+
+Check health:
+
+```bash
+curl --max-time 5 http://127.0.0.1:8000/health
+```
+
+Check the SQLite database path, size, counts, and sample companies:
+
+```bash
+curl --max-time 5 http://127.0.0.1:8000/debug/db
+```
+
+Check the company list endpoint:
+
+```bash
+curl --max-time 10 http://127.0.0.1:8000/companies
+curl --max-time 10 "http://127.0.0.1:8000/companies?limit=20"
+```
+
+Find local database files:
+
+```bash
+find . -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3"
+```
+
+The canonical SQLite path is resolved from the backend package location, not the shell working directory, so uvicorn should use the same database when started with the documented command.
+
 ## Run The Frontend
 
 In a second terminal, from the repo root:
@@ -112,6 +149,10 @@ curl -X POST http://127.0.0.1:8000/imports/crunchbase/confirm \
 
 ## API Endpoints
 
+- `GET /health`
+- `GET /debug/db`
+- `GET /companies`
+- `GET /companies/{company_id}`
 - `GET /api/health`
 - `GET /api/companies`
 - `GET /api/companies/{company_id}`
@@ -127,6 +168,45 @@ curl -X POST http://127.0.0.1:8000/imports/crunchbase/confirm \
 - `GET /agents/investor-map/company/{company_id}/runs`
 - `POST /imports/crunchbase/preview`
 - `POST /imports/crunchbase/confirm`
+- `POST /investors/rebuild-profiles`
+- `GET /investors/enrichment-queue`
+
+## Investor Profile + Enrichment Engine
+
+The Investor Profile + Enrichment Engine turns already-imported company data into ranked investor profiles without using more Crunchbase exports. It reads local `lead_investors`, `other_investors`, company sectors, funding stages, funding dates, fit scores, notes, and existing investor records, then rebuilds derived investor fields.
+
+It helps answer:
+
+- Which investors appear across the most tracked companies
+- Which investors are lead investors
+- Which investors overlap with target sectors and stages
+- Which investors are tied to high-fit companies
+- Which investors still need partner, contact-path, website, LinkedIn, or Crunchbase research
+- Which investor should be researched or contacted first
+
+To rebuild profiles after importing Crunchbase CSV data:
+
+```bash
+curl -X POST http://127.0.0.1:8000/investors/rebuild-profiles
+```
+
+To view the enrichment queue:
+
+```bash
+curl http://127.0.0.1:8000/investors/enrichment-queue
+```
+
+From the UI:
+
+1. Open `Investors`.
+2. Click `Rebuild Investor Profiles`.
+3. Review priority score, tracked company count, lead count, thesis tags, missing data, and next action.
+4. Open an investor detail row.
+5. Add relationship fields like relevant partner, partner LinkedIn, contact path, talent/platform contact, relationship strength, next action, and notes.
+
+Priority score is 0-100. The engine adds weight for lead investments, high-fit companies, repeated appearances, target-sector overlap, Seed/Series A/Series B focus, contact paths, and relevant partners. It subtracts weight when an investor has no firm URL data or no relationship data.
+
+Research shortcuts are generated links only. They point to Google, LinkedIn search, Crunchbase search, portfolio search, partner/sector search, and funding-round search for the top tracked company. The app does not scrape these pages; the links just save time and avoid burning extra Crunchbase export rows.
 
 ## AI Agent Workflows
 
