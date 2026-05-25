@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Networking Tower v2</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --accent: #6c8eff;
+    --accent2: #4ecca3;
+    --warn: #f4a261;
+    --danger: #e76f51;
+    --text: #e2e4ed;
+    --muted: #7c8096;
+    --radius: 8px;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.5; }
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 4px; height: 48px; }
+  nav h1 { font-size: 14px; font-weight: 700; color: var(--accent); margin-right: 20px; letter-spacing: .5px; }
+  nav button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 6px 12px; border-radius: var(--radius); font-size: 13px; font-family: inherit; transition: color .15s, background .15s; }
+  nav button:hover { color: var(--text); background: var(--border); }
+  nav button.active { color: var(--accent); background: rgba(108,142,255,.12); }
+
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+  h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+
+  button { font-family: inherit; font-size: 13px; cursor: pointer; border: none; border-radius: var(--radius); padding: 7px 14px; transition: opacity .15s; }
+  button:hover { opacity: .85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-sm { padding: 4px 9px; font-size: 12px; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-success { background: var(--accent2); color: #0f1117; }
+
+  input, select, textarea { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 7px 10px; font-family: inherit; font-size: 13px; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 90px; }
+  label { color: var(--muted); font-size: 12px; margin-bottom: 4px; display: block; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+  .row > * { flex: 1 1 200px; }
+
+  /* Import */
+  .import-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px; text-align: center; color: var(--muted); cursor: pointer; transition: border-color .15s; }
+  .import-zone:hover { border-color: var(--accent); }
+  .import-result { margin-top: 14px; padding: 12px; border-radius: var(--radius); font-size: 12px; }
+  .import-result.ok { background: rgba(78,204,163,.1); border: 1px solid var(--accent2); color: var(--accent2); }
+  .import-result.warn { background: rgba(244,162,97,.1); border: 1px solid var(--warn); color: var(--warn); }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(42,45,58,.5); vertical-align: top; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-ai { background: rgba(108,142,255,.15); color: var(--accent); }
+  .badge-fit { background: rgba(78,204,163,.15); color: var(--accent2); }
+  .badge-clean { background: rgba(244,162,97,.15); color: var(--warn); }
+  .badge-other { background: rgba(124,128,150,.15); color: var(--muted); }
+  .score-dots span { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--border); margin-right: 2px; }
+  .score-dots span.filled { background: var(--warn); }
+
+  /* Agent panel */
+  .agent-panel { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 700px) { .agent-panel { grid-template-columns: 1fr; } }
+  .agent-output { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; white-space: pre-wrap; font-size: 12px; line-height: 1.7; min-height: 200px; color: var(--text); }
+  .agent-output .section-head { color: var(--accent); font-weight: 700; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Saved contexts */
+  .ctx-chip { display: inline-block; padding: 4px 10px; background: var(--border); border-radius: 20px; font-size: 11px; cursor: pointer; margin: 3px; transition: background .15s; }
+  .ctx-chip:hover { background: var(--accent); color: #fff; }
+
+  /* Runs log */
+  .run-item { padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; transition: border-color .15s; }
+  .run-item:hover { border-color: var(--accent); }
+  .run-meta { display: flex; gap: 12px; align-items: center; }
+  .run-type { font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 600; }
+  .run-type.brief { background: rgba(108,142,255,.15); color: var(--accent); }
+  .run-type.investor-map { background: rgba(78,204,163,.15); color: var(--accent2); }
+  .run-detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); white-space: pre-wrap; font-size: 12px; line-height: 1.7; }
+  .run-detail.open { display: block; }
+
+  /* Action queue */
+  .action-row { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; }
+  .action-row.done { opacity: .4; }
+  .action-text { flex: 1; color: var(--muted); }
+  .empty { color: var(--muted); padding: 32px; text-align: center; }
+
+  /* Investor research */
+  .portfolio-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 10px; font-size: 12px; white-space: pre-wrap; line-height: 1.7; max-height: 200px; overflow-y: auto; }
+  .match-pill { display: inline-block; padding: 2px 8px; background: rgba(78,204,163,.15); border: 1px solid var(--accent2); color: var(--accent2); border-radius: 20px; font-size: 11px; margin: 2px; cursor: pointer; }
+  .rel-badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .rel-met { background: rgba(78,204,163,.15); color: var(--accent2); }
+  .rel-warm { background: rgba(108,142,255,.15); color: var(--accent); }
+  .rel-cold { background: rgba(124,128,150,.15); color: var(--muted); }
+  .rel-outreach_sent { background: rgba(244,162,97,.15); color: var(--warn); }
+
+  .flash { position: fixed; bottom: 20px; right: 20px; background: var(--accent2); color: #0f1117; padding: 10px 18px; border-radius: var(--radius); font-weight: 600; font-size: 13px; z-index: 999; display: none; }
+</style>
+</head>
+<body>
+
+<nav>
+  <h1>TOWER v2</h1>
+  <button class="active" data-view="companies">Companies</button>
+  <button data-view="agents">Agent Run</button>
+  <button data-view="queue">Action Queue</button>
+  <button data-view="log">Runs Log</button>
+  <button data-view="contacts">Contacts</button>
+  <button data-view="investors">Investors</button>
+</nav>
+
+<main>
+
+<!-- ===== COMPANIES VIEW ===== -->
+<div class="view active" id="view-companies">
+  <div class="card" style="margin-bottom:16px">
+    <h2>Import Companies</h2>
+    <div class="import-zone" id="importZone">
+      <div>Drop a Crunchbase CSV here or click to select</div>
+      <div style="font-size:11px;margin-top:6px;color:var(--muted)">Detects duplicates · Flags out-of-focus sectors</div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv" style="display:none">
+    <div id="importResult" style="display:none" class="import-result"></div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 id="companyCount">Companies</h2>
+    <input type="text" id="searchInput" placeholder="Filter by name, sector…" style="width:220px">
+  </div>
+
+  <div class="table-wrap">
+    <table id="companyTable">
+      <thead>
+        <tr>
+          <th>Name</th><th>Sector</th><th>Stage</th><th>Status</th>
+          <th>Score</th><th>Last Touched</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="companyBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== AGENT VIEW ===== -->
+<div class="view" id="view-agents">
+  <div class="agent-panel">
+    <div>
+      <div class="card">
+        <h3>Company</h3>
+        <select id="agentCompanySelect">
+          <option value="">Select a company…</option>
+        </select>
+        <div id="agentCompanyInfo" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6"></div>
+      </div>
+
+      <div class="card">
+        <h3>Network Context</h3>
+        <textarea id="networkContext" placeholder="Describe your network: investors you know, operators, advisors, sector connections, events attended…"></textarea>
+        <div style="margin-top:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="color:var(--muted);font-size:11px">Saved contexts</span>
+            <button class="btn-sm btn-secondary" id="saveCtxBtn">Save current</button>
+          </div>
+          <div id="savedContexts"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Run Agent</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" id="runBriefBtn" style="flex:1">Company Brief</button>
+          <button class="btn-secondary" id="runMapBtn" style="flex:1">Investor Map</button>
+        </div>
+        <div id="agentStatus" style="margin-top:10px;font-size:12px;color:var(--muted);min-height:20px"></div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 id="agentOutputLabel">Output</h2>
+        <button class="btn-sm btn-secondary" id="copyOutputBtn" style="display:none">Copy</button>
+      </div>
+      <div class="agent-output" id="agentOutput"><span style="color:var(--muted)">Select a company and run an agent to see output here.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ACTION QUEUE VIEW ===== -->
+<div class="view" id="view-queue">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2>Weekly Action Queue</h2>
+    <button class="btn-secondary btn-sm" id="refreshQueueBtn">Refresh</button>
+  </div>
+  <div id="queueList"></div>
+</div>
+
+<!-- ===== RUNS LOG VIEW ===== -->
+<div class="view" id="view-log">
+  <h2>Agent Runs Log</h2>
+  <div id="runsList"></div>
+</div>
+
+<!-- ===== CONTACTS VIEW ===== -->
+<div class="view" id="view-contacts">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2>My Contacts</h2>
+    <button class="btn-primary btn-sm" id="showAddContactBtn">+ Add Contact</button>
+  </div>
+
+  <div class="card" id="addContactForm" style="display:none;margin-bottom:16px">
+    <h3 id="contactFormTitle">Add Contact</h3>
+    <input type="hidden" id="editContactId">
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Name</label><input type="text" id="cName" placeholder="John Borchers"></div>
+      <div><label>Firm</label><input type="text" id="cFirm" placeholder="Decathlon Capital Partners"></div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Role / Title</label><input type="text" id="cRole" placeholder="Partner, Associate…"></div>
+      <div><label>How I Know Them</label><input type="text" id="cHow" placeholder="working relationship, connection…"></div>
+    </div>
+    <div style="margin-bottom:10px"><label>Notes</label><textarea id="cNotes" style="min-height:60px" placeholder="Any context about this relationship…"></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-primary" id="saveContactBtn">Save</button>
+      <button class="btn-secondary" id="cancelContactBtn">Cancel</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Firm</th><th>Role</th><th>How I Know Them</th><th>Notes</th><th></th></tr>
+      </thead>
+      <tbody id="contactsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== INVESTORS VIEW ===== -->
+<div class="view" id="view-investors">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2>Investors</h2>
+    <button class="btn-primary btn-sm" id="showAddInvestorBtn">+ Add Investor</button>
+  </div>
+
+  <div class="card" id="addInvestorForm" style="display:none;margin-bottom:16px">
+    <h3 id="investorFormTitle">Add Investor</h3>
+    <input type="hidden" id="editInvestorId">
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Name *</label><input type="text" id="iName" placeholder="Kent Goldman"></div>
+      <div><label>Firm</label><input type="text" id="iFirm" placeholder="Upside Partnership"></div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Role / Title</label><input type="text" id="iRole" placeholder="General Partner, Scout…"></div>
+      <div><label>Relationship</label>
+        <select id="iRelStatus">
+          <option value="cold">Cold</option>
+          <option value="met">Met</option>
+          <option value="warm">Warm</option>
+          <option value="outreach_sent">Outreach Sent</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Stage Focus</label><input type="text" id="iStage" placeholder="Pre-seed, Seed, Series A…"></div>
+      <div><label>Sector Focus</label><input type="text" id="iSector" placeholder="AI, fitness, clean tech…"></div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>How I Know Them</label><input type="text" id="iHow" placeholder="met at YC demo day, intro from…"></div>
+    </div>
+    <div style="margin-bottom:10px"><label>Notes</label><textarea id="iNotes" style="min-height:60px" placeholder="Any context…"></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-primary" id="saveInvestorBtn">Save</button>
+      <button class="btn-secondary" id="cancelInvestorBtn">Cancel</button>
+    </div>
+  </div>
+
+  <div id="investorList"></div>
+</div>
+
+</main>
+
+<div class="flash" id="flash"></div>
+
+<script>
+// ─── NAV ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('nav button[data-view]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    if (btn.dataset.view === 'agents') loadAgentCompanies();
+    if (btn.dataset.view === 'queue') loadQueue();
+    if (btn.dataset.view === 'log') loadRuns();
+    if (btn.dataset.view === 'contacts') loadContacts();
+    if (btn.dataset.view === 'investors') loadInvestors();
+  });
+});
+
+// ─── HELPERS ───────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch('/api' + path, opts);
+  const json = await r.json();
+  if (!r.ok) throw new Error(json.error || r.statusText);
+  return json;
+}
+
+function flash(msg, ok = true) {
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.style.background = ok ? 'var(--accent2)' : 'var(--danger)';
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+
+function sectorBadge(sector = '') {
+  const s = sector.toLowerCase();
+  if (s.includes('ai')) return `<span class="badge badge-ai">${sector}</span>`;
+  if (s.includes('fit') || s.includes('wear')) return `<span class="badge badge-fit">${sector}</span>`;
+  if (s.includes('clean')) return `<span class="badge badge-clean">${sector}</span>`;
+  return `<span class="badge badge-other">${sector || '—'}</span>`;
+}
+
+function scoreDots(score) {
+  if (!score) return '<span style="color:var(--muted)">—</span>';
+  return '<span class="score-dots">' +
+    [1,2,3,4,5].map(i => `<span class="${i <= score ? 'filled' : ''}"></span>`).join('') + '</span>';
+}
+
+function fmtDate(dt) {
+  if (!dt) return '<span style="color:var(--muted)">—</span>';
+  return dt.slice(0,10);
+}
+
+function relBadge(status) {
+  const labels = { met: 'Met', warm: 'Warm', cold: 'Cold', outreach_sent: 'Outreach Sent' };
+  return `<span class="rel-badge rel-${status}">${labels[status] || status}</span>`;
+}
+
+// ─── COMPANIES ─────────────────────────────────────────────────────────────
+let allCompanies = [];
+
+async function loadCompanies() {
+  allCompanies = await api('GET', '/companies');
+  renderCompanies(allCompanies);
+}
+
+function renderCompanies(rows) {
+  document.getElementById('companyCount').textContent = `Companies (${rows.length})`;
+  const tbody = document.getElementById('companyBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">No companies yet. Import a CSV to get started.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(c => `
+    <tr>
+      <td><strong>${c.name}</strong>${c.website ? `<br><a href="${c.website}" target="_blank" style="color:var(--muted);font-size:11px">${c.website.replace(/https?:\/\//,'')}</a>` : ''}</td>
+      <td>${sectorBadge(c.sector)}</td>
+      <td style="color:var(--muted)">${c.stage || '—'}</td>
+      <td><select class="status-select" data-id="${c.id}" style="background:none;border:none;color:var(--text);padding:0;width:auto;cursor:pointer">
+        ${['new','researching','outreach','archived'].map(s => `<option value="${s}" ${c.status===s?'selected':''}>${s}</option>`).join('')}
+      </select></td>
+      <td>${scoreDots(c.score)}</td>
+      <td>${fmtDate(c.last_touched)}</td>
+      <td>
+        <button class="btn-sm btn-secondary run-brief-btn" data-id="${c.id}" data-name="${c.name}">Brief</button>
+        <button class="btn-sm btn-secondary run-map-btn" data-id="${c.id}" data-name="${c.name}" style="margin-left:4px">Map</button>
+      </td>
+    </tr>`).join('');
+
+  tbody.querySelectorAll('.status-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await api('PATCH', '/companies/' + sel.dataset.id, { status: sel.value });
+    });
+  });
+  tbody.querySelectorAll('.run-brief-btn').forEach(btn => {
+    btn.addEventListener('click', () => openAgentForCompany(btn.dataset.id, btn.dataset.name, 'brief'));
+  });
+  tbody.querySelectorAll('.run-map-btn').forEach(btn => {
+    btn.addEventListener('click', () => openAgentForCompany(btn.dataset.id, btn.dataset.name, 'map'));
+  });
+}
+
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  renderCompanies(allCompanies.filter(c =>
+    c.name.toLowerCase().includes(q) || (c.sector||'').toLowerCase().includes(q)
+  ));
+});
+
+function openAgentForCompany(id, name, type) {
+  document.querySelectorAll('nav button[data-view]').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelector('nav button[data-view="agents"]').classList.add('active');
+  document.getElementById('view-agents').classList.add('active');
+  loadAgentCompanies().then(() => {
+    document.getElementById('agentCompanySelect').value = id;
+    document.getElementById('agentCompanySelect').dispatchEvent(new Event('change'));
+    if (type === 'map') document.getElementById('runMapBtn').focus();
+    else document.getElementById('runBriefBtn').focus();
+  });
+}
+
+// ─── IMPORT ────────────────────────────────────────────────────────────────
+const importZone = document.getElementById('importZone');
+const fileInput = document.getElementById('fileInput');
+
+importZone.addEventListener('click', () => fileInput.click());
+importZone.addEventListener('dragover', e => { e.preventDefault(); importZone.style.borderColor = 'var(--accent)'; });
+importZone.addEventListener('dragleave', () => importZone.style.borderColor = '');
+importZone.addEventListener('drop', e => { e.preventDefault(); importZone.style.borderColor = ''; handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+async function handleFile(file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  importZone.textContent = 'Importing…';
+  const r = await fetch('/api/companies/import', { method: 'POST', body: fd });
+  const data = await r.json();
+  importZone.textContent = 'Drop a Crunchbase CSV here or click to select';
+  const resultEl = document.getElementById('importResult');
+  resultEl.style.display = 'block';
+  if (data.error) {
+    resultEl.className = 'import-result warn';
+    resultEl.textContent = 'Error: ' + data.error;
+  } else {
+    const hasFlagged = data.flagged > 0;
+    resultEl.className = 'import-result ' + (hasFlagged ? 'warn' : 'ok');
+    resultEl.innerHTML = `Added ${data.added} · Skipped ${data.skipped} (duplicates)` +
+      (hasFlagged ? ` · Flagged ${data.flagged} out-of-focus:<br>${data.flaggedNames.join(', ')}` : '');
+    loadCompanies();
+  }
+}
+
+// ─── AGENT VIEW ────────────────────────────────────────────────────────────
+async function loadAgentCompanies() {
+  const companies = await api('GET', '/companies');
+  const sel = document.getElementById('agentCompanySelect');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Select a company…</option>' +
+    companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+document.getElementById('agentCompanySelect').addEventListener('change', async function() {
+  const id = this.value;
+  if (!id) { document.getElementById('agentCompanyInfo').innerHTML = ''; return; }
+  const c = await api('GET', '/companies/' + id);
+  document.getElementById('agentCompanyInfo').innerHTML =
+    `<strong>${c.name}</strong><br>${sectorBadge(c.sector)} ${c.stage || ''}<br>` +
+    `<span>${c.description ? c.description.slice(0,120) + '…' : ''}</span>`;
+});
+
+function getSavedContexts() {
+  try { return JSON.parse(localStorage.getItem('ntv2_contexts') || '[]'); } catch { return []; }
+}
+function renderSavedContexts() {
+  const div = document.getElementById('savedContexts');
+  const ctxs = getSavedContexts();
+  if (!ctxs.length) { div.innerHTML = '<span style="color:var(--muted);font-size:11px">None saved yet</span>'; return; }
+  div.innerHTML = ctxs.map((c,i) =>
+    `<span class="ctx-chip" data-i="${i}" title="${c}">${c.slice(0,30)}${c.length>30?'…':''}</span>`
+  ).join('');
+  div.querySelectorAll('.ctx-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.getElementById('networkContext').value = getSavedContexts()[chip.dataset.i];
+    });
+  });
+}
+renderSavedContexts();
+
+document.getElementById('saveCtxBtn').addEventListener('click', () => {
+  const val = document.getElementById('networkContext').value.trim();
+  if (!val) return;
+  const ctxs = getSavedContexts();
+  if (!ctxs.includes(val)) { ctxs.push(val); localStorage.setItem('ntv2_contexts', JSON.stringify(ctxs)); }
+  renderSavedContexts();
+  flash('Context saved');
+});
+
+async function runAgent(type) {
+  const company_id = document.getElementById('agentCompanySelect').value;
+  if (!company_id) { flash('Select a company first', false); return; }
+  const network_context = document.getElementById('networkContext').value;
+  const statusEl = document.getElementById('agentStatus');
+  const outputEl = document.getElementById('agentOutput');
+  const label = document.getElementById('agentOutputLabel');
+  statusEl.innerHTML = '<span class="spinner"></span>Running…';
+  outputEl.textContent = '';
+  document.getElementById('copyOutputBtn').style.display = 'none';
+  try {
+    const endpoint = type === 'brief' ? '/agents/brief' : '/agents/investor-map';
+    const data = await api('POST', endpoint, { company_id: parseInt(company_id), network_context });
+    label.textContent = type === 'brief' ? 'Company Brief' : 'Investor Map';
+    outputEl.innerHTML = formatOutput(data.output);
+    document.getElementById('copyOutputBtn').style.display = 'inline-block';
+    statusEl.textContent = 'Done — saved as run #' + data.run_id;
+    loadCompanies();
+  } catch (err) {
+    statusEl.textContent = '';
+    flash('Agent error: ' + err.message, false);
+  }
+}
+
+function formatOutput(text) {
+  return text.replace(/(SECTION \d+ —[^\n]+)/g, '<span class="section-head">$1</span>');
+}
+
+document.getElementById('runBriefBtn').addEventListener('click', () => runAgent('brief'));
+document.getElementById('runMapBtn').addEventListener('click', () => runAgent('map'));
+document.getElementById('copyOutputBtn').addEventListener('click', () => {
+  const text = document.getElementById('agentOutput').innerText;
+  navigator.clipboard.writeText(text).then(() => flash('Copied'));
+});
+
+// ─── ACTION QUEUE ──────────────────────────────────────────────────────────
+async function loadQueue() {
+  const rows = await api('GET', '/actions');
+  const el = document.getElementById('queueList');
+  if (!rows.length) { el.innerHTML = '<div class="empty">No companies yet.</div>'; return; }
+  const byCompany = {};
+  for (const r of rows) {
+    if (!byCompany[r.id]) byCompany[r.id] = { ...r, actions: [] };
+    if (r.action_id) byCompany[r.id].actions.push({ id: r.action_id, text: r.suggested_action, done: r.completed, notes: r.action_notes, due: r.due_date });
+  }
+  el.innerHTML = Object.values(byCompany).map(c => `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><strong>${c.name}</strong> ${sectorBadge(c.sector)} <span style="color:var(--muted)">${c.status}</span></div>
+        <div style="color:var(--muted);font-size:11px">Last touched: ${fmtDate(c.last_touched)}</div>
+      </div>
+      ${c.actions.length ? c.actions.map(a => `
+        <div class="action-row${a.done ? ' done' : ''}" data-aid="${a.id}">
+          <input type="checkbox" ${a.done ? 'checked' : ''} class="action-check" data-id="${a.id}">
+          <span class="action-text">${a.text}</span>
+          ${a.due ? `<span style="color:var(--muted);font-size:11px">${a.due}</span>` : ''}
+        </div>`).join('') : `<div style="color:var(--muted);font-size:12px;margin-top:8px">No actions — run a brief to generate one.</div>`}
+    </div>`).join('');
+  el.querySelectorAll('.action-check').forEach(cb => {
+    cb.addEventListener('change', async function() {
+      await api('PATCH', '/actions/' + this.dataset.id, { completed: this.checked ? 1 : 0 });
+      loadQueue();
+    });
+  });
+}
+document.getElementById('refreshQueueBtn').addEventListener('click', loadQueue);
+
+// ─── RUNS LOG ──────────────────────────────────────────────────────────────
+async function loadRuns() {
+  const runs = await api('GET', '/runs');
+  const el = document.getElementById('runsList');
+  if (!runs.length) { el.innerHTML = '<div class="empty">No runs yet.</div>'; return; }
+  el.innerHTML = runs.map(r => `
+    <div class="run-item" data-id="${r.id}">
+      <div class="run-meta">
+        <span class="run-type ${r.agent_type}">${r.agent_type}</span>
+        <strong>${r.company_name || 'Unknown'}</strong>
+        <span style="color:var(--muted);font-size:11px">${r.created_at}</span>
+      </div>
+      <div class="run-detail" id="rd-${r.id}"></div>
+    </div>`).join('');
+  el.querySelectorAll('.run-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const detail = document.getElementById('rd-' + item.dataset.id);
+      if (detail.classList.toggle('open') && !detail.textContent) {
+        const run = await api('GET', '/runs/' + item.dataset.id);
+        detail.innerHTML = formatOutput(run.output_text);
+      }
+    });
+  });
+}
+
+// ─── CONTACTS ──────────────────────────────────────────────────────────────
+async function loadContacts() {
+  const contacts = await api('GET', '/contacts');
+  const tbody = document.getElementById('contactsBody');
+  if (!contacts.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No contacts yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = contacts.map(c => `
+    <tr>
+      <td>${c.name || '<span style="color:var(--muted)">—</span>'}</td>
+      <td><strong>${c.firm || '—'}</strong></td>
+      <td style="color:var(--muted)">${c.role || '—'}</td>
+      <td style="color:var(--muted)">${c.how_i_know_them || '—'}</td>
+      <td style="color:var(--muted);font-size:12px">${c.notes || ''}</td>
+      <td>
+        <button class="btn-sm btn-secondary edit-contact-btn" data-id="${c.id}">Edit</button>
+        <button class="btn-sm btn-danger del-contact-btn" data-id="${c.id}" style="margin-left:4px">×</button>
+      </td>
+    </tr>`).join('');
+  tbody.querySelectorAll('.edit-contact-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = contacts.find(x => x.id == btn.dataset.id);
+      document.getElementById('editContactId').value = c.id;
+      document.getElementById('cName').value = c.name || '';
+      document.getElementById('cFirm').value = c.firm || '';
+      document.getElementById('cRole').value = c.role || '';
+      document.getElementById('cHow').value = c.how_i_know_them || '';
+      document.getElementById('cNotes').value = c.notes || '';
+      document.getElementById('contactFormTitle').textContent = 'Edit Contact';
+      document.getElementById('addContactForm').style.display = 'block';
+    });
+  });
+  tbody.querySelectorAll('.del-contact-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this contact?')) return;
+      await api('DELETE', '/contacts/' + btn.dataset.id);
+      loadContacts();
+    });
+  });
+}
+
+document.getElementById('showAddContactBtn').addEventListener('click', () => {
+  document.getElementById('editContactId').value = '';
+  ['cName','cFirm','cRole','cHow','cNotes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('contactFormTitle').textContent = 'Add Contact';
+  document.getElementById('addContactForm').style.display = 'block';
+});
+document.getElementById('cancelContactBtn').addEventListener('click', () => {
+  document.getElementById('addContactForm').style.display = 'none';
+});
+document.getElementById('saveContactBtn').addEventListener('click', async () => {
+  const id = document.getElementById('editContactId').value;
+  const payload = {
+    name: document.getElementById('cName').value.trim(),
+    firm: document.getElementById('cFirm').value.trim(),
+    role: document.getElementById('cRole').value.trim(),
+    how_i_know_them: document.getElementById('cHow').value.trim(),
+    notes: document.getElementById('cNotes').value.trim(),
+  };
+  if (id) await api('PATCH', '/contacts/' + id, payload);
+  else await api('POST', '/contacts', payload);
+  document.getElementById('addContactForm').style.display = 'none';
+  loadContacts();
+  flash('Contact saved');
+});
+
+// ─── INVESTORS ─────────────────────────────────────────────────────────────
+async function loadInvestors() {
+  const investors = await api('GET', '/investors');
+  const el = document.getElementById('investorList');
+  if (!investors.length) {
+    el.innerHTML = '<div class="empty">No investors yet. Add one above.</div>';
+    return;
+  }
+  el.innerHTML = investors.map(inv => `
+    <div class="card" id="inv-card-${inv.id}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+        <div>
+          <strong style="font-size:14px">${inv.name}</strong>
+          ${inv.firm ? `<span style="color:var(--muted)"> · ${inv.firm}</span>` : ''}
+          ${inv.role ? `<span style="color:var(--muted);font-size:11px"> · ${inv.role}</span>` : ''}
+          <br>
+          ${relBadge(inv.relationship_status)}
+          ${inv.stage_focus ? `<span class="badge badge-other" style="margin-left:4px">${inv.stage_focus}</span>` : ''}
+          ${inv.sector_focus ? `<span class="badge badge-other" style="margin-left:4px">${inv.sector_focus}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn-sm btn-success research-btn" data-id="${inv.id}">Research Portfolio</button>
+          <button class="btn-sm btn-secondary edit-inv-btn" data-id="${inv.id}">Edit</button>
+          <button class="btn-sm btn-danger del-inv-btn" data-id="${inv.id}">×</button>
+        </div>
+      </div>
+      ${inv.how_i_know_them ? `<div style="color:var(--muted);font-size:12px;margin-top:6px">How I know them: ${inv.how_i_know_them}</div>` : ''}
+      ${inv.notes ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">${inv.notes}</div>` : ''}
+      ${inv.portfolio_companies ? `
+        <div style="margin-top:10px">
+          <div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Portfolio</div>
+          <div class="portfolio-box">${inv.portfolio_companies}</div>
+        </div>` : ''}
+      <div class="inv-matches" id="inv-matches-${inv.id}" style="margin-top:8px"></div>
+      <div class="inv-status" id="inv-status-${inv.id}" style="font-size:12px;color:var(--muted);margin-top:6px;min-height:16px"></div>
+    </div>`).join('');
+
+  el.querySelectorAll('.research-btn').forEach(btn => {
+    btn.addEventListener('click', () => researchPortfolio(btn.dataset.id, btn));
+  });
+  el.querySelectorAll('.edit-inv-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const inv = investors.find(x => x.id == btn.dataset.id);
+      document.getElementById('editInvestorId').value = inv.id;
+      document.getElementById('iName').value = inv.name || '';
+      document.getElementById('iFirm').value = inv.firm || '';
+      document.getElementById('iRole').value = inv.role || '';
+      document.getElementById('iRelStatus').value = inv.relationship_status || 'cold';
+      document.getElementById('iStage').value = inv.stage_focus || '';
+      document.getElementById('iSector').value = inv.sector_focus || '';
+      document.getElementById('iHow').value = inv.how_i_know_them || '';
+      document.getElementById('iNotes').value = inv.notes || '';
+      document.getElementById('investorFormTitle').textContent = 'Edit Investor';
+      document.getElementById('addInvestorForm').style.display = 'block';
+      document.getElementById('addInvestorForm').scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+  el.querySelectorAll('.del-inv-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this investor?')) return;
+      await api('DELETE', '/investors/' + btn.dataset.id);
+      loadInvestors();
+    });
+  });
+}
+
+async function researchPortfolio(id, btn) {
+  const statusEl = document.getElementById('inv-status-' + id);
+  const matchesEl = document.getElementById('inv-matches-' + id);
+  btn.disabled = true;
+  btn.textContent = 'Researching…';
+  statusEl.innerHTML = '<span class="spinner"></span>Searching Exa + extracting with Claude…';
+  matchesEl.innerHTML = '';
+  try {
+    const data = await api('POST', '/investors/' + id + '/research');
+    btn.textContent = 'Research Portfolio';
+    btn.disabled = false;
+    if (data.message) {
+      statusEl.textContent = data.message;
+    } else {
+      statusEl.textContent = `Found ${data.portfolio_companies.split('\n').filter(Boolean).length} companies · Last updated now`;
+    }
+    if (data.matches && data.matches.length) {
+      matchesEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Already in your pipeline:</div>' +
+        data.matches.map(m =>
+          `<span class="match-pill" onclick="openAgentForCompany('${m.id}','${m.name}','brief')" title="Open ${m.name}">
+            ✓ ${m.name} <span style="opacity:.7">(${m.status})</span>
+          </span>`
+        ).join('');
+    }
+    // Reload to show updated portfolio
+    loadInvestors();
+  } catch (err) {
+    btn.textContent = 'Research Portfolio';
+    btn.disabled = false;
+    statusEl.textContent = '';
+    flash('Research error: ' + err.message, false);
+  }
+}
+
+document.getElementById('showAddInvestorBtn').addEventListener('click', () => {
+  document.getElementById('editInvestorId').value = '';
+  ['iName','iFirm','iRole','iStage','iSector','iHow','iNotes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('iRelStatus').value = 'cold';
+  document.getElementById('investorFormTitle').textContent = 'Add Investor';
+  document.getElementById('addInvestorForm').style.display = 'block';
+});
+document.getElementById('cancelInvestorBtn').addEventListener('click', () => {
+  document.getElementById('addInvestorForm').style.display = 'none';
+});
+document.getElementById('saveInvestorBtn').addEventListener('click', async () => {
+  const id = document.getElementById('editInvestorId').value;
+  const name = document.getElementById('iName').value.trim();
+  if (!name) { flash('Name is required', false); return; }
+  const payload = {
+    name,
+    firm: document.getElementById('iFirm').value.trim(),
+    role: document.getElementById('iRole').value.trim(),
+    relationship_status: document.getElementById('iRelStatus').value,
+    stage_focus: document.getElementById('iStage').value.trim(),
+    sector_focus: document.getElementById('iSector').value.trim(),
+    how_i_know_them: document.getElementById('iHow').value.trim(),
+    notes: document.getElementById('iNotes').value.trim(),
+  };
+  if (id) await api('PATCH', '/investors/' + id, payload);
+  else await api('POST', '/investors', payload);
+  document.getElementById('addInvestorForm').style.display = 'none';
+  loadInvestors();
+  flash('Investor saved');
+});
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+loadCompanies();
+</script>
+</body>
+</html>

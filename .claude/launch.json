@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "networking-tower-v2",
+      "runtimeExecutable": "/Users/lukestruthers/.nvm/versions/node/v22.22.2/bin/node",
+      "runtimeArgs": ["server/index.js"],
+      "port": 3000
+    }
+  ]
+}

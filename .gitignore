@@ -42,3 +42,4 @@ frontend/.env.local
 
 # Mac
 .DS_Store
+.env
