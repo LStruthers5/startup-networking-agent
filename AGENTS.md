@@ -11,7 +11,7 @@ Backend:
 ```bash
 cd backend
 source .venv/bin/activate
-uvicorn app.main:app --reload --reload-dir app --port 8000
+uvicorn app.main:app --reload --reload-dir app --port 8002
 ```
 
 Frontend:
@@ -20,6 +20,12 @@ Frontend:
 cd frontend
 bun install
 bun run dev
+```
+
+Demo URL:
+
+```text
+http://localhost:5174
 ```
 
 ## Git Hygiene

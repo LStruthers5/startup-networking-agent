@@ -19,9 +19,13 @@ frontend/dist/
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/*.db-shm
+data/*.db-wal
 backend/*.db
 backend/*.sqlite
 backend/*.sqlite3

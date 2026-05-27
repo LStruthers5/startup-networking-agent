@@ -42,10 +42,10 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --reload-dir app --port 8000
+uvicorn app.main:app --reload --reload-dir app --port 8002
 ```
 
-The API runs at `http://127.0.0.1:8000`.
+The API runs at `http://127.0.0.1:8002`.
 
 The `--reload-dir app` flag keeps the backend watcher focused on application code and prevents reload churn from `.venv` or generated files.
 
@@ -58,26 +58,26 @@ Start the backend:
 ```bash
 cd backend
 source .venv/bin/activate
-uvicorn app.main:app --reload --reload-dir app --port 8000
+uvicorn app.main:app --reload --reload-dir app --port 8002
 ```
 
 Check health:
 
 ```bash
-curl --max-time 5 http://127.0.0.1:8000/health
+curl --max-time 5 http://127.0.0.1:8002/health
 ```
 
 Check the SQLite database path, size, counts, and sample companies:
 
 ```bash
-curl --max-time 5 http://127.0.0.1:8000/debug/db
+curl --max-time 5 http://127.0.0.1:8002/debug/db
 ```
 
 Check the company list endpoint:
 
 ```bash
-curl --max-time 10 http://127.0.0.1:8000/companies
-curl --max-time 10 "http://127.0.0.1:8000/companies?limit=20"
+curl --max-time 10 http://127.0.0.1:8002/companies
+curl --max-time 10 "http://127.0.0.1:8002/companies?limit=20"
 ```
 
 Find local database files:
@@ -98,9 +98,20 @@ bun install
 bun run dev
 ```
 
-Open `http://127.0.0.1:5173`.
+Open `http://localhost:5174`.
 
 If you prefer npm and have a modern Node version installed, `npm install` and `npm run dev` also work.
+
+## Running Alongside PointTracer
+
+For demos, PointTracer can keep using its usual ports, such as frontend `http://localhost:5173` and backend `http://127.0.0.1:8000`.
+
+This startup networking app uses dedicated ports:
+
+- Frontend: `http://localhost:5174`
+- Backend: `http://127.0.0.1:8002`
+
+Vite is configured with `strictPort: true`, so `bun run dev` fails clearly instead of silently moving to another port if `5174` is busy.
 
 ## Import A CSV
 
@@ -136,14 +147,14 @@ The import maps common Crunchbase columns such as `Organization Name`, `Industri
 Preview from the API:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/imports/crunchbase/preview \
+curl -X POST http://127.0.0.1:8002/imports/crunchbase/preview \
   -F "file=@../data/imports/crunchbase_first_batch.csv"
 ```
 
 Confirm from the API:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/imports/crunchbase/confirm \
+curl -X POST http://127.0.0.1:8002/imports/crunchbase/confirm \
   -F "file=@../data/imports/crunchbase_first_batch.csv"
 ```
 
@@ -161,9 +172,13 @@ curl -X POST http://127.0.0.1:8000/imports/crunchbase/confirm \
 - `PATCH /api/companies/{company_id}`
 - `POST /api/import/companies`
 - `GET /api/filter-options`
+- `GET /filter-options`
 - `GET /api/investors`
 - `POST /api/investors`
 - `PATCH /api/investors/{investor_id}`
+- `GET /investors`
+- `POST /investors`
+- `PATCH /investors/{investor_id}`
 - `POST /agents/company-brief/{company_id}`
 - `GET /agents/company-brief/{company_id}/runs`
 - `POST /agents/investor-map/company/{company_id}`
@@ -172,6 +187,12 @@ curl -X POST http://127.0.0.1:8000/imports/crunchbase/confirm \
 - `POST /imports/crunchbase/confirm`
 - `POST /investors/rebuild-profiles`
 - `GET /investors/enrichment-queue`
+- `POST /actions/rebuild-weekly`
+- `GET /actions`
+- `GET /actions/weekly`
+- `PATCH /actions/{action_id}`
+- `DELETE /actions/{action_id}`
+- `POST /actions/{action_id}/generate-outreach-draft`
 
 ## Investor Profile + Enrichment Engine
 
@@ -189,13 +210,13 @@ It helps answer:
 To rebuild profiles after importing Crunchbase CSV data:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/investors/rebuild-profiles
+curl -X POST http://127.0.0.1:8002/investors/rebuild-profiles
 ```
 
 To view the enrichment queue:
 
 ```bash
-curl http://127.0.0.1:8000/investors/enrichment-queue
+curl http://127.0.0.1:8002/investors/enrichment-queue
 ```
 
 From the UI:
@@ -219,19 +240,19 @@ The Weekly Action Queue turns existing local company, investor, and agent-run da
 Rebuild the weekly queue:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/actions/rebuild-weekly
+curl -X POST http://127.0.0.1:8002/actions/rebuild-weekly
 ```
 
 View open weekly actions:
 
 ```bash
-curl http://127.0.0.1:8000/actions/weekly
+curl http://127.0.0.1:8002/actions/weekly
 ```
 
 Generate an editable outreach draft for one action:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/actions/1/generate-outreach-draft
+curl -X POST http://127.0.0.1:8002/actions/1/generate-outreach-draft
 ```
 
 From the UI, open `This Week`, click `Rebuild Weekly Queue`, then mark actions in progress, done, or skipped. Outreach drafts are deterministic text helpers saved into the action item; the app never sends outreach automatically.
@@ -266,8 +287,8 @@ To run it from the UI:
 To test it from the API:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/agents/company-brief/1
-curl http://127.0.0.1:8000/agents/company-brief/1/runs
+curl -X POST http://127.0.0.1:8002/agents/company-brief/1
+curl http://127.0.0.1:8002/agents/company-brief/1/runs
 ```
 
 Later, this workflow can be upgraded by replacing the deterministic `generate_company_networking_brief(company)` function with a real LLM provider call. The endpoint and database shape can stay mostly the same: gather a company snapshot, send it to the provider with a structured-output schema, validate the response, save the run, and show it in the same UI.
@@ -296,8 +317,8 @@ To run it from the UI:
 To test it from the API:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/agents/investor-map/company/1
-curl http://127.0.0.1:8000/agents/investor-map/company/1/runs
+curl -X POST http://127.0.0.1:8002/agents/investor-map/company/1
+curl http://127.0.0.1:8002/agents/investor-map/company/1/runs
 ```
 
 The Investor Mapping Agent differs from the Company Networking Brief Agent by focusing specifically on investor and portfolio paths: which investor matters most, why that investor matters, what first networking move is most useful, and what relationship data should be researched before outreach.

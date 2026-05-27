@@ -21,7 +21,7 @@ router.post('/', (req, res) => {
 
 router.patch('/:id', (req, res) => {
   const allowed = ['name','firm','role','stage_focus','sector_focus','portfolio_companies',
-                   'how_i_know_them','relationship_status','last_touched','notes'];
+                   'how_i_know_them','relationship_status','last_touched','notes','track_events'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields' });
   const sets = fields.map(f => `${f} = @${f}`).join(', ');

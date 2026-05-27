@@ -21,6 +21,20 @@ function inFocus(sector = '') {
   return FOCUS_SECTORS.some(f => s.includes(f));
 }
 
+// Parse investor firm names from Crunchbase columns, deduplicated and cleaned
+function parseInvestorFirms(row) {
+  const raw = [
+    row['Top 5 Investors'] || '',
+    row['Lead Investors'] || '',
+    row['Investors'] || '',
+  ].join(',');
+  const firms = raw.split(',')
+    .map(s => s.trim())
+    .filter(s => s.length > 1)
+    .filter((v, i, arr) => arr.indexOf(v) === i); // dedupe
+  return firms.join(', ');
+}
+
 // Map Crunchbase CSV columns → internal fields
 function mapCrunchbaseRow(row) {
   return {
@@ -33,6 +47,7 @@ function mapCrunchbaseRow(row) {
     last_funding: row['Last Funding Type'] || row['latest_funding_round'] || '',
     funding_amount: row['Last Funding Amount (in USD)'] || row['funding_amount'] || '',
     location: row['Headquarters Location'] || row['location'] || '',
+    investor_firms: parseInvestorFirms(row),
     source: 'crunchbase',
   };
 }
@@ -62,22 +77,31 @@ router.post('/import', upload.single('file'), (req, res) => {
   const flaggedNames = [];
 
   const checkDup = db.prepare(
-    'SELECT id FROM companies WHERE name = ? AND (website = ? OR website IS NULL)'
+    'SELECT id FROM companies WHERE name = ?'
   );
   const insert = db.prepare(`
     INSERT INTO companies (name, sector, stage, description, website, founded_year,
-      last_funding, funding_amount, location, source)
+      last_funding, funding_amount, location, investor_firms, source)
     VALUES (@name, @sector, @stage, @description, @website, @founded_year,
-      @last_funding, @funding_amount, @location, @source)
+      @last_funding, @funding_amount, @location, @investor_firms, @source)
   `);
+  // On re-import, backfill investor_firms for existing companies
+  const updateInvestorFirms = db.prepare(
+    `UPDATE companies SET investor_firms = @investor_firms WHERE id = @id AND (investor_firms IS NULL OR investor_firms = '')`
+  );
 
   const importMany = db.transaction((rows) => {
     for (const row of rows) {
       const mapped = mapCrunchbaseRow(row);
       if (!mapped.name) continue;
 
-      const dup = checkDup.get(mapped.name, mapped.website || null);
-      if (dup) { skipped++; continue; }
+      const dup = checkDup.get(mapped.name);
+      if (dup) {
+        // Backfill investor_firms for existing entries that don't have it
+        if (mapped.investor_firms) updateInvestorFirms.run({ id: dup.id, investor_firms: mapped.investor_firms });
+        skipped++;
+        continue;
+      }
 
       insert.run(mapped);
       added++;

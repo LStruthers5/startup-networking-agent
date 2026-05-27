@@ -92,10 +92,51 @@
   .run-detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); white-space: pre-wrap; font-size: 12px; line-height: 1.7; }
   .run-detail.open { display: block; }
 
-  /* Action queue */
-  .action-row { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; }
-  .action-row.done { opacity: .4; }
-  .action-text { flex: 1; color: var(--muted); }
+  /* Workbench Queue */
+  .wb-section-header { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 10px; }
+  .wb-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .wb-section-label.radar { color: #f87171; }
+  .wb-section-label.upnext { color: var(--accent); }
+  .wb-section-label.logged { color: var(--muted); }
+  .wb-stats { display: flex; gap: 20px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; }
+  .wb-stat { text-align: center; }
+  .wb-stat-num { font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .wb-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+  .wb-stat-num.warn { color: #f87171; }
+  /* Outreach card */
+  .oc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .oc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .oc-company { font-weight: 700; font-size: 14px; color: var(--text); }
+  .oc-timing { font-size: 11px; color: var(--muted); margin-bottom: 12px; font-style: italic; }
+  .oc-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; margin: 10px 0 6px; }
+  .oc-section.warm { color: #a78bfa; }
+  .oc-section.cold { color: var(--accent); }
+  .investor-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; background: var(--bg); }
+  .investor-info { flex: 1; min-width: 0; }
+  .investor-name { font-weight: 600; color: var(--text); font-size: 13px; }
+  .investor-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .investor-angle { font-size: 12px; color: var(--muted); margin-top: 4px; font-style: italic; line-height: 1.5; }
+  .investor-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+  .tier-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
+  .tier-1 { background: rgba(251,191,36,.2); color: #fbbf24; }
+  .tier-2 { background: rgba(108,142,255,.2); color: var(--accent); }
+  .tier-3 { background: rgba(78,204,163,.2); color: var(--accent2); }
+  .tier-4 { background: rgba(244,162,97,.2); color: var(--warn); }
+  .tier-5 { background: rgba(124,128,150,.2); color: var(--muted); }
+  .oc-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  /* Radar card */
+  .radar-card { background: rgba(248,113,113,.05); border: 1px solid rgba(248,113,113,.3); border-radius: var(--radius); padding: 14px; margin-bottom: 8px; }
+  .radar-overdue { font-size: 10px; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: .5px; }
+  /* Logged card */
+  .logged-card { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; }
+  .logged-card.responded { border-color: rgba(78,204,163,.3); }
+  /* Step badge */
+  .step-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; white-space: nowrap; }
+  .step-1 { background: rgba(108,142,255,.15); color: var(--accent); }
+  .step-2 { background: rgba(251,191,36,.15); color: #fbbf24; }
+  .step-3 { background: rgba(248,113,113,.15); color: #f87171; }
+  .overdue-tag { font-size: 10px; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: .5px; }
+  .contact-ctx { font-size: 11px; color: var(--muted); margin-top: 3px; font-style: italic; }
   .empty { color: var(--muted); padding: 32px; text-align: center; }
 
   /* Investor research */
@@ -120,6 +161,8 @@
   <button data-view="log">Runs Log</button>
   <button data-view="contacts">Contacts</button>
   <button data-view="investors">Investors</button>
+  <button data-view="events">Events</button>
+  <button data-view="email">Email</button>
 </nav>
 
 <main>
@@ -198,13 +241,97 @@
   </div>
 </div>
 
-<!-- ===== ACTION QUEUE VIEW ===== -->
+<!-- ===== ACTION QUEUE / WORKBENCH ===== -->
 <div class="view" id="view-queue">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <h2>Weekly Action Queue</h2>
-    <button class="btn-secondary btn-sm" id="refreshQueueBtn">Refresh</button>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 style="margin:0">Workbench</h2>
+    <button class="btn-secondary btn-sm" id="refreshQueueBtn">↺ Refresh</button>
   </div>
-  <div id="queueList"></div>
+
+  <!-- Stats bar -->
+  <div class="wb-stats" id="wbStats">
+    <div class="wb-stat"><div class="wb-stat-num" id="statSent">—</div><div class="wb-stat-label">Sent this week</div></div>
+    <div class="wb-stat"><div class="wb-stat-num warn" id="statOverdue">—</div><div class="wb-stat-label">Overdue</div></div>
+    <div class="wb-stat"><div class="wb-stat-num" id="statOpen">—</div><div class="wb-stat-label">Open actions</div></div>
+  </div>
+
+  <!-- EVENTS (collapsed, expands when events exist) -->
+  <div id="wbEventsSection" style="display:none">
+    <div class="wb-section-header">
+      <span class="wb-section-label" style="color:#a78bfa">🗓 Upcoming Events</span>
+      <a href="#" onclick="switchToTab('events');return false;" style="font-size:11px;color:var(--muted);text-decoration:none">See all →</a>
+    </div>
+    <div id="wbEventsList"></div>
+  </div>
+
+  <!-- RADAR -->
+  <div class="wb-section-header">
+    <span class="wb-section-label radar">📡 Radar</span>
+    <span id="radarCount" style="font-size:11px;color:var(--muted)"></span>
+  </div>
+  <div id="radarList"><div class="empty" style="padding:16px">Loading…</div></div>
+
+  <!-- UP NEXT -->
+  <div class="wb-section-header">
+    <span class="wb-section-label upnext">⚡ Up Next</span>
+    <button class="btn-secondary btn-sm" id="loadMoreBtn" style="display:none">Load More</button>
+  </div>
+  <div id="upNextList"><div class="empty" style="padding:16px">Loading…</div></div>
+  <div id="upNextLoading" style="display:none;text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Sourcing investor targets…</div>
+
+  <!-- LOGGED -->
+  <div class="wb-section-header" style="cursor:pointer" id="loggedToggle">
+    <span class="wb-section-label logged">✓ Logged</span>
+    <span id="loggedCount" style="font-size:11px;color:var(--muted)">▾</span>
+  </div>
+  <div id="loggedList" style="display:none"></div>
+</div>
+
+<!-- Log outreach modal -->
+<div id="logModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
+  <div class="card" style="width:440px;max-width:92vw;position:relative">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">Log Outreach</div>
+    <div id="logModalContext" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+    <input type="hidden" id="logActionId">
+    <input type="hidden" id="logCompanyId">
+    <input type="hidden" id="logInvestorName">
+    <input type="hidden" id="logInvestorFirm">
+    <input type="hidden" id="logInvestorRole">
+    <label>Who did you reach out to?</label>
+    <input type="text" id="logContact" placeholder="e.g. Ryan Chen, Courtside Ventures" style="margin-bottom:10px">
+    <label>What happened / quick note</label>
+    <textarea id="logNote" style="min-height:60px" placeholder="Sent LinkedIn request, got a reply, mentioned a role opening…"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-primary" id="logSaveBtn">Done — schedule follow-up</button>
+      <button class="btn-secondary" id="logCancelBtn">Cancel</button>
+    </div>
+    <div id="logFeedback" style="font-size:12px;color:var(--muted);margin-top:8px;min-height:16px"></div>
+  </div>
+</div>
+
+<!-- Draft modal -->
+<div id="draftModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
+  <div class="card" style="width:500px;max-width:92vw">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">Outreach Draft</div>
+    <div id="draftContext" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+    <div id="draftLoading" style="text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Writing personalized draft…</div>
+    <textarea id="draftText" style="display:none;min-height:140px;font-size:13px;line-height:1.6"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-primary" id="draftCopyBtn" style="display:none">Copy to Clipboard</button>
+      <button class="btn-secondary" id="draftCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dossier modal -->
+<div id="dossierModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
+  <div class="card" style="width:540px;max-width:92vw;max-height:85vh;overflow-y:auto">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">Investor Dossier</div>
+    <div id="dossierContext" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+    <div id="dossierLoading" style="text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Researching…</div>
+    <pre id="dossierText" style="display:none;white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text)"></pre>
+    <button class="btn-secondary" id="dossierCloseBtn" style="margin-top:12px">Close</button>
+  </div>
 </div>
 
 <!-- ===== RUNS LOG VIEW ===== -->
@@ -290,6 +417,46 @@
   <div id="investorList"></div>
 </div>
 
+<!-- ===== EVENTS VIEW ===== -->
+<div class="view" id="view-events">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h2 style="margin:0">Luma Events</h2>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">Flag investors in the Investors tab → scan → find events where they're speaking or hosting</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary btn-sm" id="scanEventsBtn">🔍 Scan Now</button>
+      <button class="btn-secondary btn-sm" id="refreshEventsBtn">↺ Refresh</button>
+    </div>
+  </div>
+  <div id="scanEventsStatus" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px"></div>
+  <div id="eventsList"><div class="empty">Click "Scan Now" to search for upcoming events featuring your flagged investors.</div></div>
+</div>
+
+<!-- ===== EMAIL VIEW ===== -->
+<div class="view" id="view-email">
+  <div class="card" style="margin-bottom:16px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">Email Automation</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="background:var(--bg);border-radius:8px;padding:16px">
+        <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Daily Outreach</div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:10px">3 rotating company suggestions every morning at <strong>8:00 AM PT</strong></div>
+        <button id="btnTestDaily" onclick="testEmail('daily')" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px">Send Test Now</button>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:16px">
+        <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Weekly Recap</div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:10px">Pipeline review + priorities every <strong>Monday 7:00 AM PT</strong></div>
+        <button id="btnTestWeekly" onclick="testEmail('weekly')" style="background:#7c3aed;color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px">Send Test Now</button>
+      </div>
+    </div>
+    <div id="emailTestStatus" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
+  </div>
+  <div class="card">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">Email Log</div>
+    <div id="emailLog"><div class="empty">Loading…</div></div>
+  </div>
+</div>
+
 </main>
 
 <div class="flash" id="flash"></div>
@@ -303,10 +470,12 @@ document.querySelectorAll('nav button[data-view]').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('view-' + btn.dataset.view).classList.add('active');
     if (btn.dataset.view === 'agents') loadAgentCompanies();
-    if (btn.dataset.view === 'queue') loadQueue();
+    if (btn.dataset.view === 'queue') loadWorkbench();
     if (btn.dataset.view === 'log') loadRuns();
     if (btn.dataset.view === 'contacts') loadContacts();
     if (btn.dataset.view === 'investors') loadInvestors();
+    if (btn.dataset.view === 'events') loadEvents();
+    if (btn.dataset.view === 'email') loadEmailLog();
   });
 });
 
@@ -530,36 +699,329 @@ document.getElementById('copyOutputBtn').addEventListener('click', () => {
 });
 
 // ─── ACTION QUEUE ──────────────────────────────────────────────────────────
-async function loadQueue() {
-  const rows = await api('GET', '/actions');
-  const el = document.getElementById('queueList');
-  if (!rows.length) { el.innerHTML = '<div class="empty">No companies yet.</div>'; return; }
-  const byCompany = {};
-  for (const r of rows) {
-    if (!byCompany[r.id]) byCompany[r.id] = { ...r, actions: [] };
-    if (r.action_id) byCompany[r.id].actions.push({ id: r.action_id, text: r.suggested_action, done: r.completed, notes: r.action_notes, due: r.due_date });
-  }
-  el.innerHTML = Object.values(byCompany).map(c => `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><strong>${c.name}</strong> ${sectorBadge(c.sector)} <span style="color:var(--muted)">${c.status}</span></div>
-        <div style="color:var(--muted);font-size:11px">Last touched: ${fmtDate(c.last_touched)}</div>
-      </div>
-      ${c.actions.length ? c.actions.map(a => `
-        <div class="action-row${a.done ? ' done' : ''}" data-aid="${a.id}">
-          <input type="checkbox" ${a.done ? 'checked' : ''} class="action-check" data-id="${a.id}">
-          <span class="action-text">${a.text}</span>
-          ${a.due ? `<span style="color:var(--muted);font-size:11px">${a.due}</span>` : ''}
-        </div>`).join('') : `<div style="color:var(--muted);font-size:12px;margin-top:8px">No actions — run a brief to generate one.</div>`}
-    </div>`).join('');
-  el.querySelectorAll('.action-check').forEach(cb => {
-    cb.addEventListener('change', async function() {
-      await api('PATCH', '/actions/' + this.dataset.id, { completed: this.checked ? 1 : 0 });
-      loadQueue();
-    });
-  });
+// ─── WORKBENCH ─────────────────────────────────────────────────────────────
+let wbShownIds = []; // company IDs already shown in the feed
+
+function tierBadge(tier) {
+  const labels = {1:'Scout',2:'Associate',3:'EIR/VP',4:'Principal',5:'Partner'};
+  return `<span class="tier-badge tier-${tier||5}">${labels[tier]||'Investor'}</span>`;
 }
-document.getElementById('refreshQueueBtn').addEventListener('click', loadQueue);
+
+function investorRowHtml(inv, companyId, companyName, isWarm) {
+  const via = isWarm && inv.via ? `<div style="font-size:11px;color:#a78bfa;margin-top:3px">Via: ${inv.via}</div>` : '';
+  const angle = inv.angle ? `<div class="investor-angle">"${inv.angle}"</div>` : '';
+  return `
+    <div class="investor-row">
+      <div class="investor-info">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="investor-name">${inv.name}</span>
+          ${tierBadge(inv.tier)}
+          <span style="font-size:11px;color:var(--muted)">${inv.role} · ${inv.firm}</span>
+        </div>
+        ${via}${angle}
+      </div>
+      <div class="investor-btns">
+        <button class="btn-secondary btn-sm" onclick="openDraftModal(${companyId},'${esc(inv.name)}','${esc(inv.firm)}','${esc(inv.role)}','${esc(companyName)}')">Draft</button>
+        <button class="btn-secondary btn-sm" onclick="openDossierModal('${esc(inv.name)}','${esc(inv.firm)}')">Dossier</button>
+        <button class="btn-success btn-sm" onclick="openLogFromCard(${companyId},'${esc(companyName)}','${esc(inv.name)}','${esc(inv.firm)}','${esc(inv.role)}')">Log It</button>
+      </div>
+    </div>`;
+}
+
+function renderCard(card) {
+  const warmHtml = card.warm ? `
+    <div class="oc-section warm">🔗 Warm Path</div>
+    ${investorRowHtml(card.warm, card.company_id, card.company_name, true)}` : '';
+
+  const coldHtml = card.cold && card.cold.length ? `
+    <div class="oc-section cold">📡 Cold Outreach</div>
+    ${card.cold.map(inv => investorRowHtml(inv, card.company_id, card.company_name, false)).join('')}` : '';
+
+  return `
+  <div class="oc" data-cid="${card.company_id}">
+    <div class="oc-head">
+      <span class="oc-company">${card.company_name}</span>
+      ${sectorBadge(card.sector)}
+      ${card.stage ? `<span style="font-size:11px;color:var(--muted)">${card.stage}</span>` : ''}
+    </div>
+    ${card.timing ? `<div class="oc-timing">${card.timing}</div>` : ''}
+    ${warmHtml}${coldHtml}
+    <div class="oc-actions">
+      <button class="btn-secondary btn-sm" onclick="skipCard(${card.company_id})">Skip</button>
+    </div>
+  </div>`;
+}
+
+function esc(s) { return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+async function loadWorkbench() {
+  // Stats
+  try {
+    const stats = await api('GET', '/queue/stats');
+    document.getElementById('statSent').textContent = stats.sentThisWeek;
+    document.getElementById('statOverdue').textContent = stats.overdue;
+    document.getElementById('statOpen').textContent = stats.openActions;
+  } catch(_) {}
+
+  // Events (compact preview)
+  loadWbEvents();
+
+  // Radar
+  loadRadar();
+
+  // Up Next (fresh load)
+  wbShownIds = [];
+  loadUpNext(true);
+
+  // Logged (hidden by default)
+  loadLogged();
+}
+
+async function loadRadar() {
+  const el = document.getElementById('radarList');
+  try {
+    const items = await api('GET', '/queue/radar');
+    document.getElementById('radarCount').textContent = items.length ? `${items.length} item${items.length>1?'s':''}` : '';
+    if (!items.length) { el.innerHTML = '<div class="empty" style="padding:12px">All clear — no overdue follow-ups.</div>'; return; }
+    el.innerHTML = items.map(a => {
+      const step = a.sequence_step || 1;
+      const stepNames = {1:'Initial outreach',2:'Follow-up 1',3:'Final check-in'};
+      const overdueDays = a.due_date ? Math.floor((Date.now() - new Date(a.due_date))/(1000*60*60*24)) : 0;
+      return `
+      <div class="radar-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:600;font-size:13px">${a.company_name} <span style="color:var(--muted);font-weight:400">·</span> <span style="color:var(--muted);font-size:12px">${stepNames[step]||'Follow-up'}</span></div>
+            ${a.contact_context ? `<div class="contact-ctx" style="margin-top:4px">→ ${a.contact_context}</div>` : ''}
+            <div class="radar-overdue" style="margin-top:4px">Overdue ${overdueDays > 0 ? overdueDays+'d' : 'today'}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-secondary btn-sm" onclick="openLogModal(${a.id},'${esc(a.company_name)}')">Log It</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function loadUpNext(reset = false) {
+  const el = document.getElementById('upNextList');
+  const loading = document.getElementById('upNextLoading');
+  const btn = document.getElementById('loadMoreBtn');
+
+  if (reset) el.innerHTML = '';
+  loading.style.display = 'block';
+  btn.style.display = 'none';
+
+  try {
+    const skip = wbShownIds.join(',');
+    const cards = await api('GET', `/queue/suggestions?n=3${skip ? '&skip='+skip : ''}`);
+
+    loading.style.display = 'none';
+    btn.style.display = 'block';
+
+    if (!cards.length && !wbShownIds.length) {
+      el.innerHTML = '<div class="empty" style="padding:16px">No companies in pipeline. Import a Crunchbase CSV to get started.</div>';
+      btn.style.display = 'none';
+      return;
+    }
+    if (!cards.length) {
+      el.insertAdjacentHTML('beforeend', '<div class="empty" style="padding:16px">You\'ve worked through the whole pipeline — great work! Refresh to cycle again.</div>');
+      btn.style.display = 'none';
+      return;
+    }
+
+    cards.forEach(card => {
+      wbShownIds.push(card.company_id);
+      el.insertAdjacentHTML('beforeend', renderCard(card));
+    });
+  } catch(e) {
+    loading.style.display = 'none';
+    el.insertAdjacentHTML('beforeend', `<div class="empty" style="color:#f87171">${e.message}</div>`);
+  }
+}
+
+async function loadLogged() {
+  const el = document.getElementById('loggedList');
+  try {
+    const items = await api('GET', '/queue/logged');
+    document.getElementById('loggedCount').textContent = `${items.length} total ▾`;
+    if (!items.length) { el.innerHTML = '<div class="empty" style="padding:12px">Nothing logged yet — use "Log It" on any outreach.</div>'; return; }
+    el.innerHTML = items.map(a => `
+      <div class="logged-card${a.contact_context ? ' responded' : ''}">
+        <div style="flex:1">
+          <div style="font-weight:600">${a.company_name} <span style="color:var(--muted);font-weight:400;font-size:12px">· ${a.contact_context || a.suggested_action}</span></div>
+          ${a.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${a.notes}</div>` : ''}
+        </div>
+        <div style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.created_at)}</div>
+      </div>`).join('');
+  } catch(_) {}
+}
+
+function skipCard(companyId) {
+  document.querySelector(`.oc[data-cid="${companyId}"]`)?.remove();
+}
+
+document.getElementById('loggedToggle').addEventListener('click', () => {
+  const el = document.getElementById('loggedList');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('loadMoreBtn').addEventListener('click', () => loadUpNext(false));
+document.getElementById('refreshQueueBtn').addEventListener('click', loadWorkbench);
+
+// ─── LOG MODAL ─────────────────────────────────────────────────────────────
+function openLogModal(actionId, companyName) {
+  document.getElementById('logActionId').value = actionId || '';
+  document.getElementById('logCompanyId').value = '';
+  document.getElementById('logContact').value = '';
+  document.getElementById('logNote').value = '';
+  document.getElementById('logFeedback').textContent = '';
+  document.getElementById('logModalContext').textContent = companyName ? `Follow-up for: ${companyName}` : '';
+  document.getElementById('logModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('logContact').focus(), 50);
+}
+
+function openLogFromCard(companyId, companyName, investorName, investorFirm, investorRole) {
+  document.getElementById('logActionId').value = '';
+  document.getElementById('logCompanyId').value = companyId;
+  document.getElementById('logInvestorName').value = investorName;
+  document.getElementById('logInvestorFirm').value = investorFirm;
+  document.getElementById('logInvestorRole').value = investorRole;
+  document.getElementById('logContact').value = `${investorName}, ${investorFirm}`;
+  document.getElementById('logNote').value = '';
+  document.getElementById('logFeedback').textContent = '';
+  document.getElementById('logModalContext').textContent = `${companyName} · ${investorName} (${investorRole}, ${investorFirm})`;
+  document.getElementById('logModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('logNote').focus(), 50);
+}
+
+document.getElementById('logCancelBtn').addEventListener('click', () => {
+  document.getElementById('logModal').style.display = 'none';
+});
+document.getElementById('logModal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+
+document.getElementById('logSaveBtn').addEventListener('click', async () => {
+  const actionId = document.getElementById('logActionId').value;
+  const companyId = document.getElementById('logCompanyId').value;
+  const ctx = document.getElementById('logContact').value.trim();
+  const note = document.getElementById('logNote').value.trim();
+  const fb = document.getElementById('logFeedback');
+  fb.style.color = 'var(--muted)';
+  fb.textContent = 'Saving…';
+  try {
+    if (actionId) {
+      // Completing an existing follow-up action
+      const payload = { completed: 1 };
+      if (ctx) payload.contact_context = ctx;
+      if (note) payload.notes = note;
+      const res = await api('PATCH', '/actions/' + actionId, payload);
+      if (res.followUp) {
+        const stepNames = {2:'Follow-up 1',3:'Final check-in'};
+        fb.style.color = '#4ade80';
+        fb.textContent = `✓ Logged. ${stepNames[res.followUp.step]||'Follow-up'} scheduled for ${res.followUp.due_date}.`;
+        setTimeout(() => { document.getElementById('logModal').style.display = 'none'; loadWorkbench(); }, 1600);
+      } else {
+        document.getElementById('logModal').style.display = 'none';
+        loadWorkbench();
+      }
+    } else if (companyId) {
+      // Logging a new outreach from the feed
+      const investorName = document.getElementById('logInvestorName').value;
+      const res = await api('POST', '/actions', {
+        company_id: +companyId,
+        suggested_action: `Reached out to ${investorName || ctx}`,
+        contact_context: ctx,
+        notes: note,
+        sequence_step: 1,
+        outreach_type: 'investor',
+      });
+      // Mark company as last_suggested
+      await api('PATCH', '/companies/' + companyId, { last_touched: new Date().toISOString() });
+      fb.style.color = '#4ade80';
+      fb.textContent = '✓ Logged. Follow-up 1 will be due in 7 days.';
+      setTimeout(() => {
+        document.getElementById('logModal').style.display = 'none';
+        // Remove the card from UP NEXT
+        document.querySelector(`.oc[data-cid="${companyId}"]`)?.remove();
+        loadRadar();
+        loadLogged();
+        // reload stats
+        api('GET','/queue/stats').then(s=>{
+          document.getElementById('statSent').textContent=s.sentThisWeek;
+          document.getElementById('statOverdue').textContent=s.overdue;
+          document.getElementById('statOpen').textContent=s.openActions;
+        }).catch(()=>{});
+      }, 1400);
+    }
+  } catch(err) {
+    fb.style.color = '#f87171';
+    fb.textContent = 'Error: ' + err.message;
+  }
+});
+
+// ─── DRAFT MODAL ────────────────────────────────────────────────────────────
+function openDraftModal(companyId, investorName, investorFirm, investorRole, companyName) {
+  document.getElementById('draftContext').textContent = `${investorName} · ${investorRole} · ${investorFirm} → ${companyName}`;
+  document.getElementById('draftLoading').style.display = 'block';
+  document.getElementById('draftText').style.display = 'none';
+  document.getElementById('draftCopyBtn').style.display = 'none';
+  document.getElementById('draftModal').style.display = 'flex';
+
+  api('POST', '/queue/draft', { company_id: companyId, investor_name: investorName, investor_firm: investorFirm, investor_role: investorRole })
+    .then(res => {
+      document.getElementById('draftLoading').style.display = 'none';
+      const ta = document.getElementById('draftText');
+      ta.value = res.draft;
+      ta.style.display = 'block';
+      document.getElementById('draftCopyBtn').style.display = 'inline-block';
+    })
+    .catch(err => {
+      document.getElementById('draftLoading').style.display = 'none';
+      document.getElementById('draftText').value = 'Error: ' + err.message;
+      document.getElementById('draftText').style.display = 'block';
+    });
+}
+
+document.getElementById('draftCopyBtn').addEventListener('click', () => {
+  const text = document.getElementById('draftText').value;
+  navigator.clipboard.writeText(text).then(() => flash('Copied to clipboard'));
+});
+document.getElementById('draftCloseBtn').addEventListener('click', () => {
+  document.getElementById('draftModal').style.display = 'none';
+});
+document.getElementById('draftModal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+
+// ─── DOSSIER MODAL ──────────────────────────────────────────────────────────
+function openDossierModal(name, firm) {
+  document.getElementById('dossierContext').textContent = `${name} · ${firm}`;
+  document.getElementById('dossierLoading').style.display = 'block';
+  document.getElementById('dossierText').style.display = 'none';
+  document.getElementById('dossierModal').style.display = 'flex';
+
+  api('POST', '/queue/dossier', { name, firm })
+    .then(res => {
+      document.getElementById('dossierLoading').style.display = 'none';
+      const pre = document.getElementById('dossierText');
+      pre.textContent = res.dossier;
+      pre.style.display = 'block';
+    })
+    .catch(err => {
+      document.getElementById('dossierLoading').style.display = 'none';
+      document.getElementById('dossierText').textContent = 'Error: ' + err.message;
+      document.getElementById('dossierText').style.display = 'block';
+    });
+}
+document.getElementById('dossierCloseBtn').addEventListener('click', () => {
+  document.getElementById('dossierModal').style.display = 'none';
+});
+document.getElementById('dossierModal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
 
 // ─── RUNS LOG ──────────────────────────────────────────────────────────────
 async function loadRuns() {
@@ -674,6 +1136,7 @@ async function loadInvestors() {
           ${inv.sector_focus ? `<span class="badge badge-other" style="margin-left:4px">${inv.sector_focus}</span>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn-sm ${inv.track_events ? 'btn-primary' : 'btn-secondary'} track-events-btn" data-id="${inv.id}" title="${inv.track_events ? 'Tracking events — click to stop' : 'Click to track events for this investor'}" style="font-size:12px">${inv.track_events ? '📍 Tracking' : '📍 Track Events'}</button>
           <button class="btn-sm btn-success research-btn" data-id="${inv.id}">Research Portfolio</button>
           <button class="btn-sm btn-secondary edit-inv-btn" data-id="${inv.id}">Edit</button>
           <button class="btn-sm btn-danger del-inv-btn" data-id="${inv.id}">×</button>
@@ -690,6 +1153,15 @@ async function loadInvestors() {
       <div class="inv-status" id="inv-status-${inv.id}" style="font-size:12px;color:var(--muted);margin-top:6px;min-height:16px"></div>
     </div>`).join('');
 
+  el.querySelectorAll('.track-events-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const inv = investors.find(x => x.id == btn.dataset.id);
+      const newVal = inv.track_events ? 0 : 1;
+      await api('PATCH', '/investors/' + btn.dataset.id, { track_events: newVal });
+      flash(newVal ? `📍 Tracking events for ${inv.name}` : `Stopped tracking ${inv.name}`);
+      loadInvestors();
+    });
+  });
   el.querySelectorAll('.research-btn').forEach(btn => {
     btn.addEventListener('click', () => researchPortfolio(btn.dataset.id, btn));
   });
@@ -783,6 +1255,169 @@ document.getElementById('saveInvestorBtn').addEventListener('click', async () =>
   loadInvestors();
   flash('Investor saved');
 });
+
+// ─── EMAIL ─────────────────────────────────────────────────────────────────
+async function loadEmailLog() {
+  const el = document.getElementById('emailLog');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const logs = await api('GET', '/email/logs');
+    if (!logs.length) { el.innerHTML = '<div class="empty">No emails sent yet. Use the buttons above to send a test.</div>'; return; }
+    el.innerHTML = logs.map(l => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <span style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${l.email_type === 'daily_outreach' ? 'var(--accent)' : '#a78bfa'}">${l.email_type === 'daily_outreach' ? 'Daily' : 'Weekly'}</span>
+          <span style="font-size:13px;margin-left:10px;color:var(--text)">${l.subject}</span>
+        </div>
+        <span style="font-size:11px;color:var(--muted)">${fmtDate(l.created_at)}</span>
+      </div>`).join('');
+  } catch (e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function testEmail(type) {
+  const statusEl = document.getElementById('emailTestStatus');
+  const btn = document.getElementById(type === 'daily' ? 'btnTestDaily' : 'btnTestWeekly');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  statusEl.textContent = '';
+  try {
+    await api('POST', `/email/test-${type}`);
+    statusEl.style.color = '#4ade80';
+    statusEl.textContent = `✓ ${type === 'daily' ? 'Daily outreach' : 'Weekly recap'} email sent — check lukestruthers22@gmail.com`;
+    loadEmailLog();
+  } catch (e) {
+    statusEl.style.color = '#f87171';
+    statusEl.textContent = `Error: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Test Now';
+  }
+}
+
+// ─── EVENTS ────────────────────────────────────────────────────────────────
+function fmtEventDate(dateStr) {
+  if (!dateStr) return 'Date TBD';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' });
+  } catch(_) { return dateStr; }
+}
+
+function isPast(dateStr) {
+  if (!dateStr) return false;
+  return new Date(dateStr) < new Date();
+}
+
+function eventCardHtml(ev, compact = false) {
+  const past = isPast(ev.event_date);
+  const matchBadge = ev.matched_investor_names
+    ? `<span style="font-size:11px;background:rgba(167,139,250,.15);color:#a78bfa;padding:2px 8px;border-radius:10px;margin-left:6px">📍 ${ev.matched_investor_names}</span>`
+    : '';
+  if (compact) {
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;${past ? 'opacity:.5' : ''}">
+      <div>
+        <div style="font-weight:600;font-size:13px">${ev.title}${matchBadge}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtEventDate(ev.event_date)}${ev.location ? ' · ' + ev.location : ''}</div>
+      </div>
+      <a href="${ev.event_url}" target="_blank" style="font-size:11px;color:var(--accent);white-space:nowrap;margin-left:12px;text-decoration:none">View →</a>
+    </div>`;
+  }
+  return `
+  <div class="card" style="${past ? 'opacity:.6' : ''}${ev.registered ? ';border-color:rgba(78,204,163,.3)' : ''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">${ev.title}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          <span style="font-size:12px;color:${past ? 'var(--muted)' : 'var(--accent)'}">📅 ${fmtEventDate(ev.event_date)}</span>
+          ${ev.location ? `<span style="font-size:12px;color:var(--muted)">📍 ${ev.location}</span>` : ''}
+          ${ev.host_name ? `<span style="font-size:12px;color:var(--muted)">Hosted by ${ev.host_name}</span>` : ''}
+        </div>
+        ${ev.matched_investor_names ? `<div style="margin-bottom:8px">${matchBadge.replace('margin-left:6px','margin-left:0')}</div>` : ''}
+        ${ev.description ? `<div style="font-size:12px;color:var(--muted);line-height:1.5">${ev.description.slice(0,200)}${ev.description.length>200?'…':''}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+        <a href="${ev.event_url}" target="_blank" class="btn-primary btn-sm" style="text-decoration:none;text-align:center">Register →</a>
+        <button class="btn-secondary btn-sm event-register-btn" data-id="${ev.id}" data-registered="${ev.registered}">${ev.registered ? '✓ Registered' : 'Mark Registered'}</button>
+        <button class="btn-secondary btn-sm event-dismiss-btn" data-id="${ev.id}" style="color:var(--muted)">Dismiss</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function loadEvents() {
+  const el = document.getElementById('eventsList');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const events = await api('GET', '/events');
+    if (!events.length) {
+      el.innerHTML = '<div class="empty">No events found yet.<br><br>1. Go to the <strong>Investors</strong> tab and click <strong>📍 Track Events</strong> on the investors you want to follow.<br>2. Come back here and click <strong>Scan Now</strong>.</div>';
+      return;
+    }
+    el.innerHTML = events.map(ev => eventCardHtml(ev)).join('');
+    wireEventButtons(el);
+  } catch(e) { el.innerHTML = `<div class="empty" style="color:#f87171">${e.message}</div>`; }
+}
+
+async function loadWbEvents() {
+  try {
+    const events = (await api('GET', '/events')).filter(e => !e.dismissed).slice(0, 3);
+    const section = document.getElementById('wbEventsSection');
+    const list = document.getElementById('wbEventsList');
+    if (!events.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    list.innerHTML = events.map(ev => eventCardHtml(ev, true)).join('');
+  } catch(_) {}
+}
+
+function wireEventButtons(container) {
+  container.querySelectorAll('.event-register-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const newVal = btn.dataset.registered === '1' ? 0 : 1;
+      await api('PATCH', '/events/' + btn.dataset.id, { registered: newVal });
+      loadEvents();
+    });
+  });
+  container.querySelectorAll('.event-dismiss-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await api('PATCH', '/events/' + btn.dataset.id, { dismissed: 1 });
+      loadEvents();
+    });
+  });
+}
+
+function switchToTab(viewName) {
+  document.querySelectorAll('nav button[data-view]').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const btn = document.querySelector(`nav button[data-view="${viewName}"]`);
+  if (btn) btn.classList.add('active');
+  const view = document.getElementById('view-' + viewName);
+  if (view) view.classList.add('active');
+  if (viewName === 'events') loadEvents();
+}
+
+document.getElementById('scanEventsBtn').addEventListener('click', async () => {
+  const status = document.getElementById('scanEventsStatus');
+  const btn = document.getElementById('scanEventsBtn');
+  btn.disabled = true;
+  status.style.color = 'var(--muted)';
+  status.textContent = '🔍 Scanning Luma for events featuring your tracked investors…';
+  try {
+    const res = await api('POST', '/events/scan');
+    status.style.color = '#4ade80';
+    status.textContent = res.found > 0
+      ? `✓ Found ${res.found} new event${res.found > 1 ? 's' : ''}! Loading…`
+      : res.message || '✓ Scan complete — no new events found. Try flagging more investors.';
+    if (res.found > 0) loadEvents();
+  } catch(e) {
+    status.style.color = '#f87171';
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Scan Now';
+  }
+});
+
+document.getElementById('refreshEventsBtn').addEventListener('click', loadEvents);
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
 loadCompanies();

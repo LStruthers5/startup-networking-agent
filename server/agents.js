@@ -18,6 +18,73 @@ function buildContactsBlock() {
   return `\nHere are people I have direct relationships with:\n${lines}\n\nWhere possible, prioritize these people or use them as explicit intro paths over generic network suggestions.`;
 }
 
+// Search Exa for accessible people at a specific VC firm
+async function searchFirmForPeople(firmName) {
+  const EXA_KEY = process.env.EXA_API_KEY;
+  if (!EXA_KEY) return null;
+  try {
+    // Two passes: firm's own site (team page) + general web (LinkedIn profiles, articles)
+    const query = `"${firmName}" venture capital team associate analyst scout principal "venture partner"`;
+    const resp = await fetch('https://api.exa.ai/search', {
+      method: 'POST',
+      headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, num_results: 5, text: { maxCharacters: 800 } }),
+    });
+    const data = await resp.json();
+    const results = data.results || [];
+    return results.map(r => `[${r.title}](${r.url})\n${r.text || ''}`).join('\n---\n');
+  } catch (_) {
+    return null;
+  }
+}
+
+// Claude batch-extracts accessible people from Exa results for multiple firms
+async function extractAccessiblePeopleFromFirms(firmsWithResults) {
+  const client = getClient();
+
+  const blocks = firmsWithResults.map(({ firm, text }) =>
+    `FIRM: ${firm}\n${text || '(no search results)'}`
+  ).join('\n\n===\n\n');
+
+  const prompt = `You are a VC researcher sourcing accessible investor contacts. For each firm below, extract real people with roles that are MOST LIKELY to respond to a cold email.
+
+PRIORITY ORDER (highest response rate first):
+1. Scout / Venture Scout — actively hunting deals, highest motivation to talk
+2. Analyst / Associate / Senior Associate — proving themselves, want deal flow
+3. EIR / Entrepreneur-in-Residence / Venture Partner / Operating Partner
+4. Principal / VP / Vice President
+5. Partner at funds under $300M AUM
+
+SKIP entirely: General Partner, Managing Partner, Founding Partner, Fund Manager at Tier-1 firms (Sequoia, a16z, Benchmark, Kleiner Perkins, Greylock). They rarely respond cold.
+
+Return ONLY a valid JSON object, no other text:
+{
+  "Firm Name": [
+    { "name": "Jane Smith", "role": "Associate", "tier": 2 },
+    ...
+  ]
+}
+
+If a firm has no qualifying people, return an empty array for that key.
+
+FIRMS:
+${blocks}`;
+
+  const msg = await client.messages.create({
+    model: MODEL,
+    max_tokens: 700,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  try {
+    const raw = msg.content[0].text.trim();
+    const jsonStr = raw.match(/\{[\s\S]*\}/)?.[0] || '{}';
+    return JSON.parse(jsonStr);
+  } catch (_) {
+    return {};
+  }
+}
+
 // Verify a single investor name+firm via Exa
 async function verifyInvestorViaExa(name, firm) {
   const EXA_KEY = process.env.EXA_API_KEY;
@@ -233,4 +300,508 @@ ${searchText}`;
   return message.content[0].text.trim();
 }
 
-module.exports = { runBrief, runInvestorMap, runExtractPortfolio };
+async function runDailyOutreachSuggestions(companies, overdueFollowUps = []) {
+  const client = getClient();
+  const db = require('./db');
+
+  const contacts = db.prepare('SELECT * FROM contacts ORDER BY firm, name').all();
+  const contactCount = contacts.filter(c => c.name).length;
+
+  const contactsBlock = contacts.length
+    ? 'WARM CONNECTIONS:\n' +
+      contacts.map(c => {
+        const label = c.name ? `${c.name} (${c.firm})` : c.firm;
+        return `- ${label} — ${c.how_i_know_them || 'known contact'}`;
+      }).join('\n')
+    : '';
+
+  const overdueBlock = overdueFollowUps.length
+    ? `⚠ FOLLOW-UPS DUE TODAY:\n` +
+      overdueFollowUps.map(a =>
+        `- ${a.company_name}: "${a.suggested_action}" (Step ${a.sequence_step}/3, due ${a.due_date})`
+      ).join('\n') + '\n\n'
+    : '';
+
+  // Use shared pipeline: firm names → Exa → accessible people
+  const { companyFirmMap, peopleByFirm } = await gatherInvestorDataForCompanies(companies);
+
+  // --- STEP 4: Build per-company investor context ---
+  const companySections = companies.map(c => {
+    const firms = companyFirmMap[c.id] || [];
+    const peopleLines = firms.map(firm => {
+      const people = peopleByFirm[firm] || [];
+      if (!people.length) return `  ${firm}: (no accessible contacts found via search)`;
+      return `  ${firm}:\n` +
+        people.slice(0, 3).map(p =>
+          `    • ${p.name} | ${p.role} [Tier ${p.tier || '?'} — ${tierLabel(p.tier)}]`
+        ).join('\n');
+    }).join('\n');
+
+    return `COMPANY: ${c.name} | ${c.sector} | ${c.stage || 'unknown stage'}
+Description: ${c.description || 'not provided'}
+CONFIRMED INVESTOR FIRMS (from Crunchbase):
+${firms.length ? peopleLines : '  (no investor firm data — use best judgment)'}`;
+  }).join('\n\n---\n\n');
+
+  // Warm path instruction adapts to network maturity
+  const warmInstruction = contactCount >= 3
+    ? `WARM PATH RULE: For each company, slot 1 must be a warm path — pick one of the confirmed investor firms and reason whether any of my contacts could introduce me. Be specific: co-investment history, sector overlap, same geography. If no credible link exists, say "No clear warm path yet — cold approach recommended."`
+    : contactCount >= 1
+    ? `WARM PATH RULE: Try to find 1 warm angle per company. If uncertain, flag it "Potential warm path — verify first."`
+    : `NETWORK STAGE: All slots are cold outreach. Prioritize Tier 1-2 people (scouts + associates).`;
+
+  // --- STEP 5: Claude writes the final email ---
+  const prompt = `You are a venture networking coach helping a researcher find a job at early-stage AI, fitness/wearables, and clean tech startups.
+
+For each company below, I've already identified the ACTUAL investor firms (from Crunchbase data) and searched for accessible people at those firms. Use ONLY the people listed — do not invent new names. If a firm shows no people found, you may note that and suggest checking their website directly.
+
+${warmInstruction}
+
+Format EXACTLY as (repeat for each company):
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[COMPANY NAME] · [Sector] · [Stage]
+[2-sentence overview]
+Timing: [why reach out now — 1 sentence]
+
+🔗 WARM PATH
+→ [Name] | [Firm] | [Role]
+   Via: [contact name + specific reason they'd know this person]
+   Angle: [1-sentence outreach hook]
+
+📡 COLD OUTREACH
+→ [Name] | [Firm] | [Role] · [Accessibility tier]
+   Angle: [specific, non-generic 1-sentence hook]
+
+→ [Name] | [Firm] | [Role] · [Accessibility tier]
+   Angle: [specific, non-generic 1-sentence hook]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${overdueBlock}COMPANIES WITH CONFIRMED INVESTOR DATA:
+${companySections}
+
+${contactsBlock}`;
+
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 1800,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return message.content[0].text;
+}
+
+function tierLabel(tier) {
+  const labels = { 1: 'Scout', 2: 'Associate/Analyst', 3: 'EIR/Venture Partner', 4: 'Principal/VP', 5: 'Partner' };
+  return labels[tier] || 'Investor';
+}
+
+// ─── SHARED PIPELINE: firm names → Exa → people ───────────────────────────
+// Used by both the daily email and the queue suggestions feed
+async function gatherInvestorDataForCompanies(companies) {
+  const companyFirmMap = {};
+  const allFirms = new Set();
+
+  for (const c of companies) {
+    const firms = (c.investor_firms || '')
+      .split(',').map(f => f.trim()).filter(f => f.length > 1).slice(0, 3);
+    companyFirmMap[c.id] = firms;
+    firms.forEach(f => allFirms.add(f));
+  }
+
+  const firmArray = [...allFirms];
+  if (!firmArray.length) return { companyFirmMap, peopleByFirm: {} };
+
+  const searchResults = await Promise.all(firmArray.map(f => searchFirmForPeople(f)));
+  const firmsWithResults = firmArray.map((firm, i) => ({ firm, text: searchResults[i] }));
+  const peopleByFirm = await extractAccessiblePeopleFromFirms(firmsWithResults);
+
+  return { companyFirmMap, peopleByFirm };
+}
+
+// ─── QUEUE SUGGESTIONS: returns JSON cards ─────────────────────────────────
+async function runQueueSuggestions(companies) {
+  const client = getClient();
+  const db = require('./db');
+  const contacts = db.prepare('SELECT * FROM contacts WHERE name != "" ORDER BY firm').all();
+
+  const { companyFirmMap, peopleByFirm } = await gatherInvestorDataForCompanies(companies);
+
+  // Build structured context for Claude — it only needs to fill in the creative parts
+  const companySections = companies.map(c => {
+    const firms = companyFirmMap[c.id] || [];
+    const peopleLines = firms.flatMap(firm => {
+      const people = peopleByFirm[firm] || [];
+      return people.slice(0, 2).map(p => `  • ${p.name} | ${p.role} | ${firm} [Tier ${p.tier}]`);
+    }).join('\n') || '  (no people found — Claude may suggest based on firm names)';
+
+    return `ID:${c.id} | ${c.name} | ${c.sector} | ${c.stage || 'unknown'}
+  ${c.description || ''}
+  Investor firms: ${firms.join(', ') || 'unknown'}
+  Accessible people found:\n${peopleLines}`;
+  }).join('\n\n');
+
+  const contactsLine = contacts.map(c => `${c.name} (${c.firm})`).join(', ') || 'none yet';
+
+  const prompt = `You are a VC networking strategist. For each company below, generate an outreach card as JSON.
+
+Use ONLY the people listed under "Accessible people found". Do not invent names. If a firm shows no people, leave that slot null.
+
+My contacts (warm intro potential): ${contactsLine}
+
+For each company produce:
+- timing: 1 sentence on why this is a good moment to reach out
+- warm: the single best warm intro path via one of my contacts — reason specifically why they'd know this investor. If no credible link exists, set to null.
+- cold: top 2 accessible people (lowest tier number = highest priority) with a distinct 1-sentence outreach angle each
+
+Return ONLY a valid JSON array, no other text:
+[
+  {
+    "company_id": <number>,
+    "timing": "...",
+    "warm": { "name": "...", "firm": "...", "role": "...", "tier": <number>, "via": "...", "angle": "..." } | null,
+    "cold": [
+      { "name": "...", "firm": "...", "role": "...", "tier": <number>, "angle": "..." }
+    ]
+  }
+]
+
+COMPANIES:
+${companySections}`;
+
+  const msg = await client.messages.create({
+    model: MODEL,
+    max_tokens: 1200,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  try {
+    const raw = msg.content[0].text.trim();
+    const jsonStr = raw.match(/\[[\s\S]*\]/)?.[0] || '[]';
+    const cards = JSON.parse(jsonStr);
+
+    // Hydrate with full company data
+    const companyMap = {};
+    companies.forEach(c => { companyMap[c.id] = c; });
+
+    return cards.map(card => {
+      const c = companyMap[card.company_id] || {};
+      return {
+        company_id: card.company_id,
+        company_name: c.name || '',
+        sector: c.sector || '',
+        stage: c.stage || '',
+        description: c.description || '',
+        investor_firms: companyMap[card.company_id]?.investor_firms || '',
+        timing: card.timing || '',
+        warm: card.warm || null,
+        cold: card.cold || [],
+      };
+    });
+  } catch (_) {
+    return [];
+  }
+}
+
+// ─── OUTREACH DRAFT ────────────────────────────────────────────────────────
+async function runOutreachDraft(company, investor) {
+  const client = getClient();
+  const EXA_KEY = process.env.EXA_API_KEY;
+
+  // Search for recent public activity from this investor
+  let recentActivity = '';
+  if (EXA_KEY) {
+    try {
+      const query = `"${investor.name}" "${investor.firm}" investment portfolio recent`;
+      const resp = await fetch('https://api.exa.ai/search', {
+        method: 'POST',
+        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, num_results: 3, text: { maxCharacters: 500 } }),
+      });
+      const data = await resp.json();
+      const results = (data.results || []).slice(0, 3);
+      recentActivity = results.map(r => `- ${r.title}: ${r.text || ''}`).join('\n');
+    } catch (_) {}
+  }
+
+  const prompt = `You are writing a cold LinkedIn DM or email for a venture researcher looking for a job at an early-stage startup.
+
+The researcher is targeting roles in operations, business development, research, or strategy at early-stage AI, fitness/wearables, and clean tech startups. They are well-networked, analytically sharp, and interested in how investors think about markets.
+
+Write ONE ready-to-send LinkedIn connection request message (150 words MAX). It must:
+1. Open with a specific, genuine hook — reference their firm's investment in ${company.name} or a recent move from the activity below
+2. State who the researcher is in 1 sentence (venture researcher, focused on AI/fitness/clean tech)
+3. Make a soft ask: learn about their portfolio / 15-minute call / just connect
+4. Sound human, not corporate. No "I hope this message finds you well."
+
+Target: ${investor.name} | ${investor.firm} | ${investor.role}
+Company context: ${company.name} — ${company.sector} startup — "${company.description || 'no description'}"
+
+${recentActivity ? `Recent activity found:\n${recentActivity}` : '(no recent activity found — write based on firm/company context)'}
+
+Output ONLY the message text, nothing else.`;
+
+  const msg = await client.messages.create({
+    model: MODEL,
+    max_tokens: 300,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return msg.content[0].text.trim();
+}
+
+// ─── INVESTOR DOSSIER ──────────────────────────────────────────────────────
+async function runInvestorDossier(name, firm) {
+  const client = getClient();
+  const EXA_KEY = process.env.EXA_API_KEY;
+
+  let searchText = '';
+  if (EXA_KEY) {
+    try {
+      const query = `"${name}" "${firm}" venture capital investments portfolio`;
+      const resp = await fetch('https://api.exa.ai/search', {
+        method: 'POST',
+        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, num_results: 5, text: { maxCharacters: 600 } }),
+      });
+      const data = await resp.json();
+      searchText = (data.results || [])
+        .map(r => `[${r.title}](${r.url})\n${r.text || ''}`)
+        .join('\n---\n');
+    } catch (_) {}
+  }
+
+  const prompt = `You are a VC researcher preparing a pre-outreach dossier. Be specific and factual — only include things you can confirm from the search results. Don't pad with generic statements.
+
+Format EXACTLY as:
+
+DOSSIER: ${name} · ${firm}
+
+Background
+[2 sentences: their role, how long at the firm, background before VC if visible]
+
+Recent Deals
+[3 bullet points of specific companies they've backed — with sector/stage if known. If unsure, note it.]
+
+What They Care About
+[2-3 themes from their investments or public statements — be specific, not generic]
+
+Conversation Hooks
+→ [Hook 1 — reference a specific portfolio company or investment thesis]
+→ [Hook 2 — a topic or trend they've publicly discussed]
+→ [Hook 3 — a genuine question about their thesis or a sector view]
+
+Best Approach
+[1 sentence: LinkedIn DM / email / warm intro — and any nuance about their responsiveness]
+
+---
+SEARCH RESULTS:
+${searchText || '(no results — use knowledge of this person and firm)'}`;
+
+  const msg = await client.messages.create({
+    model: MODEL,
+    max_tokens: 600,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return msg.content[0].text.trim();
+}
+
+async function runWeeklyRecap(pipelineStats) {
+  const client = getClient();
+  const { total, byStatus, recentActions, topCompanies } = pipelineStats;
+
+  const statusLines = Object.entries(byStatus)
+    .map(([s, n]) => `  ${s}: ${n}`).join('\n');
+  const actionLines = (recentActions || []).slice(0, 5)
+    .map(a => `  - ${a.suggested_action} (${a.company_name || 'unknown'})`).join('\n');
+  const topLines = (topCompanies || []).slice(0, 5)
+    .map(c => `  ${c.name} | ${c.sector} | ${c.status} | score: ${c.score || 'unscored'}`).join('\n');
+
+  const prompt = `You are a sharp venture networking coach writing a Monday morning recap email for a venture researcher conducting a job search in AI, fitness/wearables, and clean tech.
+
+Write a motivating, focused weekly recap. Tone: direct, smart, encouraging — like a good mentor. Not corporate fluff.
+
+Structure EXACTLY as:
+
+WEEKLY RECAP — Week of [current week]
+
+**Pipeline Snapshot**
+[2-3 sentence honest assessment of the pipeline state based on the stats]
+
+**Top Priorities This Week**
+[3 specific, actionable priorities based on the data]
+
+**Companies to Watch**
+[Brief call-out of 2-3 companies that deserve attention this week and why]
+
+**Mindset for the Week**
+[1 short paragraph — a reframe or insight to keep them sharp and motivated]
+
+---
+PIPELINE DATA:
+Total companies tracked: ${total}
+Status breakdown:
+${statusLines || '  (no data)'}
+
+Recent actions logged:
+${actionLines || '  (none)'}
+
+Top-scored companies:
+${topLines || '  (none scored yet)'}`;
+
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 800,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return message.content[0].text;
+}
+
+// ─── EVENT DISCOVERY ───────────────────────────────────────────────────────
+
+// Exa: search for Luma events featuring a specific investor or firm
+async function searchLumaEventsForInvestor(investor) {
+  const EXA_KEY = process.env.EXA_API_KEY;
+  if (!EXA_KEY) return [];
+  const name = investor.name || '';
+  const firm = investor.firm || '';
+  const queries = [
+    `site:lu.ma "${name}" venture capital`,
+    firm ? `site:lu.ma "${firm}" event San Francisco` : null,
+  ].filter(Boolean);
+
+  const allResults = [];
+  for (const query of queries) {
+    try {
+      const resp = await fetch('https://api.exa.ai/search', {
+        method: 'POST',
+        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, num_results: 4, text: { maxCharacters: 300 } }),
+      });
+      const data = await resp.json();
+      (data.results || []).forEach(r => {
+        if (r.url && r.url.includes('lu.ma')) allResults.push(r);
+      });
+    } catch (_) {}
+  }
+  return allResults;
+}
+
+// Exa: search for general SF VC/startup events on Luma
+async function searchSFVCEvents() {
+  const EXA_KEY = process.env.EXA_API_KEY;
+  if (!EXA_KEY) return [];
+  const queries = [
+    'site:lu.ma venture capital startup "San Francisco" 2025',
+    'site:lu.ma AI "Bay Area" investor networking 2025',
+    'site:lu.ma "San Francisco" VC founder meetup 2025',
+  ];
+  const results = [];
+  await Promise.all(queries.map(async query => {
+    try {
+      const resp = await fetch('https://api.exa.ai/search', {
+        method: 'POST',
+        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, num_results: 5, text: { maxCharacters: 300 } }),
+      });
+      const data = await resp.json();
+      (data.results || []).forEach(r => {
+        if (r.url && r.url.includes('lu.ma')) results.push(r);
+      });
+    } catch (_) {}
+  }));
+  return results;
+}
+
+// Cross-reference Exa event results against tracked investors
+// Returns array of { url, title, matchedInvestors }
+function matchEventsToInvestors(exaResults, trackedInvestors) {
+  const matched = [];
+  const seen = new Set();
+
+  for (const result of exaResults) {
+    if (!result.url || seen.has(result.url)) continue;
+    seen.add(result.url);
+
+    const blob = `${result.title || ''} ${result.text || ''}`.toLowerCase();
+    const matchedInvestors = trackedInvestors.filter(inv => {
+      const name = (inv.name || '').toLowerCase();
+      const firm = (inv.firm || '').toLowerCase();
+      return (name.length > 2 && blob.includes(name)) ||
+             (firm.length > 3 && blob.includes(firm));
+    });
+
+    matched.push({
+      url: result.url,
+      title: result.title || '',
+      snippet: result.text || '',
+      matchedInvestors,
+    });
+  }
+  return matched;
+}
+
+// Full event discovery run: Exa only
+async function runEventDiscovery(trackedInvestors) {
+  const db = require('./db');
+
+  // 1. Exa searches — investor-specific + general SF, run in parallel
+  const [investorResults, sfResults] = await Promise.all([
+    Promise.all(trackedInvestors.map(inv => searchLumaEventsForInvestor(inv)))
+      .then(arrays => arrays.flat()),
+    searchSFVCEvents(),
+  ]);
+
+  const allExa = [...investorResults, ...sfResults];
+  const matched = matchEventsToInvestors(allExa, trackedInvestors);
+
+  // 2. DB upsert — Exa title + snippet is enough
+  const newEvents = [];
+  const checkExisting = db.prepare('SELECT id FROM events WHERE event_url = ?');
+  const insertEvent = db.prepare(`
+    INSERT OR IGNORE INTO events
+      (title, event_url, luma_event_id, event_date, end_date, location, description, host_name,
+       matched_investor_ids, matched_investor_names, source)
+    VALUES
+      (@title, @event_url, @luma_event_id, @event_date, @end_date, @location, @description, @host_name,
+       @matched_investor_ids, @matched_investor_names, @source)
+  `);
+  const updateInvestors = db.prepare(`
+    UPDATE events SET matched_investor_ids = @ids, matched_investor_names = @names
+    WHERE event_url = @url AND (matched_investor_ids IS NULL OR matched_investor_ids = '')
+  `);
+
+  for (const item of matched) {
+    const existing = checkExisting.get(item.url);
+    const matchIds = item.matchedInvestors.map(i => i.id).join(',');
+    const matchNames = item.matchedInvestors.map(i => i.name || i.firm).join(', ');
+
+    if (existing) {
+      if (matchIds) updateInvestors.run({ ids: matchIds, names: matchNames, url: item.url });
+      continue;
+    }
+
+    const record = {
+      title: item.title,
+      event_url: item.url,
+      luma_event_id: '',
+      event_date: '',
+      end_date: '',
+      location: 'San Francisco, CA',
+      description: item.snippet,
+      host_name: '',
+      matched_investor_ids: matchIds,
+      matched_investor_names: matchNames,
+      source: 'exa',
+    };
+
+    insertEvent.run(record);
+    newEvents.push(record);
+  }
+
+  return newEvents;
+}
+
+module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runInvestorDossier, runEventDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms };
