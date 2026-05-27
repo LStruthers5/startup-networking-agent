@@ -42,7 +42,7 @@ function wrapHtml(title, bodyHtml) {
 
 async function sendDailyOutreach(agentOutput, companyIds) {
   const resend = getResend();
-  const db = require('./db');
+  const { execute, nowText } = require('./db');
 
   const subject = `Daily Outreach — ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
   const html = wrapHtml('Daily Outreach Brief', agentOutput.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
@@ -57,15 +57,18 @@ async function sendDailyOutreach(agentOutput, companyIds) {
   if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
 
   // Log to DB
-  db.prepare(`
-    INSERT INTO email_log (email_type, recipient, subject, status, resend_id, company_ids)
-    VALUES ('daily_outreach', ?, ?, 'sent', ?, ?)
-  `).run(RECIPIENT, subject, data?.id || null, (companyIds || []).join(','));
+  await execute(
+    `INSERT INTO email_log (email_type, recipient, subject, status, resend_id, company_ids)
+     VALUES ('daily_outreach', $1, $2, 'sent', $3, $4)`,
+    [RECIPIENT, subject, data?.id || null, (companyIds || []).join(',')]
+  );
 
   // Mark companies as last_suggested
   if (companyIds && companyIds.length) {
-    const stmt = db.prepare(`UPDATE companies SET last_suggested = datetime('now') WHERE id = ?`);
-    for (const id of companyIds) stmt.run(id);
+    const ts = nowText();
+    for (const id of companyIds) {
+      await execute('UPDATE companies SET last_suggested = $1 WHERE id = $2', [ts, id]);
+    }
   }
 
   return data;
@@ -73,7 +76,7 @@ async function sendDailyOutreach(agentOutput, companyIds) {
 
 async function sendWeeklyRecap(agentOutput) {
   const resend = getResend();
-  const db = require('./db');
+  const { execute } = require('./db');
 
   const subject = `Weekly Recap — Week of ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`;
   const html = wrapHtml('Weekly Recap', agentOutput.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
@@ -87,10 +90,11 @@ async function sendWeeklyRecap(agentOutput) {
 
   if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
 
-  db.prepare(`
-    INSERT INTO email_log (email_type, recipient, subject, status, resend_id)
-    VALUES ('weekly_recap', ?, ?, 'sent', ?)
-  `).run(RECIPIENT, subject, data?.id || null);
+  await execute(
+    `INSERT INTO email_log (email_type, recipient, subject, status, resend_id)
+     VALUES ('weekly_recap', $1, $2, 'sent', $3)`,
+    [RECIPIENT, subject, data?.id || null]
+  );
 
   return data;
 }

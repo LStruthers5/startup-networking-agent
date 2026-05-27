@@ -9,13 +9,11 @@ try {
 
 const express = require('express');
 const path = require('path');
+const { initSchema } = require('./db');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'client')));
-
-// Init DB (creates tables on first run)
-require('./db');
 
 // Routes
 app.use('/api/companies', require('./routes/companies'));
@@ -30,9 +28,9 @@ app.use('/api/events', require('./routes/events'));
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // Email: list logs
-app.get('/api/email/logs', (req, res) => {
-  const db = require('./db');
-  const logs = db.prepare('SELECT * FROM email_log ORDER BY created_at DESC LIMIT 50').all();
+app.get('/api/email/logs', async (req, res) => {
+  const { query } = require('./db');
+  const logs = await query('SELECT * FROM email_log ORDER BY created_at DESC LIMIT 50');
   res.json(logs);
 });
 
@@ -55,7 +53,16 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Networking Tower v2 → http://localhost:${PORT}`);
-  require('./scheduler').startScheduler();
-});
+
+// Init DB then start server
+initSchema()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Networking Tower v2 → http://localhost:${PORT}`);
+      require('./scheduler').startScheduler();
+    });
+  })
+  .catch(err => {
+    console.error('[DB] Init failed:', err.message);
+    process.exit(1);
+  });

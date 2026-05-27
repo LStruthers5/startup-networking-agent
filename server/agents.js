@@ -5,9 +5,9 @@ function getClient() {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 }
 
-function buildContactsBlock() {
-  const db = require('./db');
-  const contacts = db.prepare('SELECT * FROM contacts ORDER BY firm, name').all();
+async function buildContactsBlock() {
+  const { query } = require('./db');
+  const contacts = await query('SELECT * FROM contacts ORDER BY firm, name');
   if (!contacts.length) return '';
   const lines = contacts.map(c => {
     const label = c.name ? `${c.name} (${c.firm})` : c.firm;
@@ -161,10 +161,10 @@ ${networkContext || 'No network context provided.'}`;
 
 async function runInvestorMap(company, networkContext) {
   const client = getClient();
-  const db = require('./db');
+  const { query } = require('./db');
 
   // Pull user's saved investors — these are pre-verified, highest trust
-  const savedInvestors = db.prepare('SELECT * FROM investors ORDER BY firm, name').all();
+  const savedInvestors = await query('SELECT * FROM investors ORDER BY firm, name');
   const savedBlock = savedInvestors.length
     ? 'USER SAVED INVESTORS (pre-verified, prioritize these):\n' +
       savedInvestors.map(i =>
@@ -267,7 +267,7 @@ COMPANY: ${company.name} | ${company.sector} | ${company.stage || 'unknown stage
 
 RESEARCHER NETWORK CONTEXT:
 ${networkContext || 'No network context provided.'}
-${buildContactsBlock()}`;
+${await buildContactsBlock()}`;
 
   const finalMsg = await client.messages.create({
     model: MODEL,
@@ -302,9 +302,9 @@ ${searchText}`;
 
 async function runDailyOutreachSuggestions(companies, overdueFollowUps = []) {
   const client = getClient();
-  const db = require('./db');
+  const { query } = require('./db');
 
-  const contacts = db.prepare('SELECT * FROM contacts ORDER BY firm, name').all();
+  const contacts = await query('SELECT * FROM contacts ORDER BY firm, name');
   const contactCount = contacts.filter(c => c.name).length;
 
   const contactsBlock = contacts.length
@@ -422,8 +422,8 @@ async function gatherInvestorDataForCompanies(companies) {
 // ─── QUEUE SUGGESTIONS: returns JSON cards ─────────────────────────────────
 async function runQueueSuggestions(companies) {
   const client = getClient();
-  const db = require('./db');
-  const contacts = db.prepare('SELECT * FROM contacts WHERE name != "" ORDER BY firm').all();
+  const { query } = require('./db');
+  const contacts = await query("SELECT * FROM contacts WHERE name != '' ORDER BY firm");
 
   const { companyFirmMap, peopleByFirm } = await gatherInvestorDataForCompanies(companies);
 
@@ -745,7 +745,7 @@ function matchEventsToInvestors(exaResults, trackedInvestors) {
 
 // Full event discovery run: Exa only
 async function runEventDiscovery(trackedInvestors) {
-  const db = require('./db');
+  const { queryOne, execute } = require('./db');
 
   // 1. Exa searches — investor-specific + general SF, run in parallel
   const [investorResults, sfResults] = await Promise.all([
@@ -759,46 +759,36 @@ async function runEventDiscovery(trackedInvestors) {
 
   // 2. DB upsert — Exa title + snippet is enough
   const newEvents = [];
-  const checkExisting = db.prepare('SELECT id FROM events WHERE event_url = ?');
-  const insertEvent = db.prepare(`
-    INSERT OR IGNORE INTO events
-      (title, event_url, luma_event_id, event_date, end_date, location, description, host_name,
-       matched_investor_ids, matched_investor_names, source)
-    VALUES
-      (@title, @event_url, @luma_event_id, @event_date, @end_date, @location, @description, @host_name,
-       @matched_investor_ids, @matched_investor_names, @source)
-  `);
-  const updateInvestors = db.prepare(`
-    UPDATE events SET matched_investor_ids = @ids, matched_investor_names = @names
-    WHERE event_url = @url AND (matched_investor_ids IS NULL OR matched_investor_ids = '')
-  `);
 
   for (const item of matched) {
-    const existing = checkExisting.get(item.url);
     const matchIds = item.matchedInvestors.map(i => i.id).join(',');
     const matchNames = item.matchedInvestors.map(i => i.name || i.firm).join(', ');
 
+    const existing = await queryOne('SELECT id FROM events WHERE event_url = $1', [item.url]);
+
     if (existing) {
-      if (matchIds) updateInvestors.run({ ids: matchIds, names: matchNames, url: item.url });
+      if (matchIds) {
+        await execute(
+          `UPDATE events SET matched_investor_ids = $1, matched_investor_names = $2
+           WHERE event_url = $3 AND (matched_investor_ids IS NULL OR matched_investor_ids = '')`,
+          [matchIds, matchNames, item.url]
+        );
+      }
       continue;
     }
 
-    const record = {
-      title: item.title,
-      event_url: item.url,
-      luma_event_id: '',
-      event_date: '',
-      end_date: '',
-      location: 'San Francisco, CA',
-      description: item.snippet,
-      host_name: '',
-      matched_investor_ids: matchIds,
-      matched_investor_names: matchNames,
-      source: 'exa',
-    };
-
-    insertEvent.run(record);
-    newEvents.push(record);
+    await execute(
+      `INSERT INTO events
+         (title, event_url, luma_event_id, event_date, end_date, location,
+          description, host_name, matched_investor_ids, matched_investor_names, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ON CONFLICT (event_url) DO NOTHING`,
+      [
+        item.title, item.url, '', '', '', 'San Francisco, CA',
+        item.snippet, '', matchIds, matchNames, 'exa',
+      ]
+    );
+    newEvents.push({ title: item.title, event_url: item.url });
   }
 
   return newEvents;

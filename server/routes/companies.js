@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { parse } = require('csv-parse/sync');
-const db = require('../db');
+const { pool, query, queryOne, execute } = require('../db');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -52,14 +52,14 @@ function mapCrunchbaseRow(row) {
   };
 }
 
-router.get('/', (req, res) => {
-  const rows = db.prepare(`
-    SELECT * FROM companies ORDER BY last_touched DESC NULLS LAST, date_added DESC
-  `).all();
+router.get('/', async (req, res) => {
+  const rows = await query(
+    'SELECT * FROM companies ORDER BY last_touched DESC NULLS LAST, date_added DESC'
+  );
   res.json(rows);
 });
 
-router.post('/import', upload.single('file'), (req, res) => {
+router.post('/import', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   let records;
@@ -76,34 +76,43 @@ router.post('/import', upload.single('file'), (req, res) => {
   let added = 0, skipped = 0, flagged = 0;
   const flaggedNames = [];
 
-  const checkDup = db.prepare(
-    'SELECT id FROM companies WHERE name = ?'
-  );
-  const insert = db.prepare(`
-    INSERT INTO companies (name, sector, stage, description, website, founded_year,
-      last_funding, funding_amount, location, investor_firms, source)
-    VALUES (@name, @sector, @stage, @description, @website, @founded_year,
-      @last_funding, @funding_amount, @location, @investor_firms, @source)
-  `);
-  // On re-import, backfill investor_firms for existing companies
-  const updateInvestorFirms = db.prepare(
-    `UPDATE companies SET investor_firms = @investor_firms WHERE id = @id AND (investor_firms IS NULL OR investor_firms = '')`
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const importMany = db.transaction((rows) => {
-    for (const row of rows) {
+    for (const row of records) {
       const mapped = mapCrunchbaseRow(row);
       if (!mapped.name) continue;
 
-      const dup = checkDup.get(mapped.name);
-      if (dup) {
+      const existing = await client.query(
+        'SELECT id, investor_firms FROM companies WHERE name = $1',
+        [mapped.name]
+      );
+
+      if (existing.rows[0]) {
         // Backfill investor_firms for existing entries that don't have it
-        if (mapped.investor_firms) updateInvestorFirms.run({ id: dup.id, investor_firms: mapped.investor_firms });
+        if (mapped.investor_firms) {
+          await client.query(
+            `UPDATE companies SET investor_firms = $1
+             WHERE id = $2 AND (investor_firms IS NULL OR investor_firms = '')`,
+            [mapped.investor_firms, existing.rows[0].id]
+          );
+        }
         skipped++;
         continue;
       }
 
-      insert.run(mapped);
+      await client.query(
+        `INSERT INTO companies
+           (name, sector, stage, description, website, founded_year,
+            last_funding, funding_amount, location, investor_firms, source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [
+          mapped.name, mapped.sector, mapped.stage, mapped.description,
+          mapped.website, mapped.founded_year, mapped.last_funding,
+          mapped.funding_amount, mapped.location, mapped.investor_firms, mapped.source,
+        ]
+      );
       added++;
 
       if (!inFocus(mapped.sector)) {
@@ -111,26 +120,30 @@ router.post('/import', upload.single('file'), (req, res) => {
         flaggedNames.push(mapped.name);
       }
     }
-  });
 
-  importMany(records);
-
-  res.json({ added, skipped, flagged, flaggedNames });
+    await client.query('COMMIT');
+    res.json({ added, skipped, flagged, flaggedNames });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
 });
 
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   const allowed = ['notes', 'score', 'status', 'last_touched'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields' });
 
-  const sets = fields.map(f => `${f} = @${f}`).join(', ');
-  const stmt = db.prepare(`UPDATE companies SET ${sets} WHERE id = @id`);
-  stmt.run({ ...req.body, id: req.params.id });
+  const sets = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+  const vals = [...fields.map(f => req.body[f]), req.params.id];
+  await execute(`UPDATE companies SET ${sets} WHERE id = $${fields.length + 1}`, vals);
   res.json({ ok: true });
 });
 
-router.get('/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id);
+router.get('/:id', async (req, res) => {
+  const row = await queryOne('SELECT * FROM companies WHERE id = $1', [req.params.id]);
   if (!row) return res.status(404).json({ error: 'Not found' });
   res.json(row);
 });

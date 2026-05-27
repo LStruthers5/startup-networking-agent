@@ -1,72 +1,65 @@
 const cron = require('node-cron');
+const { query, queryOne, today } = require('./db');
 const { runDailyOutreachSuggestions, runWeeklyRecap } = require('./agents');
 const { sendDailyOutreach, sendWeeklyRecap } = require('./email');
 
-// Pick N companies for daily outreach — prefer:
-//   1. Never suggested, or suggested longest ago
-//   2. Status not 'passed'
-//   3. Highest score
-function pickDailyCandidates(db, n = 3) {
-  return db.prepare(`
+async function pickDailyCandidates(n = 3) {
+  return query(`
     SELECT * FROM companies
     WHERE status != 'passed'
     ORDER BY
-      last_suggested IS NULL DESC,
-      last_suggested ASC,
-      score DESC,
-      last_touched ASC
-    LIMIT ?
-  `).all(n);
+      (last_suggested IS NULL) DESC,
+      last_suggested ASC NULLS LAST,
+      score DESC NULLS LAST,
+      last_touched ASC NULLS LAST
+    LIMIT $1
+  `, [n]);
 }
 
-function getPipelineStats(db) {
-  const total = db.prepare('SELECT COUNT(*) as n FROM companies').get().n;
-
-  const statusRows = db.prepare(
-    `SELECT status, COUNT(*) as n FROM companies GROUP BY status`
-  ).all();
+async function getPipelineStats() {
+  const totalRow = await queryOne('SELECT COUNT(*) as n FROM companies');
+  const statusRows = await query('SELECT status, COUNT(*) as n FROM companies GROUP BY status');
   const byStatus = {};
-  for (const r of statusRows) byStatus[r.status || 'new'] = r.n;
+  for (const r of statusRows) byStatus[r.status || 'new'] = parseInt(r.n);
 
-  const recentActions = db.prepare(`
+  const recentActions = await query(`
     SELECT a.suggested_action, c.name as company_name
     FROM actions a
     LEFT JOIN companies c ON c.id = a.company_id
     WHERE a.completed = 0
     ORDER BY a.created_at DESC
     LIMIT 5
-  `).all();
+  `);
 
-  const topCompanies = db.prepare(`
+  const topCompanies = await query(`
     SELECT name, sector, status, score FROM companies
     WHERE score IS NOT NULL
     ORDER BY score DESC
     LIMIT 5
-  `).all();
+  `);
 
-  return { total, byStatus, recentActions, topCompanies };
+  return { total: parseInt(totalRow.n), byStatus, recentActions, topCompanies };
 }
 
-function getOverdueFollowUps(db) {
-  return db.prepare(`
+async function getOverdueFollowUps() {
+  return query(`
     SELECT a.*, c.name as company_name
     FROM actions a
     JOIN companies c ON c.id = a.company_id
     WHERE a.completed = 0
       AND a.due_date IS NOT NULL
-      AND a.due_date <= date('now')
+      AND a.due_date <= $1
       AND a.sequence_step > 1
     ORDER BY a.due_date ASC
     LIMIT 5
-  `).all();
+  `, [today()]);
 }
 
 async function runDailyJob() {
-  const db = require('./db');
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
-  const companies = pickDailyCandidates(db, 3);
+  const companies = await pickDailyCandidates(3);
   if (!companies.length) throw new Error('No companies to suggest — add some companies first');
-  const overdueFollowUps = getOverdueFollowUps(db);
+  const overdueFollowUps = await getOverdueFollowUps();
   const output = await runDailyOutreachSuggestions(companies, overdueFollowUps);
   await sendDailyOutreach(output, companies.map(c => c.id));
   console.log(`[Scheduler] Daily outreach sent — ${companies.length} companies, ${overdueFollowUps.length} overdue follow-ups`);
@@ -74,9 +67,8 @@ async function runDailyJob() {
 }
 
 async function runWeeklyJob() {
-  const db = require('./db');
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
-  const stats = getPipelineStats(db);
+  const stats = await getPipelineStats();
   const output = await runWeeklyRecap(stats);
   await sendWeeklyRecap(output);
   console.log('[Scheduler] Weekly recap sent.');
@@ -88,10 +80,7 @@ function startScheduler() {
     return;
   }
 
-  // Daily at 8:00 AM server time
   cron.schedule('0 8 * * *', () => runDailyJob().catch(e => console.error('[Scheduler] Daily job error:', e.message)), { timezone: 'America/Los_Angeles' });
-
-  // Weekly Monday at 7:00 AM
   cron.schedule('0 7 * * 1', () => runWeeklyJob().catch(e => console.error('[Scheduler] Weekly job error:', e.message)), { timezone: 'America/Los_Angeles' });
 
   console.log('[Scheduler] Email scheduler started — daily 8am, weekly Monday 7am (PT)');
