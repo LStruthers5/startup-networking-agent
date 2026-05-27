@@ -1,22 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import {
-  BriefcaseBusiness,
-  Building2,
-  ChevronDown,
-  ChevronRight,
-  ClipboardList,
-  ExternalLink,
-  Filter,
-  Lightbulb,
-  RefreshCw,
-  Search,
-  Upload,
-  UsersRound,
-} from "lucide-react";
+import BriefcaseBusiness from "lucide-react/dist/esm/icons/briefcase-business.js";
+import Building2 from "lucide-react/dist/esm/icons/building-2.js";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.js";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.js";
+import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list.js";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link.js";
+import Filter from "lucide-react/dist/esm/icons/filter.js";
+import Lightbulb from "lucide-react/dist/esm/icons/lightbulb.js";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.js";
+import Search from "lucide-react/dist/esm/icons/search.js";
+import Upload from "lucide-react/dist/esm/icons/upload.js";
+import UsersRound from "lucide-react/dist/esm/icons/users-round.js";
 import "./styles.css";
 
-const API_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8002";
 const FETCH_TIMEOUT_MS = 10000;
 const STATUSES = [
   "New",
@@ -44,7 +42,7 @@ function App() {
   const [expandedId, setExpandedId] = useState(null);
   const [message, setMessage] = useState("");
   const [fetchError, setFetchError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   async function fetchJson(path, init) {
     const controller = new AbortController();
@@ -105,14 +103,19 @@ function App() {
 
   useEffect(() => {
     loadCompanies();
-    loadInvestors();
   }, []);
+
+  useEffect(() => {
+    if (view === "investors" && investors.length === 0) {
+      loadInvestors();
+    }
+  }, [view]);
 
   const metrics = useMemo(() => {
     const topScore = companies[0]?.total_score || 0;
     const active = companies.filter((company) => !["Passed", "Contacted", "Replied"].includes(company.status)).length;
-    return { count: companies.length, topScore, active, investors: investors.length };
-  }, [companies, investors]);
+    return { count: companies.length, topScore, active, investors: investors.length || options.investors.length };
+  }, [companies, investors, options.investors]);
 
   function updateFilter(key, value) {
     const next = { ...filters, [key]: value };
@@ -139,7 +142,10 @@ function App() {
       const deleted = await fetchJson(`/companies/${companyId}`, { method: "DELETE" });
       setCompanies((current) => current.filter((company) => company.id !== companyId));
       setExpandedId(null);
-      await Promise.all([loadCompanies(), loadInvestors()]);
+      await loadCompanies();
+      if (investors.length > 0) {
+        await loadInvestors();
+      }
       setMessage(`${deleted.company_name} deleted.`);
     } catch (error) {
       setMessage(error.message);
@@ -173,7 +179,9 @@ function App() {
         body: formData,
       });
       await loadCompanies();
-      await loadInvestors();
+      if (investors.length > 0) {
+        await loadInvestors();
+      }
       setMessage(`CSV imported: ${result.imported} new, ${result.updated} updated, ${result.skipped.length} skipped.`);
     } catch (error) {
       setMessage(error.message);
@@ -220,7 +228,6 @@ function App() {
           <span>API: {API_URL}</span>
           <button className="icon-button" onClick={() => {
             loadCompanies();
-            loadInvestors();
           }}>
             <RefreshCw size={16} /> Retry
           </button>
@@ -323,7 +330,9 @@ function App() {
       ) : (
         <ImportCenter fetchJson={fetchJson} onImported={() => {
           loadCompanies();
-          loadInvestors();
+          if (investors.length > 0) {
+            loadInvestors();
+          }
         }} />
       )}
     </main>

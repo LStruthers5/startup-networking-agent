@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import inspect
 import json
 import logging
 import re
@@ -26,7 +27,12 @@ BACKEND_START_TIME = datetime.now(timezone.utc).isoformat()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -230,6 +236,18 @@ def startup() -> None:
 
 def timed_endpoint(name: str):
     def decorator(func):
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                start = time.perf_counter()
+                try:
+                    return await func(*args, **kwargs)
+                finally:
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    logger.info("%s completed in %.1fms", name, elapsed_ms)
+
+            return async_wrapper
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             start = time.perf_counter()
@@ -1427,7 +1445,7 @@ def generate_outreach_draft_for_action(action: dict[str, Any], target: dict[str,
 @app.get("/health")
 @app.get("/api/health")
 @timed_endpoint("/health")
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
