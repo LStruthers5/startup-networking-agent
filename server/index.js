@@ -13,6 +13,25 @@ const { initSchema } = require('./db');
 
 const app = express();
 app.use(express.json());
+
+// ─── Basic Auth ───────────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (req.path === '/api/health') return next(); // allow uptime checks
+
+  const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
+  if (!AUTH_PASSWORD) return next(); // no password set → open (dev mode)
+
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Basic ')) {
+    const decoded = Buffer.from(auth.slice(6), 'base64').toString();
+    const pass = decoded.split(':').slice(1).join(':'); // handle colons in password
+    if (pass === AUTH_PASSWORD) return next();
+  }
+
+  res.set('WWW-Authenticate', 'Basic realm="Networking Tower"');
+  return res.status(401).send('Unauthorized');
+});
+
 app.use(express.static(path.join(__dirname, '..', 'client')));
 
 // Routes
