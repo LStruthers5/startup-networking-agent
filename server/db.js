@@ -159,6 +159,14 @@ async function initSchema() {
     ]);
   }
 
+  // Idempotent migrations — add new columns to existing tables
+  await pool.query(`
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual';
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS confirmed INTEGER DEFAULT 1;
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS tier INTEGER DEFAULT 5;
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS source_company_id INTEGER;
+  `);
+
   console.log('[DB] Schema ready (PostgreSQL)');
 }
 

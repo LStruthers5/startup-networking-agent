@@ -228,6 +228,82 @@
   .rel-warm { background: rgba(242,184,193,.5); color: var(--rose); border: 1px solid rgba(196,80,106,.3); }
   .rel-outreach_sent { background: rgba(196,80,106,.2); color: var(--rose-deep); border: 1px solid rgba(138,32,64,.3); }
 
+  /* Investor tab */
+  .inv-stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .inv-stat-card { flex: 1 1 140px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; text-align: center; }
+  .inv-stat-num { font-size: 28px; font-weight: 700; line-height: 1; }
+  .inv-stat-num.mint { color: var(--accent); }
+  .inv-stat-num.rose { color: var(--rose); }
+  .inv-stat-num.muted { color: var(--muted); }
+  .inv-stat-num.danger { color: var(--danger); }
+  .inv-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-top: 4px; }
+
+  .inv-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+  .inv-tab { background: none; border: none; color: var(--muted); padding: 8px 20px; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; font-size: 15px; margin-bottom: -2px; transition: color .15s; }
+  .inv-tab:hover { color: var(--text); }
+  .inv-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .inv-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+  .inv-controls input { flex: 1 1 180px; max-width: 260px; }
+  .inv-controls select { width: auto; flex: 0 0 auto; font-size: 13px; padding: 6px 8px; }
+
+  /* Coverage bar */
+  .coverage-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 18px; }
+  .coverage-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+  .coverage-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .coverage-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s; }
+  .coverage-bar-fill.rose { background: var(--rose-bg); border-right: 2px solid var(--rose); }
+
+  /* Firm card */
+  .firm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; }
+  .firm-card-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; user-select: none; transition: background .1s; flex-wrap: wrap; }
+  .firm-card-head:hover { background: rgba(186,245,190,.1); }
+  .firm-name { font-weight: 700; font-size: 16px; font-style: italic; flex: 1; min-width: 0; }
+  .firm-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .firm-count { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 12px; white-space: nowrap; }
+  .firm-count.companies { background: rgba(186,245,190,.4); color: var(--accent); border: 1px solid rgba(45,138,66,.2); }
+  .firm-count.people { background: rgba(232,208,198,.4); color: var(--muted); border: 1px solid var(--border); }
+  .firm-count.people.has-people { background: rgba(242,184,193,.3); color: var(--rose); border: 1px solid rgba(196,80,106,.2); }
+  .firm-expand-icon { color: var(--muted); font-size: 12px; flex-shrink: 0; margin-left: 4px; }
+
+  .firm-body { display: none; border-top: 1px solid var(--border); }
+  .firm-body.open { display: block; }
+  .firm-section { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .firm-section:last-child { border-bottom: none; }
+  .firm-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 10px; }
+
+  /* Pipeline company pills in firm card */
+  .firm-company-pill { display: inline-flex; align-items: center; gap: 6px; background: rgba(186,245,190,.2); border: 1px solid rgba(45,138,66,.15); border-radius: 6px; padding: 4px 10px; margin: 2px; font-size: 13px; cursor: pointer; transition: background .1s; }
+  .firm-company-pill:hover { background: rgba(186,245,190,.4); }
+
+  /* Individual investor row inside firm card */
+  .firm-inv-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; background: var(--bg); flex-wrap: wrap; }
+  .firm-inv-row.unconfirmed { opacity: .85; border-style: dashed; }
+  .firm-inv-main { flex: 1; min-width: 0; }
+  .firm-inv-name { font-weight: 600; font-size: 14px; color: var(--text); }
+  .firm-inv-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .firm-inv-actions { display: flex; gap: 4px; flex-shrink: 0; flex-wrap: wrap; }
+
+  /* Source tags */
+  .src-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; text-transform: uppercase; letter-spacing: .4px; margin-left: 4px; }
+  .src-manual { background: rgba(45,138,66,.1); color: var(--accent); border: 1px solid rgba(45,138,66,.2); }
+  .src-csv { background: rgba(184,114,58,.1); color: var(--warn); border: 1px solid rgba(184,114,58,.2); }
+  .src-agent { background: rgba(196,80,106,.12); color: var(--rose); border: 1px solid rgba(196,80,106,.2); }
+  .src-agent.unconfirmed::after { content: ' ?'; }
+
+  /* Individuals list view */
+  .ind-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 10px; }
+  .ind-card.unconfirmed { border-style: dashed; background: rgba(242,184,193,.04); }
+  .ind-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .ind-name { font-weight: 700; font-size: 16px; font-style: italic; }
+  .ind-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .ind-companies { font-size: 12px; color: var(--muted); margin-top: 6px; font-style: italic; }
+  .ind-actions { display: flex; gap: 5px; flex-wrap: wrap; flex-shrink: 0; align-items: flex-start; }
+  .ind-rel-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+  /* Relationship select inline */
+  .rel-select { background: none; border: 1px solid var(--border); color: var(--text); border-radius: 20px; padding: 2px 8px; font-family: inherit; font-size: 12px; width: auto; cursor: pointer; }
+
   .flash { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: #fff; padding: 10px 18px; border-radius: var(--radius); font-weight: 600; font-size: 14px; z-index: 999; display: none; }
 </style>
 </head>
@@ -329,10 +405,59 @@
 
 <!-- ===== INVESTORS ===== -->
 <div class="view" id="view-investors">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <h2>Investors</h2>
-    <button class="btn-primary btn-sm" id="showAddInvestorBtn">+ Add Investor</button>
+
+  <!-- Stats header -->
+  <div class="inv-stats" id="invStats">
+    <div class="inv-stat-card"><div class="inv-stat-num mint" id="invStatFirms">&mdash;</div><div class="inv-stat-label">Firms Tracked</div></div>
+    <div class="inv-stat-card"><div class="inv-stat-num muted" id="invStatIndividuals">&mdash;</div><div class="inv-stat-label">Individuals</div></div>
+    <div class="inv-stat-card"><div class="inv-stat-num mint" id="invStatCoverage">&mdash;</div><div class="inv-stat-label">Companies with Warm Coverage</div></div>
+    <div class="inv-stat-card"><div class="inv-stat-num rose" id="invStatUnconfirmed">&mdash;</div><div class="inv-stat-label">Agent-Generated (Unconfirmed)</div></div>
   </div>
+
+  <!-- Sub-tabs: Firms | Individuals -->
+  <div class="inv-tabs">
+    <button class="inv-tab active" data-inv="firms">Firms</button>
+    <button class="inv-tab" data-inv="individuals">Individuals</button>
+  </div>
+
+  <!-- ── FIRMS VIEW ── -->
+  <div id="inv-firms-view">
+    <div class="inv-controls">
+      <input type="text" id="firmSearch" placeholder="Search firms&hellip;" style="max-width:240px">
+      <button class="btn-secondary btn-sm" id="discoverAllBtn">Discover Across All Firms</button>
+      <button class="btn-primary btn-sm" id="showAddInvestorBtnFirm" style="margin-left:auto">+ Add Investor</button>
+    </div>
+    <div id="firmsList"><div class="empty">Loading&hellip;</div></div>
+  </div>
+
+  <!-- ── INDIVIDUALS VIEW ── -->
+  <div id="inv-individuals-view" style="display:none">
+    <div class="inv-controls">
+      <input type="text" id="indSearch" placeholder="Search by name or firm&hellip;" style="max-width:240px">
+      <select id="indFilterRel" style="width:auto">
+        <option value="">All Relationships</option>
+        <option value="cold">Cold</option>
+        <option value="met">Met</option>
+        <option value="warm">Warm</option>
+        <option value="outreach_sent">Outreach Sent</option>
+      </select>
+      <select id="indFilterSrc" style="width:auto">
+        <option value="">All Sources</option>
+        <option value="manual">Manual</option>
+        <option value="agent">Agent</option>
+        <option value="csv">CSV</option>
+      </select>
+      <select id="indSort" style="width:auto">
+        <option value="rel">Sort: Relationship</option>
+        <option value="firm">Sort: Firm</option>
+        <option value="touched">Sort: Last Touched</option>
+      </select>
+      <button class="btn-primary btn-sm" id="showAddInvestorBtnInd" style="margin-left:auto">+ Add Investor</button>
+    </div>
+    <div id="individualsList"><div class="empty">Loading&hellip;</div></div>
+  </div>
+
+  <!-- ── ADD / EDIT FORM ── -->
   <div class="card" id="addInvestorForm" style="display:none;margin-bottom:16px">
     <h3 id="investorFormTitle">Add Investor</h3>
     <input type="hidden" id="editInvestorId">
@@ -362,7 +487,6 @@
       <button class="btn-secondary" id="cancelInvestorBtn">Cancel</button>
     </div>
   </div>
-  <div id="investorList"></div>
 </div>
 
 <!-- ===== CONTACTS ===== -->
@@ -541,7 +665,7 @@ document.querySelectorAll('nav button[data-view]').forEach(btn => {
     if (v === 'queue') { if (!wbLoaded) loadWorkbench(); }
     if (v === 'companies') loadCompanies();
     if (v === 'contacts') loadContacts();
-    if (v === 'investors') loadInvestors();
+    if (v === 'investors') loadInvestorView();
     if (v === 'agents') loadAgentCompanies();
   });
 });
@@ -951,6 +1075,7 @@ function investorRowHtml(inv, companyId, companyName, isWarm) {
       <div class="investor-btns">
         <button class="btn-secondary btn-sm" onclick="openDossierModal('${esc(inv.name)}','${esc(inv.firm)}')">Dossier</button>
         <button class="btn-secondary btn-sm" onclick="findEmail(${companyId},'${esc(inv.name)}','${esc(inv.firm)}')">Find Email</button>
+        <button class="btn-secondary btn-sm save-investor-btn" data-name="${esc(inv.name)}" data-firm="${esc(inv.firm)}" data-role="${esc(inv.role)}" data-tier="${inv.tier||5}" data-cid="${companyId}" id="save-inv-${companyId}-${esc(inv.name).replace(/[^a-z0-9]/gi,'_')}">Save</button>
         <button class="btn-success btn-sm" onclick="openLogFromCard(${companyId},'${esc(companyName)}','${esc(inv.name)}','${esc(inv.firm)}','${esc(inv.role)}')">Log It</button>
       </div>
     </div>`;
@@ -1020,6 +1145,21 @@ async function runInCardDraft(cid) {
     btn.textContent = 'Generate LinkedIn DM';
   }
   btn.disabled = false;
+}
+
+async function saveInvestorFromQueue(btn) {
+  const { name, firm, role, tier, cid } = btn.dataset;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('POST', '/investors', { name, firm, role, tier: parseInt(tier)||5, source: 'agent', confirmed: 0, source_company_id: parseInt(cid)||null });
+    btn.textContent = 'Saved';
+    btn.classList.replace('btn-secondary', 'btn-success');
+    flash(`${name} saved to Investors`);
+  } catch(err) {
+    btn.textContent = 'Save';
+    btn.disabled = false;
+    flash('Save failed: ' + err.message, false);
+  }
 }
 
 function copyInCardDraft(cid) {
@@ -1108,6 +1248,12 @@ async function loadLogged() {
 }
 
 function skipCard(companyId) { document.querySelector(`.oc[data-cid="${companyId}"]`)?.remove(); }
+
+// Event delegation for dynamically-rendered save buttons in queue cards
+document.getElementById('upNextList').addEventListener('click', e => {
+  const btn = e.target.closest('.save-investor-btn');
+  if (btn && !btn.disabled) saveInvestorFromQueue(btn);
+});
 
 document.getElementById('loggedToggle').addEventListener('click', () => {
   const el = document.getElementById('loggedList');
@@ -1321,102 +1467,439 @@ document.getElementById('saveContactBtn').addEventListener('click', async () => 
 });
 
 // ─── INVESTORS ─────────────────────────────────────────────────────────────
-async function loadInvestors() {
-  const investors = await api('GET', '/investors');
-  const el = document.getElementById('investorList');
-  if (!investors.length) { el.innerHTML = '<div class="empty">No investors yet.</div>'; return; }
-  el.innerHTML = investors.map(inv => `
-    <div class="card" id="inv-card-${inv.id}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-        <div>
-          <strong style="font-size:16px">${inv.name}</strong>
-          ${inv.firm?`<span style="color:var(--muted)"> &middot; ${inv.firm}</span>`:''}
-          ${inv.role?`<span style="color:var(--muted);font-size:12px"> &middot; ${inv.role}</span>`:''}
-          <br>
-          ${relBadge(inv.relationship_status)}
-          ${inv.stage_focus?`<span class="badge badge-other" style="margin-left:4px">${inv.stage_focus}</span>`:''}
-          ${inv.sector_focus?`<span class="badge badge-other" style="margin-left:4px">${inv.sector_focus}</span>`:''}
+let currentInvTab = 'firms';
+let allFirmsData = [];
+let allInvestorsData = [];
+const firmOpenState = {}; // { [firmKey]: boolean }
+
+function loadInvestorView() {
+  loadInvStats();
+  if (currentInvTab === 'firms') loadFirms();
+  else loadIndividuals();
+}
+
+// Sub-tab switching
+document.querySelectorAll('.inv-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.inv-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentInvTab = tab.dataset.inv;
+    document.getElementById('inv-firms-view').style.display = currentInvTab === 'firms' ? 'block' : 'none';
+    document.getElementById('inv-individuals-view').style.display = currentInvTab === 'individuals' ? 'block' : 'none';
+    if (currentInvTab === 'firms') loadFirms();
+    else loadIndividuals();
+  });
+});
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+async function loadInvStats() {
+  try {
+    const cov = await api('GET', '/investors/coverage');
+    document.getElementById('invStatFirms').textContent = allFirmsData.length || '…';
+    document.getElementById('invStatIndividuals').textContent = cov.totalIndividuals;
+    document.getElementById('invStatCoverage').textContent = `${cov.warmCoverage} / ${cov.total}`;
+    document.getElementById('invStatUnconfirmed').textContent = cov.unconfirmed;
+  } catch(_) {}
+}
+
+// ── FIRMS VIEW ─────────────────────────────────────────────────────────────
+async function loadFirms() {
+  const el = document.getElementById('firmsList');
+  el.innerHTML = '<div class="empty">Loading&hellip;</div>';
+  try {
+    allFirmsData = await api('GET', '/investors/firms');
+    document.getElementById('invStatFirms').textContent = allFirmsData.length;
+    renderFirms(allFirmsData);
+  } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--danger)">${e.message}</div>`; }
+}
+
+function renderFirms(firms) {
+  const el = document.getElementById('firmsList');
+  if (!firms.length) {
+    el.innerHTML = '<div class="empty">No firms yet. Import a Crunchbase CSV or add investors manually to get started.</div>';
+    return;
+  }
+
+  // Coverage bar
+  const total = firms.reduce((s, f) => s + f.pipeline_count, 0);
+  const withPeople = firms.filter(f => f.individual_count > 0).length;
+  const pct = firms.length ? Math.round((withPeople / firms.length) * 100) : 0;
+
+  el.innerHTML = `
+    <div class="coverage-bar-wrap">
+      <div class="coverage-label">Firm coverage &mdash; ${withPeople} of ${firms.length} firms have known individuals (${pct}%)</div>
+      <div class="coverage-bar"><div class="coverage-bar-fill" style="width:${pct}%"></div></div>
+    </div>
+    ${firms.map(f => renderFirmCard(f)).join('')}`;
+
+  el.querySelectorAll('.firm-card-head').forEach(head => {
+    head.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      const key = head.closest('.firm-card').dataset.key;
+      const body = document.getElementById('firm-body-' + key);
+      const icon = document.getElementById('firm-icon-' + key);
+      const isOpen = body.classList.toggle('open');
+      firmOpenState[key] = isOpen;
+      icon.innerHTML = isOpen ? '&#9662;' : '&#9656;';
+    });
+  });
+
+  el.querySelectorAll('.firm-discover-btn').forEach(btn => {
+    btn.addEventListener('click', () => discoverForFirm(btn.dataset.firm, btn));
+  });
+
+  el.querySelectorAll('.firm-company-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const id = pill.dataset.id, name = pill.dataset.name;
+      if (id) openAgentForCompany(id, name, 'brief');
+    });
+  });
+
+  wireFirmInvButtons(el);
+}
+
+function renderFirmCard(firm) {
+  const key = firm.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const isOpen = firmOpenState[key] || false;
+  const relCls = firm.best_relationship !== 'none' ? `rel-${firm.best_relationship}` : '';
+
+  const srcHtml = firm.source_tags.map(t =>
+    `<span class="src-tag src-${t}">${t}</span>`
+  ).join('');
+
+  const companiesHtml = firm.pipeline_companies.map(c =>
+    `<span class="firm-company-pill" data-id="${c.id}" data-name="${esc(c.name)}" title="${c.sector||''} · ${c.stage||''}">
+      ${c.name}
+      ${c.sector ? `<span style="font-size:11px;color:var(--muted)">${c.sector}</span>` : ''}
+    </span>`
+  ).join('') || '<span style="color:var(--muted);font-size:13px">No pipeline companies matched yet</span>';
+
+  const individualsHtml = firm.individuals.length
+    ? firm.individuals.map(inv => renderFirmInvRow(inv)).join('')
+    : '<div style="color:var(--muted);font-size:13px">No individuals tracked yet &mdash; click Discover to find contacts.</div>';
+
+  return `
+  <div class="firm-card" data-key="${key}">
+    <div class="firm-card-head">
+      <span class="firm-name">${firm.name}</span>
+      <div class="firm-badges">
+        ${firm.pipeline_count ? `<span class="firm-count companies">${firm.pipeline_count} co${firm.pipeline_count!==1?'mpanies':'mpany'}</span>` : ''}
+        <span class="firm-count people ${firm.individual_count?'has-people':''}">${firm.individual_count} ${firm.individual_count===1?'person':'people'}</span>
+        ${firm.best_relationship !== 'none' ? `<span class="rel-badge ${relCls}">${firm.best_relationship.replace('_',' ')}</span>` : ''}
+        ${srcHtml}
+      </div>
+      <span class="firm-expand-icon" id="firm-icon-${key}">${isOpen?'&#9662;':'&#9656;'}</span>
+    </div>
+    <div class="firm-body${isOpen?' open':''}" id="firm-body-${key}">
+      <div class="firm-section">
+        <div class="firm-section-title">Pipeline Companies (${firm.pipeline_count})</div>
+        <div>${companiesHtml}</div>
+      </div>
+      <div class="firm-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="firm-section-title" style="margin:0">Individuals (${firm.individual_count})</div>
+          <button class="btn-secondary btn-sm firm-discover-btn" data-firm="${esc(firm.name)}">
+            Discover via Agent
+          </button>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <button class="btn-sm ${inv.track_events?'btn-primary':'btn-secondary'} track-events-btn" data-id="${inv.id}">${inv.track_events?'Tracking Events':'Track Events'}</button>
-          <button class="btn-sm btn-success research-btn" data-id="${inv.id}">Research Portfolio</button>
-          <button class="btn-sm btn-secondary edit-inv-btn" data-id="${inv.id}">Edit</button>
-          <button class="btn-sm btn-danger del-inv-btn" data-id="${inv.id}">&times;</button>
+        <div id="firm-ind-${key}">${individualsHtml}</div>
+        <div id="firm-discover-status-${key}" style="font-size:12px;color:var(--muted);min-height:14px;margin-top:6px"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderFirmInvRow(inv) {
+  const srcClass = `src-${inv.source||'manual'}${inv.confirmed===0?' unconfirmed':''}`;
+  const unconfCls = inv.confirmed === 0 ? ' unconfirmed' : '';
+  const safeId = inv.id;
+  return `
+  <div class="firm-inv-row${unconfCls}" id="finv-row-${safeId}">
+    <div class="firm-inv-main">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="firm-inv-name">${inv.name}</span>
+        ${tierBadge(inv.tier)}
+        <span class="src-tag ${srcClass}">${inv.confirmed===0?'Agent ?':(inv.source||'manual')}</span>
+      </div>
+      <div class="firm-inv-meta">${[inv.role, inv.firm].filter(Boolean).join(' &middot; ')}</div>
+      ${inv.stage_focus||inv.sector_focus ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${[inv.stage_focus,inv.sector_focus].filter(Boolean).join(' &middot; ')}</div>` : ''}
+      ${inv.how_i_know_them?`<div style="font-size:12px;color:var(--rose);margin-top:3px;font-style:italic">Via: ${inv.how_i_know_them}</div>`:''}
+    </div>
+    <div class="firm-inv-actions">
+      ${inv.confirmed===0 ? `<button class="btn-primary btn-sm confirm-inv-btn" data-id="${safeId}">Confirm</button>` : ''}
+      <select class="rel-select quick-rel-sel" data-id="${safeId}">
+        ${['cold','met','warm','outreach_sent'].map(s=>`<option value="${s}"${inv.relationship_status===s?' selected':''}>${s.replace('_',' ')}</option>`).join('')}
+      </select>
+      <button class="btn-secondary btn-sm dossier-inv-btn" data-name="${esc(inv.name)}" data-firm="${esc(inv.firm||'')}">Dossier</button>
+      <button class="btn-secondary btn-sm edit-inv-btn" data-id="${safeId}">Edit</button>
+      <button class="btn-danger btn-sm del-inv-btn" data-id="${safeId}">&times;</button>
+    </div>
+  </div>`;
+}
+
+function wireFirmInvButtons(container) {
+  container.querySelectorAll('.quick-rel-sel').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await api('PATCH', '/investors/'+sel.dataset.id, { relationship_status: sel.value });
+      flash('Relationship updated'); loadInvStats();
+    });
+  });
+  container.querySelectorAll('.confirm-inv-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await api('PATCH', '/investors/'+btn.dataset.id, { confirmed: 1 });
+      flash('Investor confirmed'); loadFirms();
+    });
+  });
+  container.querySelectorAll('.dossier-inv-btn').forEach(btn => {
+    btn.addEventListener('click', () => openDossierModal(btn.dataset.name, btn.dataset.firm));
+  });
+  container.querySelectorAll('.edit-inv-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const inv = await api('GET', '/investors').then(list => list.find(x => x.id == btn.dataset.id));
+      if (!inv) return;
+      openInvestorForm(inv);
+    });
+  });
+  container.querySelectorAll('.del-inv-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this investor?')) return;
+      await api('DELETE', '/investors/'+btn.dataset.id);
+      flash('Deleted'); loadFirms(); loadInvStats();
+    });
+  });
+}
+
+async function discoverForFirm(firmName, btn) {
+  const key = firmName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const statusEl = document.getElementById('firm-discover-status-' + key);
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Searching&hellip;';
+  if (statusEl) { statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'Running Exa search + Claude extraction&hellip;'; }
+  try {
+    const res = await api('POST', `/investors/firms/${encodeURIComponent(firmName)}/discover`);
+    btn.textContent = 'Discover via Agent'; btn.disabled = false;
+    const msg = res.saved.length
+      ? `Found ${res.saved.length} new contact${res.saved.length>1?'s':''}${res.skipped.length?' ('+res.skipped.length+' already known)':''}`
+      : `No new contacts found${res.skipped.length?' ('+res.skipped.length+' already known)':''}`;
+    if (statusEl) { statusEl.style.color = res.saved.length ? 'var(--accent)' : 'var(--muted)'; statusEl.textContent = msg; }
+    if (res.saved.length) { loadFirms(); loadInvStats(); }
+  } catch(err) {
+    btn.textContent = 'Discover via Agent'; btn.disabled = false;
+    if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Error: ' + err.message; }
+  }
+}
+
+document.getElementById('firmSearch').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  renderFirms(allFirmsData.filter(f =>
+    f.name.toLowerCase().includes(q) ||
+    f.pipeline_companies.some(c => c.name.toLowerCase().includes(q))
+  ));
+});
+
+document.getElementById('discoverAllBtn').addEventListener('click', async () => {
+  const csvFirms = allFirmsData.filter(f => f.source_tags.includes('csv') && !f.individual_count);
+  if (!csvFirms.length) { flash('All CSV firms already have individuals'); return; }
+  flash(`Discovering across ${csvFirms.length} firms — this will take a moment`);
+  for (const f of csvFirms.slice(0, 5)) { // cap at 5 to avoid rate limits
+    try { await api('POST', `/investors/firms/${encodeURIComponent(f.name)}/discover`); } catch(_) {}
+  }
+  loadFirms(); loadInvStats();
+});
+
+// ── INDIVIDUALS VIEW ───────────────────────────────────────────────────────
+async function loadIndividuals() {
+  const el = document.getElementById('individualsList');
+  el.innerHTML = '<div class="empty">Loading&hellip;</div>';
+  try {
+    allInvestorsData = await api('GET', '/investors');
+    renderIndividuals();
+  } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--danger)">${e.message}</div>`; }
+}
+
+function renderIndividuals() {
+  const el = document.getElementById('individualsList');
+  const q = document.getElementById('indSearch').value.toLowerCase();
+  const relF = document.getElementById('indFilterRel').value;
+  const srcF = document.getElementById('indFilterSrc').value;
+  const sortBy = document.getElementById('indSort').value;
+
+  let list = allInvestorsData.filter(inv => {
+    if (q && !inv.name.toLowerCase().includes(q) && !(inv.firm||'').toLowerCase().includes(q)) return false;
+    if (relF && inv.relationship_status !== relF) return false;
+    if (srcF && (inv.source||'manual') !== srcF) return false;
+    return true;
+  });
+
+  const REL_ORDER = { outreach_sent: 0, warm: 1, met: 2, cold: 3 };
+  if (sortBy === 'rel') list.sort((a,b) => (REL_ORDER[a.relationship_status]??99) - (REL_ORDER[b.relationship_status]??99));
+  else if (sortBy === 'firm') list.sort((a,b) => (a.firm||'').localeCompare(b.firm||''));
+  else if (sortBy === 'touched') list.sort((a,b) => (b.last_touched||'').localeCompare(a.last_touched||''));
+
+  if (!list.length) { el.innerHTML = '<div class="empty">No investors match the current filters.</div>'; return; }
+
+  // For each investor, find their firm's associated pipeline companies
+  const firmCompanyMap = {};
+  for (const f of allFirmsData) {
+    firmCompanyMap[f.name.toLowerCase()] = f.pipeline_companies;
+  }
+
+  el.innerHTML = list.map(inv => {
+    const srcClass = `src-${inv.source||'manual'}${inv.confirmed===0?' unconfirmed':''}`;
+    const unconfCls = inv.confirmed === 0 ? ' unconfirmed' : '';
+    const firmCos = (firmCompanyMap[(inv.firm||'').toLowerCase()] || []).slice(0,3);
+    const cosHtml = firmCos.length
+      ? `<div class="ind-companies">Firm backed: ${firmCos.map(c => `<span style="cursor:pointer;color:var(--accent)" onclick="openAgentForCompany('${c.id}','${esc(c.name)}','brief')">${c.name}</span>`).join(', ')}</div>`
+      : '';
+    return `
+    <div class="ind-card${unconfCls}" id="ind-card-${inv.id}">
+      <div class="ind-card-top">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="ind-name">${inv.name}</span>
+            ${tierBadge(inv.tier)}
+            <span class="src-tag ${srcClass}">${inv.confirmed===0?'Agent ?':(inv.source||'manual')}</span>
+          </div>
+          <div class="ind-meta">${[inv.role, inv.firm].filter(Boolean).join(' &middot; ')}</div>
+          ${inv.stage_focus||inv.sector_focus?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${[inv.stage_focus,inv.sector_focus].filter(Boolean).join(' &middot; ')}</div>`:''}
+          ${cosHtml}
+          <div class="ind-rel-row">
+            ${relBadge(inv.relationship_status)}
+            <select class="rel-select quick-rel-sel-ind" data-id="${inv.id}">
+              ${['cold','met','warm','outreach_sent'].map(s=>`<option value="${s}"${inv.relationship_status===s?' selected':''}>${s.replace('_',' ')}</option>`).join('')}
+            </select>
+            ${inv.last_touched?`<span style="font-size:12px;color:var(--muted)">Last: ${inv.last_touched.slice(0,10)}</span>`:''}
+          </div>
+          ${inv.how_i_know_them?`<div style="font-size:12px;color:var(--rose);font-style:italic;margin-top:4px">How I know them: ${inv.how_i_know_them}</div>`:''}
+          ${inv.notes?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${inv.notes}</div>`:''}
+        </div>
+        <div class="ind-actions">
+          ${inv.confirmed===0?`<button class="btn-primary btn-sm confirm-inv-btn-ind" data-id="${inv.id}">Confirm</button>`:''}
+          <button class="btn-secondary btn-sm" onclick="openDossierModal('${esc(inv.name)}','${esc(inv.firm||'')}')">Dossier</button>
+          <button class="btn-secondary btn-sm track-btn-ind" data-id="${inv.id}">${inv.track_events?'Tracking Events':'Track Events'}</button>
+          <button class="btn-secondary btn-sm research-btn-ind" data-id="${inv.id}">Research</button>
+          <button class="btn-secondary btn-sm edit-inv-ind-btn" data-id="${inv.id}">Edit</button>
+          <button class="btn-danger btn-sm del-inv-ind-btn" data-id="${inv.id}">&times;</button>
         </div>
       </div>
-      ${inv.how_i_know_them?`<div style="color:var(--muted);font-size:13px;margin-top:6px">How I know them: ${inv.how_i_know_them}</div>`:''}
-      ${inv.notes?`<div style="color:var(--muted);font-size:13px;margin-top:4px">${inv.notes}</div>`:''}
-      ${inv.portfolio_companies?`<div style="margin-top:10px"><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Portfolio</div><div class="portfolio-box">${inv.portfolio_companies}</div></div>`:''}
-      <div class="inv-matches" id="inv-matches-${inv.id}" style="margin-top:8px"></div>
-      <div class="inv-status" id="inv-status-${inv.id}" style="font-size:13px;color:var(--muted);margin-top:6px;min-height:16px"></div>
-    </div>`).join('');
+      ${inv.portfolio_companies?`<div style="margin-top:10px"><div class="firm-section-title">Portfolio</div><div class="portfolio-box">${inv.portfolio_companies}</div></div>`:''}
+      <div id="inv-matches-${inv.id}" style="margin-top:6px"></div>
+      <div id="inv-status-${inv.id}" style="font-size:12px;color:var(--muted);margin-top:4px;min-height:14px"></div>
+    </div>`;
+  }).join('');
 
-  el.querySelectorAll('.track-events-btn').forEach(btn => {
+  // Wire controls
+  el.querySelectorAll('.quick-rel-sel-ind').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      await api('PATCH', '/investors/'+sel.dataset.id, { relationship_status: sel.value });
+      allInvestorsData.find(i => i.id == sel.dataset.id).relationship_status = sel.value;
+      renderIndividuals(); loadInvStats();
+    });
+  });
+  el.querySelectorAll('.confirm-inv-btn-ind').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const inv = investors.find(x => x.id == btn.dataset.id);
+      await api('PATCH', '/investors/'+btn.dataset.id, { confirmed: 1 });
+      allInvestorsData.find(i => i.id == btn.dataset.id).confirmed = 1;
+      renderIndividuals(); loadInvStats();
+    });
+  });
+  el.querySelectorAll('.track-btn-ind').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const inv = allInvestorsData.find(x => x.id == btn.dataset.id);
       const newVal = inv.track_events ? 0 : 1;
       await api('PATCH', '/investors/'+btn.dataset.id, { track_events: newVal });
       flash(newVal ? `Tracking events for ${inv.name}` : `Stopped tracking ${inv.name}`);
-      loadInvestors();
+      inv.track_events = newVal; renderIndividuals();
     });
   });
-  el.querySelectorAll('.research-btn').forEach(btn => { btn.addEventListener('click', () => researchPortfolio(btn.dataset.id, btn)); });
-  el.querySelectorAll('.edit-inv-btn').forEach(btn => {
+  el.querySelectorAll('.research-btn-ind').forEach(btn => { btn.addEventListener('click', () => researchPortfolio(btn.dataset.id, btn)); });
+  el.querySelectorAll('.edit-inv-ind-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const inv = investors.find(x => x.id == btn.dataset.id);
-      document.getElementById('editInvestorId').value = inv.id;
-      document.getElementById('iName').value = inv.name||'';
-      document.getElementById('iFirm').value = inv.firm||'';
-      document.getElementById('iRole').value = inv.role||'';
-      document.getElementById('iRelStatus').value = inv.relationship_status||'cold';
-      document.getElementById('iStage').value = inv.stage_focus||'';
-      document.getElementById('iSector').value = inv.sector_focus||'';
-      document.getElementById('iHow').value = inv.how_i_know_them||'';
-      document.getElementById('iNotes').value = inv.notes||'';
-      document.getElementById('investorFormTitle').textContent = 'Edit Investor';
-      document.getElementById('addInvestorForm').style.display = 'block';
-      document.getElementById('addInvestorForm').scrollIntoView({ behavior: 'smooth' });
+      const inv = allInvestorsData.find(x => x.id == btn.dataset.id);
+      if (inv) openInvestorForm(inv);
     });
   });
-  el.querySelectorAll('.del-inv-btn').forEach(btn => {
-    btn.addEventListener('click', async () => { if (!confirm('Delete?')) return; await api('DELETE', '/investors/'+btn.dataset.id); loadInvestors(); });
+  el.querySelectorAll('.del-inv-ind-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete?')) return;
+      await api('DELETE', '/investors/'+btn.dataset.id);
+      allInvestorsData = allInvestorsData.filter(i => i.id != btn.dataset.id);
+      renderIndividuals(); loadInvStats();
+    });
   });
 }
 
-async function researchPortfolio(id, btn) {
-  const statusEl = document.getElementById('inv-status-'+id);
-  const matchesEl = document.getElementById('inv-matches-'+id);
-  btn.disabled = true; btn.textContent = 'Researching…';
-  statusEl.innerHTML = '<span class="spinner"></span>Searching Exa + extracting with Claude…';
-  matchesEl.innerHTML = '';
-  try {
-    const data = await api('POST', '/investors/'+id+'/research');
-    btn.textContent = 'Research Portfolio'; btn.disabled = false;
-    statusEl.textContent = data.message || `Found ${data.portfolio_companies.split('\n').filter(Boolean).length} companies`;
-    if (data.matches && data.matches.length) {
-      matchesEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Already in your pipeline:</div>' +
-        data.matches.map(m => `<span class="match-pill" onclick="openAgentForCompany('${m.id}','${m.name}','brief')">${m.name} <span style="opacity:.7">(${m.status})</span></span>`).join('');
-    }
-    loadInvestors();
-  } catch (err) { btn.textContent = 'Research Portfolio'; btn.disabled = false; statusEl.textContent = ''; flash('Research error: '+err.message, false); }
+// Filter/sort controls for individuals
+['indSearch','indFilterRel','indFilterSrc','indSort'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderIndividuals);
+  document.getElementById(id).addEventListener('change', renderIndividuals);
+});
+
+// ── Shared investor form ────────────────────────────────────────────────────
+function openInvestorForm(inv) {
+  document.getElementById('editInvestorId').value = inv ? inv.id : '';
+  document.getElementById('iName').value = inv?.name||'';
+  document.getElementById('iFirm').value = inv?.firm||'';
+  document.getElementById('iRole').value = inv?.role||'';
+  document.getElementById('iRelStatus').value = inv?.relationship_status||'cold';
+  document.getElementById('iStage').value = inv?.stage_focus||'';
+  document.getElementById('iSector').value = inv?.sector_focus||'';
+  document.getElementById('iHow').value = inv?.how_i_know_them||'';
+  document.getElementById('iNotes').value = inv?.notes||'';
+  document.getElementById('investorFormTitle').textContent = inv ? 'Edit Investor' : 'Add Investor';
+  document.getElementById('addInvestorForm').style.display = 'block';
+  document.getElementById('addInvestorForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-document.getElementById('showAddInvestorBtn').addEventListener('click', () => {
-  document.getElementById('editInvestorId').value = '';
-  ['iName','iFirm','iRole','iStage','iSector','iHow','iNotes'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('iRelStatus').value = 'cold';
-  document.getElementById('investorFormTitle').textContent = 'Add Investor';
-  document.getElementById('addInvestorForm').style.display = 'block';
+['showAddInvestorBtnFirm','showAddInvestorBtnInd'].forEach(btnId => {
+  document.getElementById(btnId).addEventListener('click', () => openInvestorForm(null));
 });
+
 document.getElementById('cancelInvestorBtn').addEventListener('click', () => { document.getElementById('addInvestorForm').style.display = 'none'; });
+
 document.getElementById('saveInvestorBtn').addEventListener('click', async () => {
   const id = document.getElementById('editInvestorId').value;
   const name = document.getElementById('iName').value.trim();
   if (!name) { flash('Name is required', false); return; }
-  const payload = { name, firm: document.getElementById('iFirm').value.trim(), role: document.getElementById('iRole').value.trim(), relationship_status: document.getElementById('iRelStatus').value, stage_focus: document.getElementById('iStage').value.trim(), sector_focus: document.getElementById('iSector').value.trim(), how_i_know_them: document.getElementById('iHow').value.trim(), notes: document.getElementById('iNotes').value.trim() };
-  if (id) await api('PATCH', '/investors/'+id, payload); else await api('POST', '/investors', payload);
-  document.getElementById('addInvestorForm').style.display = 'none'; loadInvestors(); flash('Investor saved');
+  const payload = {
+    name, firm: document.getElementById('iFirm').value.trim(),
+    role: document.getElementById('iRole').value.trim(),
+    relationship_status: document.getElementById('iRelStatus').value,
+    stage_focus: document.getElementById('iStage').value.trim(),
+    sector_focus: document.getElementById('iSector').value.trim(),
+    how_i_know_them: document.getElementById('iHow').value.trim(),
+    notes: document.getElementById('iNotes').value.trim(),
+    source: 'manual', confirmed: 1,
+  };
+  if (id) await api('PATCH', '/investors/'+id, payload);
+  else await api('POST', '/investors', payload);
+  document.getElementById('addInvestorForm').style.display = 'none';
+  flash('Investor saved');
+  loadInvestorView();
 });
+
+// ── Portfolio research ──────────────────────────────────────────────────────
+async function researchPortfolio(id, btn) {
+  const statusEl = document.getElementById('inv-status-'+id);
+  const matchesEl = document.getElementById('inv-matches-'+id);
+  btn.disabled = true; btn.textContent = 'Researching…';
+  if (statusEl) statusEl.innerHTML = '<span class="spinner"></span>Searching Exa + extracting with Claude…';
+  if (matchesEl) matchesEl.innerHTML = '';
+  try {
+    const data = await api('POST', '/investors/'+id+'/research');
+    btn.textContent = 'Research'; btn.disabled = false;
+    if (statusEl) statusEl.textContent = data.message || `Found ${data.portfolio_companies.split('\n').filter(Boolean).length} companies`;
+    if (matchesEl && data.matches && data.matches.length) {
+      matchesEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Already in your pipeline:</div>' +
+        data.matches.map(m => `<span class="match-pill" onclick="openAgentForCompany('${m.id}','${m.name}','brief')">${m.name} <span style="opacity:.7">(${m.status})</span></span>`).join('');
+    }
+    allInvestorsData = []; // force reload
+    if (currentInvTab === 'individuals') loadIndividuals();
+  } catch (err) {
+    btn.textContent = 'Research'; btn.disabled = false;
+    if (statusEl) statusEl.textContent = '';
+    flash('Research error: '+err.message, false);
+  }
+}
 
 // ─── EVENTS ────────────────────────────────────────────────────────────────
 function fmtEventDate(dateStr) {

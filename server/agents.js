@@ -114,6 +114,33 @@ async function verifyInvestorViaExa(name, firm) {
   }
 }
 
+// ─── FIRM DISCOVERY ────────────────────────────────────────────────────────
+// Finds accessible individuals at a specific VC firm relevant to your pipeline
+async function runFirmDiscovery(firmName, pipelineCompanies) {
+  // Reuse the existing Exa + Claude pipeline
+  const searchText = await searchFirmForPeople(firmName);
+  const peopleByFirm = await extractAccessiblePeopleFromFirms([{ firm: firmName, text: searchText }]);
+
+  // extractAccessiblePeopleFromFirms keys by firm name as Claude interprets it — try exact, then fuzzy
+  const people =
+    peopleByFirm[firmName] ||
+    Object.entries(peopleByFirm).find(([k]) =>
+      k.toLowerCase().includes(firmName.toLowerCase()) ||
+      firmName.toLowerCase().includes(k.toLowerCase())
+    )?.[1] ||
+    Object.values(peopleByFirm)[0] ||
+    [];
+
+  return people.filter(p => p.name).map(p => ({
+    name: p.name,
+    firm: firmName,
+    role: p.role || '',
+    tier: p.tier || 5,
+    source: 'agent',
+    confirmed: 0,
+  }));
+}
+
 async function runBrief(company, networkContext) {
   const client = getClient();
   const prompt = `You are an action-oriented venture research assistant. Given the company details below, produce a structured company brief in EXACTLY this format — no extra sections, no deviation:
@@ -802,4 +829,4 @@ async function runEventDiscovery(trackedInvestors) {
   return newEvents;
 }
 
-module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runInvestorDossier, runEventDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms };
+module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runInvestorDossier, runEventDiscovery, runFirmDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms };
