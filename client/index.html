@@ -7,195 +7,228 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
-    --accent: #6c8eff; --accent2: #4ecca3; --warn: #f4a261;
-    --danger: #e76f51; --text: #e2e4ed; --muted: #7c8096; --radius: 8px;
+    --bg: #ffe7d9;
+    --surface: #fff8f4;
+    --border: #e8d0c6;
+    --accent: #2d8a42;
+    --accent2: #2d8a42;
+    --accent-bg: #baf5be;
+    --rose: #c4506a;
+    --rose-bg: #f2b8c1;
+    --rose-deep: #8a2040;
+    --warn: #b8723a;
+    --danger: #c04040;
+    --text: #2c1a16;
+    --muted: #9a7068;
+    --radius: 8px;
   }
-  body { background: var(--bg); color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.5; }
+  body { background: var(--bg); color: var(--text); font-family: 'Times New Roman', Times, Georgia, serif; font-size: 15px; line-height: 1.6; }
 
   /* ── Nav ── */
-  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 4px; height: 48px; position: sticky; top: 0; z-index: 50; }
-  nav h1 { font-size: 14px; font-weight: 700; color: var(--accent); margin-right: 20px; letter-spacing: .5px; }
-  nav button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 6px 12px; border-radius: var(--radius); font-size: 13px; font-family: inherit; transition: color .15s, background .15s; white-space: nowrap; }
-  nav button:hover { color: var(--text); background: var(--border); }
-  nav button.active { color: var(--accent); background: rgba(108,142,255,.12); }
+  nav { background: var(--surface); border-bottom: 2px solid var(--border); padding: 0 28px; display: flex; align-items: center; gap: 4px; height: 52px; position: sticky; top: 0; z-index: 50; }
+  nav h1 { font-size: 17px; font-weight: 700; color: var(--accent); margin-right: 24px; letter-spacing: .4px; font-style: italic; }
+  nav button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 6px 14px; border-radius: var(--radius); font-size: 14px; font-family: inherit; transition: color .15s, background .15s; white-space: nowrap; }
+  nav button:hover { color: var(--text); background: rgba(186,245,190,.25); }
+  nav button.active { color: var(--accent); background: rgba(45,138,66,.1); font-weight: 600; }
 
-  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  main { padding: 28px; max-width: 1200px; margin: 0 auto; }
   .view { display: none; }
   .view.active { display: block; }
 
-  h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
-  h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  h2 { font-size: 19px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+  h3 { font-size: 12px; font-weight: 700; margin-bottom: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; }
 
-  button { font-family: inherit; font-size: 13px; cursor: pointer; border: none; border-radius: var(--radius); padding: 7px 14px; transition: opacity .15s; }
+  button { font-family: inherit; font-size: 14px; cursor: pointer; border: none; border-radius: var(--radius); padding: 7px 14px; transition: opacity .15s; }
   button:hover { opacity: .85; }
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-  .btn-sm { padding: 4px 9px; font-size: 12px; }
+  .btn-sm { padding: 4px 10px; font-size: 13px; }
   .btn-danger { background: var(--danger); color: #fff; }
-  .btn-success { background: var(--accent2); color: #0f1117; }
-  .btn-ghost { background: none; border: none; color: var(--muted); padding: 4px 8px; font-size: 12px; }
+  .btn-success { background: var(--accent); color: #fff; }
+  .btn-ghost { background: none; border: none; color: var(--muted); padding: 4px 8px; font-size: 13px; }
   .btn-ghost:hover { color: var(--text); }
 
-  input, select, textarea { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 7px 10px; font-family: inherit; font-size: 13px; width: 100%; }
+  input, select, textarea { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 8px 11px; font-family: inherit; font-size: 14px; width: 100%; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
   textarea { resize: vertical; min-height: 90px; }
   label { color: var(--muted); font-size: 12px; margin-bottom: 4px; display: block; }
 
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
   .row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
   .row > * { flex: 1 1 200px; }
 
   /* Import */
   .import-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px; text-align: center; color: var(--muted); cursor: pointer; transition: border-color .15s; }
   .import-zone:hover { border-color: var(--accent); }
-  .import-result { margin-top: 14px; padding: 12px; border-radius: var(--radius); font-size: 12px; }
-  .import-result.ok { background: rgba(78,204,163,.1); border: 1px solid var(--accent2); color: var(--accent2); }
-  .import-result.warn { background: rgba(244,162,97,.1); border: 1px solid var(--warn); color: var(--warn); }
+  .import-result { margin-top: 14px; padding: 12px; border-radius: var(--radius); font-size: 13px; }
+  .import-result.ok { background: rgba(186,245,190,.3); border: 1px solid var(--accent); color: var(--accent); }
+  .import-result.warn { background: rgba(184,114,58,.1); border: 1px solid var(--warn); color: var(--warn); }
 
   /* Table */
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; padding: 8px 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  td { padding: 8px 10px; border-bottom: 1px solid rgba(42,45,58,.5); vertical-align: top; }
+  th { text-align: left; padding: 10px 11px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+  td { padding: 10px 11px; border-bottom: 1px solid rgba(232,208,198,.5); vertical-align: top; font-size: 14px; }
   tr.data-row { cursor: pointer; }
-  tr.data-row:hover td { background: rgba(108,142,255,.05); }
-  tr.data-row.selected td { background: rgba(108,142,255,.08); border-bottom-color: var(--accent); }
-  .badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .badge-ai { background: rgba(108,142,255,.15); color: var(--accent); }
-  .badge-fit { background: rgba(78,204,163,.15); color: var(--accent2); }
-  .badge-clean { background: rgba(244,162,97,.15); color: var(--warn); }
-  .badge-other { background: rgba(124,128,150,.15); color: var(--muted); }
-  .score-dots span { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--border); margin-right: 2px; }
+  tr.data-row:hover td { background: rgba(186,245,190,.18); }
+  tr.data-row.selected td { background: rgba(186,245,190,.3); border-bottom-color: var(--accent); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge-ai { background: rgba(45,138,66,.12); color: var(--accent); border: 1px solid rgba(45,138,66,.25); }
+  .badge-fit { background: rgba(186,245,190,.5); color: #1a6330; border: 1px solid rgba(186,245,190,.9); }
+  .badge-clean { background: rgba(184,114,58,.12); color: var(--warn); border: 1px solid rgba(184,114,58,.25); }
+  .badge-other { background: rgba(154,112,104,.1); color: var(--muted); border: 1px solid rgba(154,112,104,.2); }
+  .score-dots span { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--border); margin-right: 2px; }
   .score-dots span.filled { background: var(--warn); }
 
   /* Company detail panel */
-  .company-detail { background: rgba(108,142,255,.04); border: 1px solid rgba(108,142,255,.2); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
-  .company-detail h4 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-  .detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
-  .detail-field label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
-  .detail-field .val { color: var(--text); font-size: 13px; }
+  .company-detail { background: rgba(186,245,190,.1); border: 1px solid rgba(45,138,66,.2); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; }
+  .company-detail h4 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-top: 14px; }
+  .detail-field label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+  .detail-field .val { color: var(--text); font-size: 14px; }
 
   /* Agent panel */
-  .agent-panel { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+  .agent-panel { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
   @media (max-width: 700px) { .agent-panel { grid-template-columns: 1fr; } }
-  .agent-output { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; white-space: pre-wrap; font-size: 12px; line-height: 1.7; min-height: 200px; color: var(--text); }
+  .agent-output { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; white-space: pre-wrap; font-size: 14px; line-height: 1.8; min-height: 200px; color: var(--text); }
   .agent-output .section-head { color: var(--accent); font-weight: 700; }
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* Sub-tabs (Agent Run view) */
-  .sub-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
-  .sub-tab { background: none; border: none; color: var(--muted); padding: 8px 16px; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; font-size: 13px; transition: color .15s; }
+  .sub-tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--border); margin-bottom: 22px; }
+  .sub-tab { background: none; border: none; color: var(--muted); padding: 8px 18px; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; font-size: 14px; transition: color .15s; margin-bottom: -2px; }
   .sub-tab:hover { color: var(--text); }
-  .sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
   .sub-view { display: none; }
   .sub-view.active { display: block; }
 
   /* Saved contexts */
-  .ctx-chip { display: inline-block; padding: 4px 10px; background: var(--border); border-radius: 20px; font-size: 11px; cursor: pointer; margin: 3px; transition: background .15s; }
-  .ctx-chip:hover { background: var(--accent); color: #fff; }
+  .ctx-chip { display: inline-block; padding: 4px 10px; background: var(--border); border-radius: 20px; font-size: 12px; cursor: pointer; margin: 3px; transition: background .15s; }
+  .ctx-chip:hover { background: var(--accent-bg); color: var(--accent); }
 
   /* Runs log */
-  .run-item { padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; transition: border-color .15s; }
+  .run-item { padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; transition: border-color .15s; background: var(--surface); }
   .run-item:hover { border-color: var(--accent); }
   .run-meta { display: flex; gap: 12px; align-items: center; }
-  .run-type { font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 600; }
-  .run-type.brief { background: rgba(108,142,255,.15); color: var(--accent); }
-  .run-type.investor-map { background: rgba(78,204,163,.15); color: var(--accent2); }
-  .run-detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); white-space: pre-wrap; font-size: 12px; line-height: 1.7; }
+  .run-type { font-size: 12px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .run-type.brief { background: rgba(186,245,190,.45); color: #1a6330; }
+  .run-type.investor-map { background: rgba(242,184,193,.45); color: var(--rose-deep); }
+  .run-detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); white-space: pre-wrap; font-size: 13px; line-height: 1.8; }
   .run-detail.open { display: block; }
 
   /* Workbench queue */
-  .wb-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; position: relative; }
-  .wb-stats { display: flex; gap: 20px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; }
+  .wb-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; position: relative; }
+  .wb-stats { display: flex; gap: 24px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 18px; }
   .wb-stat { text-align: center; }
-  .wb-stat-num { font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1; }
-  .wb-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
-  .wb-stat-num.warn { color: #f87171; }
-  .wb-section-header { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 10px; }
-  .wb-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-  .wb-section-label.radar { color: #f87171; }
+  .wb-stat-num { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .wb-stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+  .wb-stat-num.warn { color: var(--danger); }
+  .wb-section-header { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 10px; }
+  .wb-section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .wb-section-label.radar { color: var(--danger); }
   .wb-section-label.upnext { color: var(--accent); }
   .wb-section-label.logged { color: var(--muted); }
 
   /* Runs dropdown */
-  .runs-dropdown { position: absolute; right: 0; top: 36px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 380px; max-height: 400px; overflow-y: auto; z-index: 40; box-shadow: 0 8px 32px rgba(0,0,0,.4); display: none; }
+  .runs-dropdown { position: absolute; right: 0; top: 40px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 400px; max-height: 420px; overflow-y: auto; z-index: 40; box-shadow: 0 8px 32px rgba(44,26,22,.15); display: none; }
   .runs-dropdown.open { display: block; }
-  .runs-dropdown-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
-  .runs-dropdown-item:hover { background: rgba(255,255,255,.03); }
+  .runs-dropdown-item { padding: 11px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
+  .runs-dropdown-item:hover { background: rgba(186,245,190,.15); }
   .runs-dropdown-item:last-child { border-bottom: none; }
 
   /* Outreach card */
-  .oc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
-  .oc-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
-  .oc-company { font-weight: 700; font-size: 14px; color: var(--text); }
-  .oc-timing { font-size: 11px; color: var(--muted); padding: 0 16px 10px; font-style: italic; }
+  .oc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
+  .oc-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px 10px; }
+  .oc-company { font-weight: 700; font-size: 17px; color: var(--text); font-style: italic; }
+  .oc-timing { font-size: 13px; color: var(--muted); padding: 0 18px 10px; font-style: italic; }
   .oc-skip { margin-left: auto; }
 
-  /* Accordion sections */
+  /* Accordion sections — pipeline depth via modifier class */
   .acc-section { border-top: 1px solid var(--border); }
-  .acc-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; cursor: pointer; user-select: none; transition: background .1s; }
-  .acc-header:hover { background: rgba(255,255,255,.02); }
-  .acc-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
-  .acc-title.active { color: var(--accent); }
-  .acc-icon { font-size: 11px; color: var(--muted); transition: transform .15s; }
-  .acc-body { display: none; padding: 14px 16px; background: rgba(0,0,0,.15); }
+  .acc-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px; cursor: pointer; user-select: none; transition: background .1s; }
+
+  /* Brief (research phase) — mint */
+  .acc-brief .acc-header:hover { background: rgba(186,245,190,.2); }
+  .acc-brief .acc-title.active { color: var(--accent); }
+  .acc-brief .acc-body.open { background: rgba(186,245,190,.1); }
+
+  /* Investors (outreach planning) — rose */
+  .acc-investors .acc-header:hover { background: rgba(242,184,193,.25); }
+  .acc-investors .acc-title.active { color: var(--rose); }
+  .acc-investors .acc-body.open { background: rgba(242,184,193,.12); }
+
+  /* Draft (active drafting) — deep rose */
+  .acc-draft .acc-header:hover { background: rgba(196,80,106,.12); }
+  .acc-draft .acc-title.active { color: var(--rose-deep); }
+  .acc-draft .acc-body.open { background: rgba(196,80,106,.08); }
+
+  .acc-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  .acc-icon { font-size: 12px; color: var(--muted); transition: transform .15s; }
+  .acc-body { display: none; padding: 16px 18px; }
   .acc-body.open { display: block; }
 
   /* Brief section */
-  .brief-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
-  .brief-field label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
-  .brief-field .val { color: var(--text); font-size: 12px; margin-top: 1px; word-break: break-word; }
-  .brief-agent-output { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 12px; white-space: pre-wrap; line-height: 1.7; margin-top: 10px; color: var(--text); max-height: 300px; overflow-y: auto; }
+  .brief-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .brief-field label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .brief-field .val { color: var(--text); font-size: 13px; margin-top: 2px; word-break: break-word; }
+  .brief-agent-output { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-size: 13px; white-space: pre-wrap; line-height: 1.8; margin-top: 10px; color: var(--text); max-height: 300px; overflow-y: auto; }
 
   /* Investor section */
-  .oc-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; margin: 10px 0 6px; }
-  .oc-section.warm { color: #a78bfa; }
+  .oc-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; margin: 10px 0 6px; }
+  .oc-section.warm { color: var(--rose); }
   .oc-section.cold { color: var(--accent); }
-  .investor-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; background: var(--bg); }
+  .investor-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; background: var(--bg); }
   .investor-info { flex: 1; min-width: 0; }
-  .investor-name { font-weight: 600; color: var(--text); font-size: 13px; }
-  .investor-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
-  .investor-angle { font-size: 12px; color: var(--muted); margin-top: 4px; font-style: italic; line-height: 1.5; }
+  .investor-name { font-weight: 600; color: var(--text); font-size: 14px; }
+  .investor-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .investor-angle { font-size: 13px; color: var(--muted); margin-top: 4px; font-style: italic; line-height: 1.5; }
   .investor-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
-  .email-found { font-size: 11px; color: var(--accent2); margin-top: 4px; word-break: break-all; }
-  .tier-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
-  .tier-1 { background: rgba(251,191,36,.2); color: #fbbf24; }
-  .tier-2 { background: rgba(108,142,255,.2); color: var(--accent); }
-  .tier-3 { background: rgba(78,204,163,.2); color: var(--accent2); }
-  .tier-4 { background: rgba(244,162,97,.2); color: var(--warn); }
-  .tier-5 { background: rgba(124,128,150,.2); color: var(--muted); }
+  .email-found { font-size: 12px; color: var(--accent); margin-top: 4px; word-break: break-all; }
+
+  /* Tier badges — deeper = more saturated mint (seniority ~ decision authority) */
+  .tier-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px; }
+  .tier-1 { background: rgba(45,138,66,.25); color: #1a5e2e; border: 1px solid rgba(45,138,66,.4); }
+  .tier-2 { background: rgba(45,138,66,.17); color: #2d8a42; border: 1px solid rgba(45,138,66,.3); }
+  .tier-3 { background: rgba(186,245,190,.5); color: #2d8a42; border: 1px solid rgba(186,245,190,.9); }
+  .tier-4 { background: rgba(242,184,193,.4); color: var(--rose); border: 1px solid rgba(242,184,193,.8); }
+  .tier-5 { background: rgba(154,112,104,.1); color: var(--muted); border: 1px solid rgba(154,112,104,.2); }
 
   /* Draft section */
-  .draft-section textarea { min-height: 110px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
+  .draft-section textarea { min-height: 110px; font-size: 14px; line-height: 1.6; margin-top: 10px; }
   .draft-investor-select { margin-bottom: 10px; }
 
   /* Radar card */
-  .radar-card { background: rgba(248,113,113,.05); border: 1px solid rgba(248,113,113,.3); border-radius: var(--radius); padding: 14px; margin-bottom: 8px; }
-  .radar-overdue { font-size: 10px; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: .5px; }
+  .radar-card { background: rgba(192,64,64,.04); border: 1px solid rgba(192,64,64,.22); border-radius: var(--radius); padding: 16px; margin-bottom: 10px; }
+  .radar-overdue { font-size: 11px; font-weight: 700; color: var(--danger); text-transform: uppercase; letter-spacing: .5px; }
 
   /* Logged card */
-  .logged-card { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; }
-  .logged-card.responded { border-color: rgba(78,204,163,.3); }
-  .step-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; white-space: nowrap; }
-  .step-1 { background: rgba(108,142,255,.15); color: var(--accent); }
-  .step-2 { background: rgba(251,191,36,.15); color: #fbbf24; }
-  .step-3 { background: rgba(248,113,113,.15); color: #f87171; }
-  .overdue-tag { font-size: 10px; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: .5px; }
-  .contact-ctx { font-size: 11px; color: var(--muted); margin-top: 3px; font-style: italic; }
-  .empty { color: var(--muted); padding: 32px; text-align: center; }
+  .logged-card { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; background: var(--surface); }
+  .logged-card.responded { border-color: rgba(45,138,66,.3); }
+
+  /* Step badges — pipeline depth: lightest → deepest */
+  .step-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+  .step-1 { background: rgba(186,245,190,.45); color: #2d8a42; border: 1px solid rgba(186,245,190,.9); }
+  .step-2 { background: rgba(242,184,193,.45); color: var(--rose); border: 1px solid rgba(242,184,193,.9); }
+  .step-3 { background: rgba(192,64,64,.15); color: var(--danger); border: 1px solid rgba(192,64,64,.3); }
+
+  .overdue-tag { font-size: 11px; font-weight: 700; color: var(--danger); text-transform: uppercase; letter-spacing: .5px; }
+  .contact-ctx { font-size: 12px; color: var(--muted); margin-top: 3px; font-style: italic; }
+  .empty { color: var(--muted); padding: 32px; text-align: center; font-size: 15px; }
 
   /* Investor research */
-  .portfolio-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 10px; font-size: 12px; white-space: pre-wrap; line-height: 1.7; max-height: 200px; overflow-y: auto; }
-  .match-pill { display: inline-block; padding: 2px 8px; background: rgba(78,204,163,.15); border: 1px solid var(--accent2); color: var(--accent2); border-radius: 20px; font-size: 11px; margin: 2px; cursor: pointer; }
-  .rel-badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .rel-met { background: rgba(78,204,163,.15); color: var(--accent2); }
-  .rel-warm { background: rgba(108,142,255,.15); color: var(--accent); }
-  .rel-cold { background: rgba(124,128,150,.15); color: var(--muted); }
-  .rel-outreach_sent { background: rgba(244,162,97,.15); color: var(--warn); }
+  .portfolio-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 10px; font-size: 13px; white-space: pre-wrap; line-height: 1.8; max-height: 200px; overflow-y: auto; }
+  .match-pill { display: inline-block; padding: 2px 9px; background: rgba(186,245,190,.35); border: 1px solid rgba(45,138,66,.3); color: var(--accent); border-radius: 20px; font-size: 12px; margin: 2px; cursor: pointer; }
+  .match-pill:hover { background: rgba(186,245,190,.55); }
 
-  .flash { position: fixed; bottom: 20px; right: 20px; background: var(--accent2); color: #0f1117; padding: 10px 18px; border-radius: var(--radius); font-weight: 600; font-size: 13px; z-index: 999; display: none; }
+  /* Relationship badges — pipeline depth (cold=lightest, outreach_sent=deepest rose) */
+  .rel-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .rel-cold { background: rgba(154,112,104,.1); color: var(--muted); border: 1px solid rgba(154,112,104,.2); }
+  .rel-met { background: rgba(186,245,190,.45); color: #2d8a42; border: 1px solid rgba(45,138,66,.3); }
+  .rel-warm { background: rgba(242,184,193,.5); color: var(--rose); border: 1px solid rgba(196,80,106,.3); }
+  .rel-outreach_sent { background: rgba(196,80,106,.2); color: var(--rose-deep); border: 1px solid rgba(138,32,64,.3); }
+
+  .flash { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: #fff; padding: 10px 18px; border-radius: var(--radius); font-weight: 600; font-size: 14px; z-index: 999; display: none; }
 </style>
 </head>
 <body>
@@ -216,50 +249,50 @@
   <div class="wb-header">
     <h2 style="margin:0">Action Queue</h2>
     <div style="display:flex;gap:8px;align-items:center;position:relative">
-      <button class="btn-secondary btn-sm" id="runsDropdownBtn">Runs Log ▾</button>
-      <button class="btn-secondary btn-sm" id="refreshQueueBtn">↺ Refresh</button>
+      <button class="btn-secondary btn-sm" id="runsDropdownBtn">Runs Log &#9662;</button>
+      <button class="btn-secondary btn-sm" id="refreshQueueBtn">Refresh</button>
       <!-- Runs dropdown -->
       <div class="runs-dropdown" id="runsDropdown">
         <div style="padding:10px 14px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">Recent Agent Runs</div>
-        <div id="runsDropdownList"><div style="padding:16px;color:var(--muted);text-align:center">Loading…</div></div>
+        <div id="runsDropdownList"><div style="padding:16px;color:var(--muted);text-align:center">Loading&hellip;</div></div>
       </div>
     </div>
   </div>
 
   <div class="wb-stats" id="wbStats">
-    <div class="wb-stat"><div class="wb-stat-num" id="statSent">—</div><div class="wb-stat-label">Sent this week</div></div>
-    <div class="wb-stat"><div class="wb-stat-num warn" id="statOverdue">—</div><div class="wb-stat-label">Overdue</div></div>
-    <div class="wb-stat"><div class="wb-stat-num" id="statOpen">—</div><div class="wb-stat-label">Open actions</div></div>
+    <div class="wb-stat"><div class="wb-stat-num" id="statSent">&mdash;</div><div class="wb-stat-label">Sent this week</div></div>
+    <div class="wb-stat"><div class="wb-stat-num warn" id="statOverdue">&mdash;</div><div class="wb-stat-label">Overdue</div></div>
+    <div class="wb-stat"><div class="wb-stat-num" id="statOpen">&mdash;</div><div class="wb-stat-label">Open actions</div></div>
   </div>
 
   <!-- Events preview -->
   <div id="wbEventsSection" style="display:none">
     <div class="wb-section-header">
-      <span class="wb-section-label" style="color:#a78bfa">🗓 Upcoming Events</span>
-      <a href="#" onclick="switchSubTab('agents','events');return false;" style="font-size:11px;color:var(--muted);text-decoration:none">See all →</a>
+      <span class="wb-section-label" style="color:var(--rose)">Upcoming Events</span>
+      <a href="#" onclick="switchSubTab('agents','events');return false;" style="font-size:12px;color:var(--muted);text-decoration:none">See all &rarr;</a>
     </div>
     <div id="wbEventsList"></div>
   </div>
 
   <!-- RADAR -->
   <div class="wb-section-header">
-    <span class="wb-section-label radar">📡 Radar — Follow-ups Due</span>
-    <span id="radarCount" style="font-size:11px;color:var(--muted)"></span>
+    <span class="wb-section-label radar">Radar &mdash; Follow-ups Due</span>
+    <span id="radarCount" style="font-size:12px;color:var(--muted)"></span>
   </div>
-  <div id="radarList"><div class="empty" style="padding:16px">Loading…</div></div>
+  <div id="radarList"><div class="empty" style="padding:16px">Loading&hellip;</div></div>
 
   <!-- UP NEXT -->
   <div class="wb-section-header">
-    <span class="wb-section-label upnext">⚡ Up Next</span>
+    <span class="wb-section-label upnext">Up Next</span>
     <button class="btn-secondary btn-sm" id="loadMoreBtn" style="display:none">Load More</button>
   </div>
   <div id="upNextList"></div>
-  <div id="upNextLoading" style="display:none;text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Sourcing investor targets…</div>
+  <div id="upNextLoading" style="display:none;text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Sourcing investor targets&hellip;</div>
 
   <!-- LOGGED -->
   <div class="wb-section-header" style="cursor:pointer" id="loggedToggle">
-    <span class="wb-section-label logged">✓ Logged</span>
-    <span id="loggedCount" style="font-size:11px;color:var(--muted)">▾</span>
+    <span class="wb-section-label logged">Logged</span>
+    <span id="loggedCount" style="font-size:12px;color:var(--muted)">&#9662;</span>
   </div>
   <div id="loggedList" style="display:none"></div>
 </div>
@@ -270,7 +303,7 @@
     <h2>Import Companies</h2>
     <div class="import-zone" id="importZone">
       <div>Drop a Crunchbase CSV here or click to select</div>
-      <div style="font-size:11px;margin-top:6px;color:var(--muted)">Detects duplicates · Flags out-of-focus sectors</div>
+      <div style="font-size:12px;margin-top:6px;color:var(--muted)">Detects duplicates &middot; Flags out-of-focus sectors</div>
     </div>
     <input type="file" id="fileInput" accept=".csv" style="display:none">
     <div id="importResult" style="display:none" class="import-result"></div>
@@ -281,7 +314,7 @@
 
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h2 id="companyCount">Companies</h2>
-    <input type="text" id="searchInput" placeholder="Filter by name, sector…" style="width:220px">
+    <input type="text" id="searchInput" placeholder="Filter by name, sector&hellip;" style="width:220px">
   </div>
 
   <div class="table-wrap">
@@ -308,7 +341,7 @@
       <div><label>Firm</label><input type="text" id="iFirm" placeholder="Upside Partnership"></div>
     </div>
     <div class="row" style="margin-bottom:10px">
-      <div><label>Role</label><input type="text" id="iRole" placeholder="General Partner, Scout…"></div>
+      <div><label>Role</label><input type="text" id="iRole" placeholder="General Partner, Scout&hellip;"></div>
       <div><label>Relationship</label>
         <select id="iRelStatus">
           <option value="cold">Cold</option><option value="met">Met</option>
@@ -317,11 +350,11 @@
       </div>
     </div>
     <div class="row" style="margin-bottom:10px">
-      <div><label>Stage Focus</label><input type="text" id="iStage" placeholder="Pre-seed, Seed…"></div>
-      <div><label>Sector Focus</label><input type="text" id="iSector" placeholder="AI, fitness…"></div>
+      <div><label>Stage Focus</label><input type="text" id="iStage" placeholder="Pre-seed, Seed&hellip;"></div>
+      <div><label>Sector Focus</label><input type="text" id="iSector" placeholder="AI, fitness&hellip;"></div>
     </div>
     <div class="row" style="margin-bottom:10px">
-      <div><label>How I Know Them</label><input type="text" id="iHow" placeholder="met at YC demo day…"></div>
+      <div><label>How I Know Them</label><input type="text" id="iHow" placeholder="met at YC demo day&hellip;"></div>
     </div>
     <div style="margin-bottom:10px"><label>Notes</label><textarea id="iNotes" style="min-height:60px"></textarea></div>
     <div style="display:flex;gap:8px">
@@ -346,8 +379,8 @@
       <div><label>Firm</label><input type="text" id="cFirm" placeholder="Decathlon Capital"></div>
     </div>
     <div class="row" style="margin-bottom:10px">
-      <div><label>Role</label><input type="text" id="cRole" placeholder="Partner, Associate…"></div>
-      <div><label>How I Know Them</label><input type="text" id="cHow" placeholder="working relationship…"></div>
+      <div><label>Role</label><input type="text" id="cRole" placeholder="Partner, Associate&hellip;"></div>
+      <div><label>How I Know Them</label><input type="text" id="cHow" placeholder="working relationship&hellip;"></div>
     </div>
     <div style="margin-bottom:10px"><label>Notes</label><textarea id="cNotes" style="min-height:60px"></textarea></div>
     <div style="display:flex;gap:8px">
@@ -366,10 +399,10 @@
 <!-- ===== AGENT RUN (contains Events, Email, Runs Log as sub-tabs) ===== -->
 <div class="view" id="view-agents">
   <div class="sub-tabs">
-    <button class="sub-tab active" data-sub="agent-run">⚙ Agent Run</button>
-    <button class="sub-tab" data-sub="events">🗓 Events</button>
-    <button class="sub-tab" data-sub="email">✉ Email</button>
-    <button class="sub-tab" data-sub="runs">📋 Runs Log</button>
+    <button class="sub-tab active" data-sub="agent-run">Agent Run</button>
+    <button class="sub-tab" data-sub="events">Events</button>
+    <button class="sub-tab" data-sub="email">Email</button>
+    <button class="sub-tab" data-sub="runs">Runs Log</button>
   </div>
 
   <!-- Agent sub-view -->
@@ -378,15 +411,15 @@
       <div>
         <div class="card">
           <h3>Company</h3>
-          <select id="agentCompanySelect"><option value="">Select a company…</option></select>
-          <div id="agentCompanyInfo" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6"></div>
+          <select id="agentCompanySelect"><option value="">Select a company&hellip;</option></select>
+          <div id="agentCompanyInfo" style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.6"></div>
         </div>
         <div class="card">
           <h3>Network Context</h3>
-          <textarea id="networkContext" placeholder="Describe your network: investors you know, operators, advisors, sector connections…"></textarea>
+          <textarea id="networkContext" placeholder="Describe your network: investors you know, operators, advisors, sector connections&hellip;"></textarea>
           <div style="margin-top:8px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <span style="color:var(--muted);font-size:11px">Saved contexts</span>
+              <span style="color:var(--muted);font-size:12px">Saved contexts</span>
               <button class="btn-sm btn-secondary" id="saveCtxBtn">Save current</button>
             </div>
             <div id="savedContexts"></div>
@@ -398,7 +431,7 @@
             <button class="btn-primary" id="runBriefBtn" style="flex:1">Company Brief</button>
             <button class="btn-secondary" id="runMapBtn" style="flex:1">Investor Map</button>
           </div>
-          <div id="agentStatus" style="margin-top:10px;font-size:12px;color:var(--muted);min-height:20px"></div>
+          <div id="agentStatus" style="margin-top:10px;font-size:13px;color:var(--muted);min-height:20px"></div>
         </div>
       </div>
       <div>
@@ -416,38 +449,38 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div>
         <h2 style="margin:0">Luma Events</h2>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">Flag investors in Investors tab → Scan → find events where they're speaking or hosting</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px">Flag investors in Investors tab &rarr; Scan &rarr; find events where they&rsquo;re speaking or hosting</div>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn-secondary btn-sm" id="scanEventsBtn">🔍 Scan Now</button>
-        <button class="btn-secondary btn-sm" id="refreshEventsBtn">↺ Refresh</button>
+        <button class="btn-secondary btn-sm" id="scanEventsBtn">Scan Now</button>
+        <button class="btn-secondary btn-sm" id="refreshEventsBtn">Refresh</button>
       </div>
     </div>
-    <div id="scanEventsStatus" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px"></div>
-    <div id="eventsList"><div class="empty">Click "Scan Now" to search for upcoming events featuring your flagged investors.</div></div>
+    <div id="scanEventsStatus" style="font-size:13px;color:var(--muted);margin-bottom:12px;min-height:16px"></div>
+    <div id="eventsList"><div class="empty">Click &ldquo;Scan Now&rdquo; to search for upcoming events featuring your flagged investors.</div></div>
   </div>
 
   <!-- Email sub-view -->
   <div class="sub-view" id="sub-email">
     <div class="card" style="margin-bottom:16px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">Email Automation</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px;color:var(--accent)">Email Automation</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div style="background:var(--bg);border-radius:8px;padding:16px">
-          <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Daily Outreach</div>
-          <div style="font-size:13px;color:var(--text);margin-bottom:10px">3 rotating company suggestions every morning at <strong>8:00 AM PT</strong></div>
-          <button id="btnTestDaily" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px">Send Test Now</button>
+        <div style="background:var(--bg);border-radius:8px;padding:18px;border:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Daily Outreach</div>
+          <div style="font-size:14px;color:var(--text);margin-bottom:12px">3 rotating company suggestions every morning at <strong>8:00 AM PT</strong></div>
+          <button id="btnTestDaily" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit">Send Test Now</button>
         </div>
-        <div style="background:var(--bg);border-radius:8px;padding:16px">
-          <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Weekly Recap</div>
-          <div style="font-size:13px;color:var(--text);margin-bottom:10px">Pipeline review every <strong>Monday 7:00 AM PT</strong></div>
-          <button id="btnTestWeekly" style="background:#7c3aed;color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px">Send Test Now</button>
+        <div style="background:var(--bg);border-radius:8px;padding:18px;border:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Weekly Recap</div>
+          <div style="font-size:14px;color:var(--text);margin-bottom:12px">Pipeline review every <strong>Monday 7:00 AM PT</strong></div>
+          <button id="btnTestWeekly" style="background:var(--rose);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit">Send Test Now</button>
         </div>
       </div>
-      <div id="emailTestStatus" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
+      <div id="emailTestStatus" style="margin-top:12px;font-size:13px;color:var(--muted)"></div>
     </div>
     <div class="card">
-      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">Email Log</div>
-      <div id="emailLog"><div class="empty">Loading…</div></div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px;color:var(--accent)">Email Log</div>
+      <div id="emailLog"><div class="empty">Loading&hellip;</div></div>
     </div>
   </div>
 
@@ -458,11 +491,11 @@
   </div>
 </div>
 
-<!-- ── Log modal ── -->
-<div id="logModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
+<!-- Log modal -->
+<div id="logModal" style="display:none;position:fixed;inset:0;background:rgba(44,26,22,.5);z-index:100;align-items:center;justify-content:center">
   <div class="card" style="width:440px;max-width:92vw;position:relative">
-    <div style="font-size:14px;font-weight:700;margin-bottom:4px">Log Outreach</div>
-    <div id="logModalContext" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">Log Outreach</div>
+    <div id="logModalContext" style="font-size:13px;color:var(--muted);margin-bottom:14px"></div>
     <input type="hidden" id="logActionId">
     <input type="hidden" id="logCompanyId">
     <input type="hidden" id="logInvestorName">
@@ -471,22 +504,22 @@
     <label>Who did you reach out to?</label>
     <input type="text" id="logContact" placeholder="e.g. Ryan Chen, Courtside Ventures" style="margin-bottom:10px">
     <label>What happened / quick note</label>
-    <textarea id="logNote" style="min-height:60px" placeholder="Sent LinkedIn request, got a reply…"></textarea>
+    <textarea id="logNote" style="min-height:60px" placeholder="Sent LinkedIn request, got a reply&hellip;"></textarea>
     <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn-primary" id="logSaveBtn">Done — schedule follow-up</button>
+      <button class="btn-primary" id="logSaveBtn">Done &mdash; schedule follow-up</button>
       <button class="btn-secondary" id="logCancelBtn">Cancel</button>
     </div>
-    <div id="logFeedback" style="font-size:12px;color:var(--muted);margin-top:8px;min-height:16px"></div>
+    <div id="logFeedback" style="font-size:13px;color:var(--muted);margin-top:8px;min-height:16px"></div>
   </div>
 </div>
 
-<!-- ── Dossier modal ── -->
-<div id="dossierModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
+<!-- Dossier modal -->
+<div id="dossierModal" style="display:none;position:fixed;inset:0;background:rgba(44,26,22,.5);z-index:100;align-items:center;justify-content:center">
   <div class="card" style="width:540px;max-width:92vw;max-height:85vh;overflow-y:auto">
-    <div style="font-size:14px;font-weight:700;margin-bottom:4px">Investor Dossier</div>
-    <div id="dossierContext" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
-    <div id="dossierLoading" style="text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Researching…</div>
-    <pre id="dossierText" style="display:none;white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text)"></pre>
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">Investor Dossier</div>
+    <div id="dossierContext" style="font-size:13px;color:var(--muted);margin-bottom:14px"></div>
+    <div id="dossierLoading" style="text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Researching&hellip;</div>
+    <pre id="dossierText" style="display:none;white-space:pre-wrap;font-size:13px;line-height:1.8;color:var(--text)"></pre>
     <button class="btn-secondary" id="dossierCloseBtn" style="margin-top:12px">Close</button>
   </div>
 </div>
@@ -534,7 +567,6 @@ function switchSubTab(view, sub) {
   if (navBtn) navBtn.classList.add('active');
   const viewEl = document.getElementById('view-' + view);
   if (viewEl) viewEl.classList.add('active');
-  // activate the sub-tab
   viewEl.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
   viewEl.querySelectorAll('.sub-view').forEach(v => v.classList.remove('active'));
   const subTab = viewEl.querySelector(`.sub-tab[data-sub="${sub}"]`);
@@ -558,7 +590,7 @@ async function api(method, path, body) {
 
 function flash(msg, ok = true) {
   const el = document.getElementById('flash');
-  el.textContent = msg; el.style.background = ok ? 'var(--accent2)' : 'var(--danger)';
+  el.textContent = msg; el.style.background = ok ? 'var(--accent)' : 'var(--danger)';
   el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 3000);
 }
 
@@ -567,19 +599,26 @@ function sectorBadge(sector = '') {
   if (s.includes('ai')) return `<span class="badge badge-ai">${sector}</span>`;
   if (s.includes('fit') || s.includes('wear')) return `<span class="badge badge-fit">${sector}</span>`;
   if (s.includes('clean')) return `<span class="badge badge-clean">${sector}</span>`;
-  return `<span class="badge badge-other">${sector || '—'}</span>`;
+  return `<span class="badge badge-other">${sector || '&mdash;'}</span>`;
 }
 
 function scoreDots(score) {
-  if (!score) return '<span style="color:var(--muted)">—</span>';
+  if (!score) return '<span style="color:var(--muted)">&mdash;</span>';
   return '<span class="score-dots">' + [1,2,3,4,5].map(i => `<span class="${i<=score?'filled':''}"></span>`).join('') + '</span>';
 }
 
-function fmtDate(dt) { if (!dt) return '<span style="color:var(--muted)">—</span>'; return dt.slice(0,10); }
+function fmtDate(dt) { if (!dt) return '<span style="color:var(--muted)">&mdash;</span>'; return dt.slice(0,10); }
 function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
 function relBadge(status) {
   const labels = { met:'Met', warm:'Warm', cold:'Cold', outreach_sent:'Outreach Sent' };
   return `<span class="rel-badge rel-${status}">${labels[status]||status}</span>`;
+}
+function fmtMoney(val) {
+  if (!val) return '&mdash;';
+  const s = String(val).replace(/[^0-9.]/g, '');
+  const n = parseFloat(s);
+  if (isNaN(n)) return val;
+  return '$' + n.toLocaleString('en-US');
 }
 
 // ─── COMPANIES ─────────────────────────────────────────────────────────────
@@ -600,10 +639,10 @@ function renderCompanies(rows) {
   }
   tbody.innerHTML = rows.map(c => `
     <tr class="data-row${selectedCompanyId==c.id?' selected':''}" data-id="${c.id}">
-      <td><strong>${c.name}</strong>${c.website?`<br><a href="${c.website}" target="_blank" style="color:var(--muted);font-size:11px">${c.website.replace(/https?:\/\//,'')}</a>`:''}</td>
+      <td><strong>${c.name}</strong>${c.website?`<br><a href="${c.website}" target="_blank" style="color:var(--muted);font-size:12px">${c.website.replace(/https?:\/\//,'')}</a>`:''}</td>
       <td>${sectorBadge(c.sector)}</td>
-      <td style="color:var(--muted)">${c.stage||'—'}</td>
-      <td><select class="status-select" data-id="${c.id}" style="background:none;border:none;color:var(--text);padding:0;width:auto;cursor:pointer">
+      <td style="color:var(--muted)">${c.stage||'&mdash;'}</td>
+      <td><select class="status-select" data-id="${c.id}" style="background:none;border:none;color:var(--text);padding:0;width:auto;cursor:pointer;font-family:inherit;font-size:14px">
         ${['new','researching','outreach','archived'].map(s=>`<option value="${s}"${c.status===s?' selected':''}>${s}</option>`).join('')}
       </select></td>
       <td>${scoreDots(c.score)}</td>
@@ -642,28 +681,28 @@ function showCompanyDetail(c) {
         <div style="display:flex;gap:8px;flex-shrink:0">
           <button class="btn-primary btn-sm" onclick="openAgentForCompany('${c.id}','${esc(c.name)}','brief')">Run Brief</button>
           <button class="btn-secondary btn-sm" onclick="openAgentForCompany('${c.id}','${esc(c.name)}','map')">Investor Map</button>
-          <button class="btn-ghost btn-sm" onclick="closeCompanyDetail()">✕</button>
+          <button class="btn-ghost btn-sm" onclick="closeCompanyDetail()">&times;</button>
         </div>
       </div>
-      ${c.description?`<div style="margin-top:12px;font-size:13px;color:var(--muted);line-height:1.7">${c.description}</div>`:''}
+      ${c.description?`<div style="margin-top:12px;font-size:14px;color:var(--muted);line-height:1.7">${c.description}</div>`:''}
       <div class="detail-grid">
-        ${field('Website', c.website ? `<a href="${c.website}" target="_blank" style="color:var(--accent)">${c.website.replace(/https?:\/\//,'')}</a>` : '—')}
+        ${field('Website', c.website ? `<a href="${c.website}" target="_blank" style="color:var(--accent)">${c.website.replace(/https?:\/\//,'')}</a>` : '&mdash;')}
         ${field('Location', c.location)}
         ${field('Founded', c.founded_year)}
         ${field('Last Funding', c.last_funding)}
-        ${field('Amount', c.funding_amount ? '$' + c.funding_amount : '—')}
+        ${field('Amount', c.funding_amount ? fmtMoney(c.funding_amount) : '&mdash;')}
         ${field('Status', c.status)}
-        ${field('Score', c.score || '—')}
+        ${field('Score', c.score || '&mdash;')}
         ${field('Added', c.date_added)}
         ${field('Last Touched', c.last_touched)}
       </div>
-      ${c.investor_firms?`<div style="margin-top:14px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Investor Firms (from CSV)</div><div style="font-size:13px;color:var(--text)">${c.investor_firms}</div></div>`:''}
-      ${c.notes?`<div style="margin-top:12px"><label>Notes</label><div style="font-size:13px;color:var(--muted);margin-top:4px">${c.notes}</div></div>`:''}
+      ${c.investor_firms?`<div style="margin-top:14px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Investor Firms (from CSV)</div><div style="font-size:14px;color:var(--text)">${c.investor_firms}</div></div>`:''}
+      ${c.notes?`<div style="margin-top:12px"><label>Notes</label><div style="font-size:14px;color:var(--muted);margin-top:4px">${c.notes}</div></div>`:''}
     </div>`;
 }
 
 function field(label, val) {
-  return `<div class="detail-field"><label>${label}</label><div class="val">${val||'—'}</div></div>`;
+  return `<div class="detail-field"><label>${label}</label><div class="val">${val||'&mdash;'}</div></div>`;
 }
 
 function closeCompanyDetail() {
@@ -683,7 +722,6 @@ function openAgentForCompany(id, name, type) {
   const navBtn = document.querySelector('nav button[data-view="agents"]');
   navBtn.classList.add('active');
   document.getElementById('view-agents').classList.add('active');
-  // Ensure Agent Run sub-tab is active
   document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.sub-view').forEach(v => v.classList.remove('active'));
   document.querySelector('.sub-tab[data-sub="agent-run"]').classList.add('active');
@@ -713,13 +751,13 @@ async function handleFile(file) {
   importZone.textContent = 'Importing…';
   const r = await fetch('/api/companies/import', { method: 'POST', body: fd });
   const data = await r.json();
-  importZone.innerHTML = 'Drop a Crunchbase CSV here or click to select<div style="font-size:11px;margin-top:6px;color:var(--muted)">Detects duplicates · Flags out-of-focus sectors</div>';
+  importZone.innerHTML = 'Drop a Crunchbase CSV here or click to select<div style="font-size:12px;margin-top:6px;color:var(--muted)">Detects duplicates &middot; Flags out-of-focus sectors</div>';
   const resultEl = document.getElementById('importResult');
   resultEl.style.display = 'block';
   if (data.error) { resultEl.className = 'import-result warn'; resultEl.textContent = 'Error: ' + data.error; }
   else {
     resultEl.className = 'import-result ' + (data.flagged > 0 ? 'warn' : 'ok');
-    resultEl.innerHTML = `Added ${data.added} · Skipped ${data.skipped}` + (data.flagged > 0 ? ` · Flagged ${data.flagged} out-of-focus: ${data.flaggedNames.join(', ')}` : '');
+    resultEl.innerHTML = `Added ${data.added} &middot; Skipped ${data.skipped}` + (data.flagged > 0 ? ` &middot; Flagged ${data.flagged} out-of-focus: ${data.flaggedNames.join(', ')}` : '');
     loadCompanies();
   }
 }
@@ -745,7 +783,7 @@ function getSavedContexts() { try { return JSON.parse(localStorage.getItem('ntv2
 function renderSavedContexts() {
   const div = document.getElementById('savedContexts');
   const ctxs = getSavedContexts();
-  if (!ctxs.length) { div.innerHTML = '<span style="color:var(--muted);font-size:11px">None saved yet</span>'; return; }
+  if (!ctxs.length) { div.innerHTML = '<span style="color:var(--muted);font-size:12px">None saved yet</span>'; return; }
   div.innerHTML = ctxs.map((c,i) => `<span class="ctx-chip" data-i="${i}" title="${c}">${c.slice(0,30)}${c.length>30?'…':''}</span>`).join('');
   div.querySelectorAll('.ctx-chip').forEach(chip => {
     chip.addEventListener('click', () => { document.getElementById('networkContext').value = getSavedContexts()[chip.dataset.i]; });
@@ -785,7 +823,6 @@ document.getElementById('copyOutputBtn').addEventListener('click', () => { navig
 
 // ─── ACTION QUEUE ──────────────────────────────────────────────────────────
 let wbShownIds = [];
-// Per-card state: draft text, accordion open/closed
 const cardState = {}; // { [companyId]: { draftText, draftInvestorIndex, briefOutput } }
 
 function getCardState(cid) {
@@ -794,7 +831,7 @@ function getCardState(cid) {
 }
 
 function tierBadge(tier) {
-  const labels = {1:'Scout',2:'Associate',3:'EIR/VP',4:'Principal',5:'Partner'};
+  const labels = {1:'Partner',2:'Principal',3:'EIR / VP',4:'Associate',5:'Scout'};
   return `<span class="tier-badge tier-${tier||5}">${labels[tier]||'Investor'}</span>`;
 }
 
@@ -802,17 +839,15 @@ function renderCard(card) {
   const cid = card.company_id;
   const cs = getCardState(cid);
 
-  // Build investor list for draft dropdown
   const investors = [
     ...(card.warm ? [{ ...card.warm, _type: 'warm' }] : []),
     ...(card.cold || []).map(i => ({ ...i, _type: 'cold' })),
   ];
 
   const investorOptions = investors.map((inv, i) =>
-    `<option value="${i}">${inv.name} · ${inv.firm} (${inv._type === 'warm' ? '🔗 Warm' : '📡 Cold'})</option>`
+    `<option value="${i}">${inv.name} · ${inv.firm} (${inv._type === 'warm' ? 'Warm' : 'Cold'})</option>`
   ).join('');
 
-  // Brief section content
   const briefContent = `
     <div class="brief-grid">
       ${card.description ? `<div class="brief-field" style="grid-column:1/-1"><label>Description</label><div class="val">${card.description}</div></div>` : ''}
@@ -820,32 +855,30 @@ function renderCard(card) {
       ${bfield('Location', card.location)}
       ${bfield('Founded', card.founded_year)}
       ${bfield('Last Funding', card.last_funding)}
-      ${bfield('Amount', card.funding_amount ? '$'+card.funding_amount : '')}
+      ${bfield('Amount', card.funding_amount ? fmtMoney(card.funding_amount) : '')}
       ${card.investor_firms ? `<div class="brief-field" style="grid-column:1/-1"><label>Investor Firms (CSV)</label><div class="val">${card.investor_firms}</div></div>` : ''}
     </div>
     <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn-secondary btn-sm" onclick="runInCardBrief(${cid})" id="incard-brief-btn-${cid}">⚙ Generate Agent Brief</button>
+      <button class="btn-secondary btn-sm" onclick="runInCardBrief(${cid})" id="incard-brief-btn-${cid}">Generate Agent Brief</button>
     </div>
     <div id="incard-brief-output-${cid}" style="display:${cs.briefOutput?'block':'none'}">
       <div class="brief-agent-output">${cs.briefOutput ? formatOutput(cs.briefOutput) : ''}</div>
     </div>`;
 
-  // Investors section content
   const warmHtml = card.warm ? `
-    <div class="oc-section warm">🔗 Warm Path</div>
+    <div class="oc-section warm">Warm Path</div>
     ${investorRowHtml(card.warm, cid, card.company_name, true)}` : '';
   const coldHtml = card.cold && card.cold.length ? `
-    <div class="oc-section cold">📡 Cold Outreach</div>
+    <div class="oc-section cold">Cold Outreach</div>
     ${card.cold.map(inv => investorRowHtml(inv, cid, card.company_name, false)).join('')}` : '';
-  const investorContent = (warmHtml + coldHtml) || '<div style="color:var(--muted);font-size:12px;padding:8px 0">No investor targets generated yet.</div>';
+  const investorContent = (warmHtml + coldHtml) || '<div style="color:var(--muted);font-size:13px;padding:8px 0">No investor targets generated yet.</div>';
 
-  // Draft section content
   const draftContent = `
     ${investors.length ? `<div class="draft-investor-select"><label>Drafting for</label>
       <select id="draft-inv-sel-${cid}" onchange="getCardState(${cid}).draftInvestorIndex=this.selectedIndex">${investorOptions}</select>
-    </div>` : '<div style="color:var(--muted);font-size:12px;margin-bottom:10px">No investors — expand the Investors section first.</div>'}
-    <button class="btn-secondary btn-sm" onclick="runInCardDraft(${cid})" id="incard-draft-btn-${cid}" ${!investors.length?'disabled':''}>✍ Generate LinkedIn DM</button>
-    <textarea id="incard-draft-ta-${cid}" style="margin-top:10px;min-height:110px;font-size:13px;line-height:1.6" placeholder="Draft will appear here — or type your own…">${cs.draftText}</textarea>
+    </div>` : '<div style="color:var(--muted);font-size:13px;margin-bottom:10px">No investors &mdash; expand the Investors section first.</div>'}
+    <button class="btn-secondary btn-sm" onclick="runInCardDraft(${cid})" id="incard-draft-btn-${cid}" ${!investors.length?'disabled':''}>Generate LinkedIn DM</button>
+    <textarea id="incard-draft-ta-${cid}" style="margin-top:10px;min-height:110px;font-size:14px;line-height:1.6" placeholder="Draft will appear here — or type your own…">${cs.draftText}</textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn-primary btn-sm" onclick="copyInCardDraft(${cid})">Copy</button>
       <button class="btn-success btn-sm" onclick="openLogFromCard(${cid},'${esc(card.company_name)}',${investors.length?`'${esc(investors[0].name)}','${esc(investors[0].firm)}','${esc(investors[0].role)}'`:"'','',''"})" >Log It</button>
@@ -856,31 +889,31 @@ function renderCard(card) {
     <div class="oc-head">
       <span class="oc-company">${card.company_name}</span>
       ${sectorBadge(card.sector)}
-      ${card.stage ? `<span style="font-size:11px;color:var(--muted)">${card.stage}</span>` : ''}
+      ${card.stage ? `<span style="font-size:12px;color:var(--muted)">${card.stage}</span>` : ''}
       <button class="btn-secondary btn-sm oc-skip" onclick="skipCard(${cid})">Skip</button>
     </div>
     ${card.timing ? `<div class="oc-timing">${card.timing}</div>` : ''}
 
-    <div class="acc-section">
+    <div class="acc-section acc-brief">
       <div class="acc-header" onclick="toggleAcc(${cid},'brief')">
-        <span class="acc-title" id="acc-title-${cid}-brief">📋 Company Brief</span>
-        <span class="acc-icon" id="acc-icon-${cid}-brief">▸</span>
+        <span class="acc-title" id="acc-title-${cid}-brief">Company Brief</span>
+        <span class="acc-icon" id="acc-icon-${cid}-brief">&#9656;</span>
       </div>
       <div class="acc-body" id="acc-body-${cid}-brief">${briefContent}</div>
     </div>
 
-    <div class="acc-section">
+    <div class="acc-section acc-investors">
       <div class="acc-header" onclick="toggleAcc(${cid},'investors')">
-        <span class="acc-title" id="acc-title-${cid}-investors">👥 Investors</span>
-        <span class="acc-icon" id="acc-icon-${cid}-investors">▸</span>
+        <span class="acc-title" id="acc-title-${cid}-investors">Investors</span>
+        <span class="acc-icon" id="acc-icon-${cid}-investors">&#9656;</span>
       </div>
       <div class="acc-body" id="acc-body-${cid}-investors">${investorContent}</div>
     </div>
 
-    <div class="acc-section">
+    <div class="acc-section acc-draft">
       <div class="acc-header" onclick="toggleAcc(${cid},'draft')">
-        <span class="acc-title" id="acc-title-${cid}-draft">✍ Draft Workspace</span>
-        <span class="acc-icon" id="acc-icon-${cid}-draft">▸</span>
+        <span class="acc-title" id="acc-title-${cid}-draft">Draft Workspace</span>
+        <span class="acc-icon" id="acc-icon-${cid}-draft">&#9656;</span>
       </div>
       <div class="acc-body" id="acc-body-${cid}-draft">${draftContent}</div>
     </div>
@@ -897,20 +930,20 @@ function toggleAcc(cid, section) {
   const icon = document.getElementById(`acc-icon-${cid}-${section}`);
   const title = document.getElementById(`acc-title-${cid}-${section}`);
   const isOpen = body.classList.toggle('open');
-  icon.textContent = isOpen ? '▾' : '▸';
+  icon.innerHTML = isOpen ? '&#9662;' : '&#9656;';
   if (title) title.classList.toggle('active', isOpen);
 }
 
 function investorRowHtml(inv, companyId, companyName, isWarm) {
-  const via = isWarm && inv.via ? `<div style="font-size:11px;color:#a78bfa;margin-top:3px">Via: ${inv.via}</div>` : '';
-  const angle = inv.angle ? `<div class="investor-angle">"${inv.angle}"</div>` : '';
+  const via = isWarm && inv.via ? `<div style="font-size:12px;color:var(--rose);margin-top:3px">Via: ${inv.via}</div>` : '';
+  const angle = inv.angle ? `<div class="investor-angle">&ldquo;${inv.angle}&rdquo;</div>` : '';
   return `
     <div class="investor-row" id="inv-row-${companyId}-${esc(inv.name).replace(/[^a-z0-9]/gi,'_')}">
       <div class="investor-info">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="investor-name">${inv.name}</span>
           ${tierBadge(inv.tier)}
-          <span style="font-size:11px;color:var(--muted)">${inv.role} · ${inv.firm}</span>
+          <span style="font-size:12px;color:var(--muted)">${inv.role} &middot; ${inv.firm}</span>
         </div>
         ${via}${angle}
         <div id="email-result-${companyId}-${esc(inv.name).replace(/[^a-z0-9]/gi,'_')}" style="display:none"></div>
@@ -928,15 +961,15 @@ async function findEmail(companyId, name, firm) {
   const el = document.getElementById(`email-result-${key}`);
   if (!el) return;
   el.style.display = 'block';
-  el.innerHTML = '<span class="spinner"></span><span style="font-size:11px;color:var(--muted)">Searching…</span>';
+  el.innerHTML = '<span class="spinner"></span><span style="font-size:12px;color:var(--muted)">Searching…</span>';
   try {
     const data = await api('GET', `/queue/find-email?name=${encodeURIComponent(name)}&firm=${encodeURIComponent(firm)}`);
     if (data.email) {
-      el.innerHTML = `<span class="email-found">✉ ${data.email}</span> <button class="btn-ghost" onclick="navigator.clipboard.writeText('${data.email}').then(()=>flash('Email copied'))">Copy</button>`;
+      el.innerHTML = `<span class="email-found">${data.email}</span> <button class="btn-ghost" onclick="navigator.clipboard.writeText('${data.email}').then(()=>flash('Email copied'))">Copy</button>`;
     } else {
-      el.innerHTML = `<span style="font-size:11px;color:var(--muted)">No email found via public sources</span>`;
+      el.innerHTML = `<span style="font-size:12px;color:var(--muted)">No email found via public sources</span>`;
     }
-  } catch { el.innerHTML = `<span style="font-size:11px;color:var(--muted)">Search failed</span>`; }
+  } catch { el.innerHTML = `<span style="font-size:12px;color:var(--muted)">Search failed</span>`; }
 }
 
 async function runInCardBrief(cid) {
@@ -948,11 +981,11 @@ async function runInCardBrief(cid) {
     getCardState(cid).briefOutput = data.output;
     outDiv.style.display = 'block';
     outDiv.querySelector('.brief-agent-output').innerHTML = formatOutput(data.output);
-    btn.textContent = '⚙ Regenerate Brief';
+    btn.textContent = 'Regenerate Brief';
   } catch (err) {
     outDiv.style.display = 'block';
-    outDiv.innerHTML = `<div style="color:#f87171;font-size:12px;padding:8px">Error: ${err.message}</div>`;
-    btn.textContent = '⚙ Generate Agent Brief';
+    outDiv.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:8px">Error: ${err.message}</div>`;
+    btn.textContent = 'Generate Agent Brief';
   }
   btn.disabled = false;
 }
@@ -963,15 +996,11 @@ async function runInCardDraft(cid) {
   const btn = document.getElementById(`incard-draft-btn-${cid}`);
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Writing…';
   ta.value = '';
-  // Get the card data from DOM context — find the card
   const oc = document.querySelector(`.oc[data-cid="${cid}"]`);
   if (!oc) return;
-  // Get selected investor index
   const idx = sel ? parseInt(sel.value) : 0;
-  // We need company name and investor info. Reconstruct from the row
   const companyNameEl = oc.querySelector('.oc-company');
   const companyName = companyNameEl ? companyNameEl.textContent : '';
-  // Find the investor row at that index
   const invRows = oc.querySelectorAll('.investor-row');
   const invRow = invRows[idx];
   let invName = '', invFirm = '', invRole = '';
@@ -985,10 +1014,10 @@ async function runInCardDraft(cid) {
     const data = await api('POST', '/queue/draft', { company_id: cid, investor_name: invName, investor_firm: invFirm, investor_role: invRole });
     ta.value = data.draft;
     getCardState(cid).draftText = data.draft;
-    btn.textContent = '✍ Regenerate';
+    btn.textContent = 'Regenerate';
   } catch (err) {
     ta.value = 'Error: ' + err.message;
-    btn.textContent = '✍ Generate LinkedIn DM';
+    btn.textContent = 'Generate LinkedIn DM';
   }
   btn.disabled = false;
 }
@@ -1028,8 +1057,8 @@ async function loadRadar() {
       <div class="radar-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <div style="font-weight:600;font-size:13px">${a.company_name} <span style="color:var(--muted);font-weight:400">·</span> <span style="color:var(--muted);font-size:12px">${stepNames[step]||'Follow-up'}</span></div>
-            ${a.contact_context?`<div class="contact-ctx" style="margin-top:4px">→ ${a.contact_context}</div>`:''}
+            <div style="font-weight:600;font-size:14px">${a.company_name} <span style="color:var(--muted);font-weight:400">&middot;</span> <span style="color:var(--muted);font-size:13px">${stepNames[step]||'Follow-up'}</span></div>
+            ${a.contact_context?`<div class="contact-ctx" style="margin-top:4px">&rarr; ${a.contact_context}</div>`:''}
             <div class="radar-overdue" style="margin-top:4px">Overdue ${overdueDays>0?overdueDays+'d':'today'}</div>
           </div>
           <button class="btn-secondary btn-sm" onclick="openLogModal(${a.id},'${esc(a.company_name)}')">Log It</button>
@@ -1058,7 +1087,7 @@ async function loadUpNext(reset = false) {
       btn.style.display = 'none'; return;
     }
     cards.forEach(card => { wbShownIds.push(card.company_id); el.insertAdjacentHTML('beforeend', renderCard(card)); });
-  } catch(e) { loading.style.display = 'none'; el.insertAdjacentHTML('beforeend', `<div class="empty" style="color:#f87171">${e.message}</div>`); }
+  } catch(e) { loading.style.display = 'none'; el.insertAdjacentHTML('beforeend', `<div class="empty" style="color:var(--danger)">${e.message}</div>`); }
 }
 
 async function loadLogged() {
@@ -1070,10 +1099,10 @@ async function loadLogged() {
     el.innerHTML = items.map(a => `
       <div class="logged-card${a.contact_context?' responded':''}">
         <div style="flex:1">
-          <div style="font-weight:600">${a.company_name} <span style="color:var(--muted);font-weight:400;font-size:12px">· ${a.contact_context||a.suggested_action}</span></div>
-          ${a.notes?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${a.notes}</div>`:''}
+          <div style="font-weight:600;font-size:14px">${a.company_name} <span style="color:var(--muted);font-weight:400;font-size:13px">&middot; ${a.contact_context||a.suggested_action}</span></div>
+          ${a.notes?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${a.notes}</div>`:''}
         </div>
-        <div style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.created_at)}</div>
+        <div style="font-size:12px;color:var(--muted);white-space:nowrap">${fmtDate(a.created_at)}</div>
       </div>`).join('');
   } catch(_) {}
 }
@@ -1102,11 +1131,11 @@ document.getElementById('runsDropdownBtn').addEventListener('click', async (e) =
         <div class="runs-dropdown-item" onclick="openRunInAgentTab(${r.id},'${esc(r.company_name||'')}','${r.agent_type}')">
           <div style="display:flex;gap:8px;align-items:center">
             <span class="run-type ${r.agent_type}" style="flex-shrink:0">${r.agent_type}</span>
-            <strong style="font-size:12px">${r.company_name||'Unknown'}</strong>
-            <span style="font-size:11px;color:var(--muted);margin-left:auto">${fmtDate(r.created_at)}</span>
+            <strong style="font-size:13px">${r.company_name||'Unknown'}</strong>
+            <span style="font-size:12px;color:var(--muted);margin-left:auto">${fmtDate(r.created_at)}</span>
           </div>
         </div>`).join('');
-    } catch(e) { list.innerHTML = `<div style="padding:16px;color:#f87171">${e.message}</div>`; }
+    } catch(e) { list.innerHTML = `<div style="padding:16px;color:var(--danger)">${e.message}</div>`; }
   }
 });
 document.addEventListener('click', () => runsDropdown.classList.remove('open'));
@@ -1164,8 +1193,8 @@ document.getElementById('logSaveBtn').addEventListener('click', async () => {
       const res = await api('PATCH', '/actions/' + actionId, payload);
       if (res.followUp) {
         const stepNames = {2:'Follow-up 1',3:'Final check-in'};
-        fb.style.color = '#4ade80';
-        fb.textContent = `✓ Logged. ${stepNames[res.followUp.step]||'Follow-up'} scheduled for ${res.followUp.due_date}.`;
+        fb.style.color = 'var(--accent)';
+        fb.textContent = `Logged. ${stepNames[res.followUp.step]||'Follow-up'} scheduled for ${res.followUp.due_date}.`;
         setTimeout(() => { document.getElementById('logModal').style.display = 'none'; loadRadar(); loadLogged(); }, 1600);
       } else {
         document.getElementById('logModal').style.display = 'none'; loadRadar(); loadLogged();
@@ -1178,7 +1207,7 @@ document.getElementById('logSaveBtn').addEventListener('click', async () => {
         contact_context: ctx, notes: note, sequence_step: 1, outreach_type: 'investor',
       });
       await api('PATCH', '/companies/' + companyId, { last_touched: new Date().toISOString() });
-      fb.style.color = '#4ade80'; fb.textContent = '✓ Logged. Follow-up 1 due in 7 days.';
+      fb.style.color = 'var(--accent)'; fb.textContent = 'Logged. Follow-up 1 due in 7 days.';
       setTimeout(() => {
         document.getElementById('logModal').style.display = 'none';
         document.querySelector(`.oc[data-cid="${companyId}"]`)?.remove();
@@ -1190,7 +1219,7 @@ document.getElementById('logSaveBtn').addEventListener('click', async () => {
         }).catch(()=>{});
       }, 1400);
     }
-  } catch(err) { fb.style.color = '#f87171'; fb.textContent = 'Error: ' + err.message; }
+  } catch(err) { fb.style.color = 'var(--danger)'; fb.textContent = 'Error: ' + err.message; }
 });
 
 // ─── DOSSIER MODAL ─────────────────────────────────────────────────────────
@@ -1227,7 +1256,7 @@ async function loadRunsFull() {
         <div class="run-meta">
           <span class="run-type ${r.agent_type}">${r.agent_type}</span>
           <strong>${r.company_name||'Unknown'}</strong>
-          <span style="color:var(--muted);font-size:11px">${r.created_at}</span>
+          <span style="color:var(--muted);font-size:12px">${r.created_at}</span>
         </div>
         <div class="run-detail" id="rdf-${r.id}"></div>
       </div>`).join('');
@@ -1240,7 +1269,7 @@ async function loadRunsFull() {
         }
       });
     });
-  } catch(e) { el.innerHTML = `<div class="empty" style="color:#f87171">${e.message}</div>`; }
+  } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--danger)">${e.message}</div>`; }
 }
 
 // ─── CONTACTS ──────────────────────────────────────────────────────────────
@@ -1250,14 +1279,14 @@ async function loadContacts() {
   if (!contacts.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No contacts yet.</td></tr>'; return; }
   tbody.innerHTML = contacts.map(c => `
     <tr>
-      <td>${c.name||'<span style="color:var(--muted)">—</span>'}</td>
-      <td><strong>${c.firm||'—'}</strong></td>
-      <td style="color:var(--muted)">${c.role||'—'}</td>
-      <td style="color:var(--muted)">${c.how_i_know_them||'—'}</td>
-      <td style="color:var(--muted);font-size:12px">${c.notes||''}</td>
+      <td>${c.name||'<span style="color:var(--muted)">&mdash;</span>'}</td>
+      <td><strong>${c.firm||'&mdash;'}</strong></td>
+      <td style="color:var(--muted)">${c.role||'&mdash;'}</td>
+      <td style="color:var(--muted)">${c.how_i_know_them||'&mdash;'}</td>
+      <td style="color:var(--muted);font-size:13px">${c.notes||''}</td>
       <td>
         <button class="btn-sm btn-secondary edit-contact-btn" data-id="${c.id}">Edit</button>
-        <button class="btn-sm btn-danger del-contact-btn" data-id="${c.id}" style="margin-left:4px">×</button>
+        <button class="btn-sm btn-danger del-contact-btn" data-id="${c.id}" style="margin-left:4px">&times;</button>
       </td>
     </tr>`).join('');
   tbody.querySelectorAll('.edit-contact-btn').forEach(btn => {
@@ -1300,26 +1329,26 @@ async function loadInvestors() {
     <div class="card" id="inv-card-${inv.id}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
         <div>
-          <strong style="font-size:14px">${inv.name}</strong>
-          ${inv.firm?`<span style="color:var(--muted)"> · ${inv.firm}</span>`:''}
-          ${inv.role?`<span style="color:var(--muted);font-size:11px"> · ${inv.role}</span>`:''}
+          <strong style="font-size:16px">${inv.name}</strong>
+          ${inv.firm?`<span style="color:var(--muted)"> &middot; ${inv.firm}</span>`:''}
+          ${inv.role?`<span style="color:var(--muted);font-size:12px"> &middot; ${inv.role}</span>`:''}
           <br>
           ${relBadge(inv.relationship_status)}
           ${inv.stage_focus?`<span class="badge badge-other" style="margin-left:4px">${inv.stage_focus}</span>`:''}
           ${inv.sector_focus?`<span class="badge badge-other" style="margin-left:4px">${inv.sector_focus}</span>`:''}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <button class="btn-sm ${inv.track_events?'btn-primary':'btn-secondary'} track-events-btn" data-id="${inv.id}">${inv.track_events?'📍 Tracking':'📍 Track Events'}</button>
+          <button class="btn-sm ${inv.track_events?'btn-primary':'btn-secondary'} track-events-btn" data-id="${inv.id}">${inv.track_events?'Tracking Events':'Track Events'}</button>
           <button class="btn-sm btn-success research-btn" data-id="${inv.id}">Research Portfolio</button>
           <button class="btn-sm btn-secondary edit-inv-btn" data-id="${inv.id}">Edit</button>
-          <button class="btn-sm btn-danger del-inv-btn" data-id="${inv.id}">×</button>
+          <button class="btn-sm btn-danger del-inv-btn" data-id="${inv.id}">&times;</button>
         </div>
       </div>
-      ${inv.how_i_know_them?`<div style="color:var(--muted);font-size:12px;margin-top:6px">How I know them: ${inv.how_i_know_them}</div>`:''}
-      ${inv.notes?`<div style="color:var(--muted);font-size:12px;margin-top:4px">${inv.notes}</div>`:''}
+      ${inv.how_i_know_them?`<div style="color:var(--muted);font-size:13px;margin-top:6px">How I know them: ${inv.how_i_know_them}</div>`:''}
+      ${inv.notes?`<div style="color:var(--muted);font-size:13px;margin-top:4px">${inv.notes}</div>`:''}
       ${inv.portfolio_companies?`<div style="margin-top:10px"><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Portfolio</div><div class="portfolio-box">${inv.portfolio_companies}</div></div>`:''}
       <div class="inv-matches" id="inv-matches-${inv.id}" style="margin-top:8px"></div>
-      <div class="inv-status" id="inv-status-${inv.id}" style="font-size:12px;color:var(--muted);margin-top:6px;min-height:16px"></div>
+      <div class="inv-status" id="inv-status-${inv.id}" style="font-size:13px;color:var(--muted);margin-top:6px;min-height:16px"></div>
     </div>`).join('');
 
   el.querySelectorAll('.track-events-btn').forEach(btn => {
@@ -1327,7 +1356,7 @@ async function loadInvestors() {
       const inv = investors.find(x => x.id == btn.dataset.id);
       const newVal = inv.track_events ? 0 : 1;
       await api('PATCH', '/investors/'+btn.dataset.id, { track_events: newVal });
-      flash(newVal ? `📍 Tracking events for ${inv.name}` : `Stopped tracking ${inv.name}`);
+      flash(newVal ? `Tracking events for ${inv.name}` : `Stopped tracking ${inv.name}`);
       loadInvestors();
     });
   });
@@ -1366,7 +1395,7 @@ async function researchPortfolio(id, btn) {
     statusEl.textContent = data.message || `Found ${data.portfolio_companies.split('\n').filter(Boolean).length} companies`;
     if (data.matches && data.matches.length) {
       matchesEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Already in your pipeline:</div>' +
-        data.matches.map(m => `<span class="match-pill" onclick="openAgentForCompany('${m.id}','${m.name}','brief')">✓ ${m.name} <span style="opacity:.7">(${m.status})</span></span>`).join('');
+        data.matches.map(m => `<span class="match-pill" onclick="openAgentForCompany('${m.id}','${m.name}','brief')">${m.name} <span style="opacity:.7">(${m.status})</span></span>`).join('');
     }
     loadInvestors();
   } catch (err) { btn.textContent = 'Research Portfolio'; btn.disabled = false; statusEl.textContent = ''; flash('Research error: '+err.message, false); }
@@ -1399,27 +1428,27 @@ function isPast(dateStr) { if (!dateStr) return false; return new Date(dateStr) 
 
 function eventCardHtml(ev, compact = false) {
   const past = isPast(ev.event_date);
-  const matchBadge = ev.matched_investor_names ? `<span style="font-size:11px;background:rgba(167,139,250,.15);color:#a78bfa;padding:2px 8px;border-radius:10px;margin-left:6px">📍 ${ev.matched_investor_names}</span>` : '';
+  const matchBadge = ev.matched_investor_names ? `<span style="font-size:12px;background:rgba(196,80,106,.12);color:var(--rose);padding:2px 9px;border-radius:10px;margin-left:6px;border:1px solid rgba(196,80,106,.25)">${ev.matched_investor_names}</span>` : '';
   if (compact) {
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;${past?'opacity:.5':''}">
-      <div><div style="font-weight:600;font-size:13px">${ev.title}${matchBadge}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtEventDate(ev.event_date)}${ev.location?' · '+ev.location:''}</div></div>
-      <a href="${ev.event_url}" target="_blank" style="font-size:11px;color:var(--accent);white-space:nowrap;margin-left:12px;text-decoration:none">View →</a>
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--surface);${past?'opacity:.5':''}">
+      <div><div style="font-weight:600;font-size:14px">${ev.title}${matchBadge}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${fmtEventDate(ev.event_date)}${ev.location?' &middot; '+ev.location:''}</div></div>
+      <a href="${ev.event_url}" target="_blank" style="font-size:12px;color:var(--accent);white-space:nowrap;margin-left:12px;text-decoration:none">View &rarr;</a>
     </div>`;
   }
-  return `<div class="card" style="${past?'opacity:.6':''}${ev.registered?';border-color:rgba(78,204,163,.3)':''}">
+  return `<div class="card" style="${past?'opacity:.6':''}${ev.registered?';border-color:rgba(45,138,66,.3)':''}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
       <div style="flex:1">
-        <div style="font-weight:700;font-size:14px;margin-bottom:4px">${ev.title}</div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:4px">${ev.title}</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
-          <span style="font-size:12px;color:${past?'var(--muted)':'var(--accent)'}">📅 ${fmtEventDate(ev.event_date)}</span>
-          ${ev.location?`<span style="font-size:12px;color:var(--muted)">📍 ${ev.location}</span>`:''}
+          <span style="font-size:13px;color:${past?'var(--muted)':'var(--accent)'}">${fmtEventDate(ev.event_date)}</span>
+          ${ev.location?`<span style="font-size:13px;color:var(--muted)">${ev.location}</span>`:''}
         </div>
         ${ev.matched_investor_names?`<div style="margin-bottom:8px">${matchBadge.replace('margin-left:6px','margin-left:0')}</div>`:''}
-        ${ev.description?`<div style="font-size:12px;color:var(--muted);line-height:1.5">${ev.description.slice(0,200)}${ev.description.length>200?'…':''}</div>`:''}
+        ${ev.description?`<div style="font-size:13px;color:var(--muted);line-height:1.6">${ev.description.slice(0,200)}${ev.description.length>200?'…':''}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-        <a href="${ev.event_url}" target="_blank" class="btn-primary btn-sm" style="text-decoration:none;text-align:center">Register →</a>
-        <button class="btn-secondary btn-sm event-register-btn" data-id="${ev.id}" data-registered="${ev.registered}">${ev.registered?'✓ Registered':'Mark Registered'}</button>
+        <a href="${ev.event_url}" target="_blank" class="btn-primary btn-sm" style="text-decoration:none;text-align:center">Register &rarr;</a>
+        <button class="btn-secondary btn-sm event-register-btn" data-id="${ev.id}" data-registered="${ev.registered}">${ev.registered?'Registered':'Mark Registered'}</button>
         <button class="btn-secondary btn-sm event-dismiss-btn" data-id="${ev.id}" style="color:var(--muted)">Dismiss</button>
       </div>
     </div>
@@ -1431,10 +1460,10 @@ async function loadEvents() {
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
     const events = await api('GET', '/events');
-    if (!events.length) { el.innerHTML = '<div class="empty">No events found yet.<br><br>1. Go to <strong>Investors</strong> and click <strong>📍 Track Events</strong>.<br>2. Come back here and click <strong>Scan Now</strong>.</div>'; return; }
+    if (!events.length) { el.innerHTML = '<div class="empty">No events found yet.<br><br>1. Go to <strong>Investors</strong> and click <strong>Track Events</strong>.<br>2. Come back here and click <strong>Scan Now</strong>.</div>'; return; }
     el.innerHTML = events.map(ev => eventCardHtml(ev)).join('');
     wireEventButtons(el);
-  } catch(e) { el.innerHTML = `<div class="empty" style="color:#f87171">${e.message}</div>`; }
+  } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--danger)">${e.message}</div>`; }
 }
 
 async function loadWbEvents() {
@@ -1461,14 +1490,14 @@ document.getElementById('scanEventsBtn').addEventListener('click', async () => {
   const status = document.getElementById('scanEventsStatus');
   const btn = document.getElementById('scanEventsBtn');
   btn.disabled = true; status.style.color = 'var(--muted)';
-  status.textContent = '🔍 Scanning Luma for events featuring your tracked investors…';
+  status.textContent = 'Scanning Luma for events featuring your tracked investors…';
   try {
     const res = await api('POST', '/events/scan');
-    status.style.color = '#4ade80';
-    status.textContent = res.found > 0 ? `✓ Found ${res.found} new event${res.found>1?'s':''}!` : res.message || '✓ Scan complete — no new events found.';
+    status.style.color = 'var(--accent)';
+    status.textContent = res.found > 0 ? `Found ${res.found} new event${res.found>1?'s':''}!` : res.message || 'Scan complete — no new events found.';
     if (res.found > 0) loadEvents();
-  } catch(e) { status.style.color = '#f87171'; status.textContent = 'Error: ' + e.message; }
-  finally { btn.disabled = false; btn.textContent = '🔍 Scan Now'; }
+  } catch(e) { status.style.color = 'var(--danger)'; status.textContent = 'Error: ' + e.message; }
+  finally { btn.disabled = false; btn.textContent = 'Scan Now'; }
 });
 document.getElementById('refreshEventsBtn').addEventListener('click', loadEvents);
 
@@ -1482,10 +1511,10 @@ async function loadEmailLog() {
     el.innerHTML = logs.map(l => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
         <div>
-          <span style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${l.email_type==='daily_outreach'?'var(--accent)':'#a78bfa'}">${l.email_type==='daily_outreach'?'Daily':'Weekly'}</span>
-          <span style="font-size:13px;margin-left:10px;color:var(--text)">${l.subject}</span>
+          <span style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${l.email_type==='daily_outreach'?'var(--accent)':'var(--rose)'}">${l.email_type==='daily_outreach'?'Daily':'Weekly'}</span>
+          <span style="font-size:14px;margin-left:10px;color:var(--text)">${l.subject}</span>
         </div>
-        <span style="font-size:11px;color:var(--muted)">${fmtDate(l.created_at)}</span>
+        <span style="font-size:12px;color:var(--muted)">${fmtDate(l.created_at)}</span>
       </div>`).join('');
   } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
 }
@@ -1496,10 +1525,10 @@ async function testEmail(type) {
   btn.disabled = true; btn.textContent = 'Sending…'; statusEl.textContent = '';
   try {
     await api('POST', `/email/test-${type}`);
-    statusEl.style.color = '#4ade80';
-    statusEl.textContent = `✓ ${type==='daily'?'Daily outreach':'Weekly recap'} sent — check your inbox`;
+    statusEl.style.color = 'var(--accent)';
+    statusEl.textContent = `${type==='daily'?'Daily outreach':'Weekly recap'} sent — check your inbox`;
     loadEmailLog();
-  } catch(e) { statusEl.style.color = '#f87171'; statusEl.textContent = 'Error: ' + e.message; }
+  } catch(e) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Error: ' + e.message; }
   finally { btn.disabled = false; btn.textContent = 'Send Test Now'; }
 }
 
