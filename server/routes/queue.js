@@ -114,4 +114,40 @@ router.get('/stats', async (req, res) => {
   });
 });
 
+// GET /api/queue/find-email?name=X&firm=Y — Exa search for investor email
+router.get('/find-email', async (req, res) => {
+  const { name, firm } = req.query;
+  if (!name) return res.status(400).json({ error: 'name required' });
+
+  const EXA_KEY = process.env.EXA_API_KEY;
+  if (!EXA_KEY) return res.json({ email: null, source: null });
+
+  try {
+    const queries = [
+      `"${name}" "${firm || ''}" email contact`,
+      `"${name}" site:linkedin.com OR site:crunchbase.com email`,
+    ];
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const skip = ['noreply','no-reply','support','info@','hello@','contact@','privacy@','press@','jobs@'];
+
+    for (const query of queries) {
+      const resp = await fetch('https://api.exa.ai/search', {
+        method: 'POST',
+        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, num_results: 5, text: { maxCharacters: 500 } }),
+      });
+      const data = await resp.json();
+      for (const result of (data.results || [])) {
+        const blob = `${result.text || ''} ${result.url}`;
+        const emails = blob.match(emailRegex) || [];
+        const found = emails.find(e => !skip.some(s => e.toLowerCase().includes(s)));
+        if (found) return res.json({ email: found, source: result.url });
+      }
+    }
+    res.json({ email: null, source: null });
+  } catch (err) {
+    res.json({ email: null, source: null });
+  }
+});
+
 module.exports = router;

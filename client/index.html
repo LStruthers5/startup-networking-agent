@@ -7,21 +7,16 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --border: #2a2d3a;
-    --accent: #6c8eff;
-    --accent2: #4ecca3;
-    --warn: #f4a261;
-    --danger: #e76f51;
-    --text: #e2e4ed;
-    --muted: #7c8096;
-    --radius: 8px;
+    --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
+    --accent: #6c8eff; --accent2: #4ecca3; --warn: #f4a261;
+    --danger: #e76f51; --text: #e2e4ed; --muted: #7c8096; --radius: 8px;
   }
   body { background: var(--bg); color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.5; }
-  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 4px; height: 48px; }
+
+  /* ── Nav ── */
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 4px; height: 48px; position: sticky; top: 0; z-index: 50; }
   nav h1 { font-size: 14px; font-weight: 700; color: var(--accent); margin-right: 20px; letter-spacing: .5px; }
-  nav button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 6px 12px; border-radius: var(--radius); font-size: 13px; font-family: inherit; transition: color .15s, background .15s; }
+  nav button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 6px 12px; border-radius: var(--radius); font-size: 13px; font-family: inherit; transition: color .15s, background .15s; white-space: nowrap; }
   nav button:hover { color: var(--text); background: var(--border); }
   nav button.active { color: var(--accent); background: rgba(108,142,255,.12); }
 
@@ -39,6 +34,8 @@
   .btn-sm { padding: 4px 9px; font-size: 12px; }
   .btn-danger { background: var(--danger); color: #fff; }
   .btn-success { background: var(--accent2); color: #0f1117; }
+  .btn-ghost { background: none; border: none; color: var(--muted); padding: 4px 8px; font-size: 12px; }
+  .btn-ghost:hover { color: var(--text); }
 
   input, select, textarea { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 7px 10px; font-family: inherit; font-size: 13px; width: 100%; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
@@ -61,7 +58,9 @@
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; padding: 8px 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   td { padding: 8px 10px; border-bottom: 1px solid rgba(42,45,58,.5); vertical-align: top; }
-  tr:hover td { background: rgba(255,255,255,.02); }
+  tr.data-row { cursor: pointer; }
+  tr.data-row:hover td { background: rgba(108,142,255,.05); }
+  tr.data-row.selected td { background: rgba(108,142,255,.08); border-bottom-color: var(--accent); }
   .badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
   .badge-ai { background: rgba(108,142,255,.15); color: var(--accent); }
   .badge-fit { background: rgba(78,204,163,.15); color: var(--accent2); }
@@ -70,6 +69,13 @@
   .score-dots span { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--border); margin-right: 2px; }
   .score-dots span.filled { background: var(--warn); }
 
+  /* Company detail panel */
+  .company-detail { background: rgba(108,142,255,.04); border: 1px solid rgba(108,142,255,.2); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+  .company-detail h4 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
+  .detail-field label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+  .detail-field .val { color: var(--text); font-size: 13px; }
+
   /* Agent panel */
   .agent-panel { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
   @media (max-width: 700px) { .agent-panel { grid-template-columns: 1fr; } }
@@ -77,6 +83,14 @@
   .agent-output .section-head { color: var(--accent); font-weight: 700; }
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Sub-tabs (Agent Run view) */
+  .sub-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .sub-tab { background: none; border: none; color: var(--muted); padding: 8px 16px; border-bottom: 2px solid transparent; cursor: pointer; font-family: inherit; font-size: 13px; transition: color .15s; }
+  .sub-tab:hover { color: var(--text); }
+  .sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .sub-view { display: none; }
+  .sub-view.active { display: block; }
 
   /* Saved contexts */
   .ctx-chip { display: inline-block; padding: 4px 10px; background: var(--border); border-radius: 20px; font-size: 11px; cursor: pointer; margin: 3px; transition: background .15s; }
@@ -92,22 +106,50 @@
   .run-detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); white-space: pre-wrap; font-size: 12px; line-height: 1.7; }
   .run-detail.open { display: block; }
 
-  /* Workbench Queue */
-  .wb-section-header { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 10px; }
-  .wb-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-  .wb-section-label.radar { color: #f87171; }
-  .wb-section-label.upnext { color: var(--accent); }
-  .wb-section-label.logged { color: var(--muted); }
+  /* Workbench queue */
+  .wb-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; position: relative; }
   .wb-stats { display: flex; gap: 20px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; }
   .wb-stat { text-align: center; }
   .wb-stat-num { font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1; }
   .wb-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
   .wb-stat-num.warn { color: #f87171; }
+  .wb-section-header { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 10px; }
+  .wb-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .wb-section-label.radar { color: #f87171; }
+  .wb-section-label.upnext { color: var(--accent); }
+  .wb-section-label.logged { color: var(--muted); }
+
+  /* Runs dropdown */
+  .runs-dropdown { position: absolute; right: 0; top: 36px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 380px; max-height: 400px; overflow-y: auto; z-index: 40; box-shadow: 0 8px 32px rgba(0,0,0,.4); display: none; }
+  .runs-dropdown.open { display: block; }
+  .runs-dropdown-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
+  .runs-dropdown-item:hover { background: rgba(255,255,255,.03); }
+  .runs-dropdown-item:last-child { border-bottom: none; }
+
   /* Outreach card */
-  .oc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
-  .oc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .oc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
+  .oc-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
   .oc-company { font-weight: 700; font-size: 14px; color: var(--text); }
-  .oc-timing { font-size: 11px; color: var(--muted); margin-bottom: 12px; font-style: italic; }
+  .oc-timing { font-size: 11px; color: var(--muted); padding: 0 16px 10px; font-style: italic; }
+  .oc-skip { margin-left: auto; }
+
+  /* Accordion sections */
+  .acc-section { border-top: 1px solid var(--border); }
+  .acc-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; cursor: pointer; user-select: none; transition: background .1s; }
+  .acc-header:hover { background: rgba(255,255,255,.02); }
+  .acc-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  .acc-title.active { color: var(--accent); }
+  .acc-icon { font-size: 11px; color: var(--muted); transition: transform .15s; }
+  .acc-body { display: none; padding: 14px 16px; background: rgba(0,0,0,.15); }
+  .acc-body.open { display: block; }
+
+  /* Brief section */
+  .brief-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .brief-field label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+  .brief-field .val { color: var(--text); font-size: 12px; margin-top: 1px; word-break: break-word; }
+  .brief-agent-output { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 12px; white-space: pre-wrap; line-height: 1.7; margin-top: 10px; color: var(--text); max-height: 300px; overflow-y: auto; }
+
+  /* Investor section */
   .oc-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; margin: 10px 0 6px; }
   .oc-section.warm { color: #a78bfa; }
   .oc-section.cold { color: var(--accent); }
@@ -117,20 +159,25 @@
   .investor-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
   .investor-angle { font-size: 12px; color: var(--muted); margin-top: 4px; font-style: italic; line-height: 1.5; }
   .investor-btns { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+  .email-found { font-size: 11px; color: var(--accent2); margin-top: 4px; word-break: break-all; }
   .tier-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
   .tier-1 { background: rgba(251,191,36,.2); color: #fbbf24; }
   .tier-2 { background: rgba(108,142,255,.2); color: var(--accent); }
   .tier-3 { background: rgba(78,204,163,.2); color: var(--accent2); }
   .tier-4 { background: rgba(244,162,97,.2); color: var(--warn); }
   .tier-5 { background: rgba(124,128,150,.2); color: var(--muted); }
-  .oc-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+  /* Draft section */
+  .draft-section textarea { min-height: 110px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
+  .draft-investor-select { margin-bottom: 10px; }
+
   /* Radar card */
   .radar-card { background: rgba(248,113,113,.05); border: 1px solid rgba(248,113,113,.3); border-radius: var(--radius); padding: 14px; margin-bottom: 8px; }
   .radar-overdue { font-size: 10px; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: .5px; }
+
   /* Logged card */
   .logged-card { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; }
   .logged-card.responded { border-color: rgba(78,204,163,.3); }
-  /* Step badge */
   .step-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; white-space: nowrap; }
   .step-1 { background: rgba(108,142,255,.15); color: var(--accent); }
   .step-2 { background: rgba(251,191,36,.15); color: #fbbf24; }
@@ -155,118 +202,48 @@
 
 <nav>
   <h1>TOWER v2</h1>
-  <button class="active" data-view="companies">Companies</button>
-  <button data-view="agents">Agent Run</button>
-  <button data-view="queue">Action Queue</button>
-  <button data-view="log">Runs Log</button>
-  <button data-view="contacts">Contacts</button>
+  <button class="active" data-view="queue">Action Queue</button>
+  <button data-view="companies">Companies</button>
   <button data-view="investors">Investors</button>
-  <button data-view="events">Events</button>
-  <button data-view="email">Email</button>
+  <button data-view="contacts">Contacts</button>
+  <button data-view="agents">Agent Run</button>
 </nav>
 
 <main>
 
-<!-- ===== COMPANIES VIEW ===== -->
-<div class="view active" id="view-companies">
-  <div class="card" style="margin-bottom:16px">
-    <h2>Import Companies</h2>
-    <div class="import-zone" id="importZone">
-      <div>Drop a Crunchbase CSV here or click to select</div>
-      <div style="font-size:11px;margin-top:6px;color:var(--muted)">Detects duplicates · Flags out-of-focus sectors</div>
-    </div>
-    <input type="file" id="fileInput" accept=".csv" style="display:none">
-    <div id="importResult" style="display:none" class="import-result"></div>
-  </div>
-
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h2 id="companyCount">Companies</h2>
-    <input type="text" id="searchInput" placeholder="Filter by name, sector…" style="width:220px">
-  </div>
-
-  <div class="table-wrap">
-    <table id="companyTable">
-      <thead>
-        <tr>
-          <th>Name</th><th>Sector</th><th>Stage</th><th>Status</th>
-          <th>Score</th><th>Last Touched</th><th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="companyBody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- ===== AGENT VIEW ===== -->
-<div class="view" id="view-agents">
-  <div class="agent-panel">
-    <div>
-      <div class="card">
-        <h3>Company</h3>
-        <select id="agentCompanySelect">
-          <option value="">Select a company…</option>
-        </select>
-        <div id="agentCompanyInfo" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6"></div>
-      </div>
-
-      <div class="card">
-        <h3>Network Context</h3>
-        <textarea id="networkContext" placeholder="Describe your network: investors you know, operators, advisors, sector connections, events attended…"></textarea>
-        <div style="margin-top:8px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="color:var(--muted);font-size:11px">Saved contexts</span>
-            <button class="btn-sm btn-secondary" id="saveCtxBtn">Save current</button>
-          </div>
-          <div id="savedContexts"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Run Agent</h3>
-        <div style="display:flex;gap:8px">
-          <button class="btn-primary" id="runBriefBtn" style="flex:1">Company Brief</button>
-          <button class="btn-secondary" id="runMapBtn" style="flex:1">Investor Map</button>
-        </div>
-        <div id="agentStatus" style="margin-top:10px;font-size:12px;color:var(--muted);min-height:20px"></div>
+<!-- ===== ACTION QUEUE ===== -->
+<div class="view active" id="view-queue">
+  <div class="wb-header">
+    <h2 style="margin:0">Action Queue</h2>
+    <div style="display:flex;gap:8px;align-items:center;position:relative">
+      <button class="btn-secondary btn-sm" id="runsDropdownBtn">Runs Log ▾</button>
+      <button class="btn-secondary btn-sm" id="refreshQueueBtn">↺ Refresh</button>
+      <!-- Runs dropdown -->
+      <div class="runs-dropdown" id="runsDropdown">
+        <div style="padding:10px 14px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">Recent Agent Runs</div>
+        <div id="runsDropdownList"><div style="padding:16px;color:var(--muted);text-align:center">Loading…</div></div>
       </div>
     </div>
-
-    <div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <h2 id="agentOutputLabel">Output</h2>
-        <button class="btn-sm btn-secondary" id="copyOutputBtn" style="display:none">Copy</button>
-      </div>
-      <div class="agent-output" id="agentOutput"><span style="color:var(--muted)">Select a company and run an agent to see output here.</span></div>
-    </div>
-  </div>
-</div>
-
-<!-- ===== ACTION QUEUE / WORKBENCH ===== -->
-<div class="view" id="view-queue">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h2 style="margin:0">Workbench</h2>
-    <button class="btn-secondary btn-sm" id="refreshQueueBtn">↺ Refresh</button>
   </div>
 
-  <!-- Stats bar -->
   <div class="wb-stats" id="wbStats">
     <div class="wb-stat"><div class="wb-stat-num" id="statSent">—</div><div class="wb-stat-label">Sent this week</div></div>
     <div class="wb-stat"><div class="wb-stat-num warn" id="statOverdue">—</div><div class="wb-stat-label">Overdue</div></div>
     <div class="wb-stat"><div class="wb-stat-num" id="statOpen">—</div><div class="wb-stat-label">Open actions</div></div>
   </div>
 
-  <!-- EVENTS (collapsed, expands when events exist) -->
+  <!-- Events preview -->
   <div id="wbEventsSection" style="display:none">
     <div class="wb-section-header">
       <span class="wb-section-label" style="color:#a78bfa">🗓 Upcoming Events</span>
-      <a href="#" onclick="switchToTab('events');return false;" style="font-size:11px;color:var(--muted);text-decoration:none">See all →</a>
+      <a href="#" onclick="switchSubTab('agents','events');return false;" style="font-size:11px;color:var(--muted);text-decoration:none">See all →</a>
     </div>
     <div id="wbEventsList"></div>
   </div>
 
   <!-- RADAR -->
   <div class="wb-section-header">
-    <span class="wb-section-label radar">📡 Radar</span>
+    <span class="wb-section-label radar">📡 Radar — Follow-ups Due</span>
     <span id="radarCount" style="font-size:11px;color:var(--muted)"></span>
   </div>
   <div id="radarList"><div class="empty" style="padding:16px">Loading…</div></div>
@@ -276,7 +253,7 @@
     <span class="wb-section-label upnext">⚡ Up Next</span>
     <button class="btn-secondary btn-sm" id="loadMoreBtn" style="display:none">Load More</button>
   </div>
-  <div id="upNextList"><div class="empty" style="padding:16px">Loading…</div></div>
+  <div id="upNextList"></div>
   <div id="upNextLoading" style="display:none;text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Sourcing investor targets…</div>
 
   <!-- LOGGED -->
@@ -287,7 +264,201 @@
   <div id="loggedList" style="display:none"></div>
 </div>
 
-<!-- Log outreach modal -->
+<!-- ===== COMPANIES ===== -->
+<div class="view" id="view-companies">
+  <div class="card" style="margin-bottom:16px">
+    <h2>Import Companies</h2>
+    <div class="import-zone" id="importZone">
+      <div>Drop a Crunchbase CSV here or click to select</div>
+      <div style="font-size:11px;margin-top:6px;color:var(--muted)">Detects duplicates · Flags out-of-focus sectors</div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv" style="display:none">
+    <div id="importResult" style="display:none" class="import-result"></div>
+  </div>
+
+  <!-- Company detail panel (shown above table when a row is selected) -->
+  <div id="companyDetailPanel" style="display:none"></div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 id="companyCount">Companies</h2>
+    <input type="text" id="searchInput" placeholder="Filter by name, sector…" style="width:220px">
+  </div>
+
+  <div class="table-wrap">
+    <table id="companyTable">
+      <thead>
+        <tr><th>Name</th><th>Sector</th><th>Stage</th><th>Status</th><th>Score</th><th>Last Touched</th></tr>
+      </thead>
+      <tbody id="companyBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== INVESTORS ===== -->
+<div class="view" id="view-investors">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2>Investors</h2>
+    <button class="btn-primary btn-sm" id="showAddInvestorBtn">+ Add Investor</button>
+  </div>
+  <div class="card" id="addInvestorForm" style="display:none;margin-bottom:16px">
+    <h3 id="investorFormTitle">Add Investor</h3>
+    <input type="hidden" id="editInvestorId">
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Name *</label><input type="text" id="iName" placeholder="Kent Goldman"></div>
+      <div><label>Firm</label><input type="text" id="iFirm" placeholder="Upside Partnership"></div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Role</label><input type="text" id="iRole" placeholder="General Partner, Scout…"></div>
+      <div><label>Relationship</label>
+        <select id="iRelStatus">
+          <option value="cold">Cold</option><option value="met">Met</option>
+          <option value="warm">Warm</option><option value="outreach_sent">Outreach Sent</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Stage Focus</label><input type="text" id="iStage" placeholder="Pre-seed, Seed…"></div>
+      <div><label>Sector Focus</label><input type="text" id="iSector" placeholder="AI, fitness…"></div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>How I Know Them</label><input type="text" id="iHow" placeholder="met at YC demo day…"></div>
+    </div>
+    <div style="margin-bottom:10px"><label>Notes</label><textarea id="iNotes" style="min-height:60px"></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-primary" id="saveInvestorBtn">Save</button>
+      <button class="btn-secondary" id="cancelInvestorBtn">Cancel</button>
+    </div>
+  </div>
+  <div id="investorList"></div>
+</div>
+
+<!-- ===== CONTACTS ===== -->
+<div class="view" id="view-contacts">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2>My Contacts</h2>
+    <button class="btn-primary btn-sm" id="showAddContactBtn">+ Add Contact</button>
+  </div>
+  <div class="card" id="addContactForm" style="display:none;margin-bottom:16px">
+    <h3 id="contactFormTitle">Add Contact</h3>
+    <input type="hidden" id="editContactId">
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Name</label><input type="text" id="cName" placeholder="John Borchers"></div>
+      <div><label>Firm</label><input type="text" id="cFirm" placeholder="Decathlon Capital"></div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>Role</label><input type="text" id="cRole" placeholder="Partner, Associate…"></div>
+      <div><label>How I Know Them</label><input type="text" id="cHow" placeholder="working relationship…"></div>
+    </div>
+    <div style="margin-bottom:10px"><label>Notes</label><textarea id="cNotes" style="min-height:60px"></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-primary" id="saveContactBtn">Save</button>
+      <button class="btn-secondary" id="cancelContactBtn">Cancel</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Firm</th><th>Role</th><th>How I Know Them</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="contactsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== AGENT RUN (contains Events, Email, Runs Log as sub-tabs) ===== -->
+<div class="view" id="view-agents">
+  <div class="sub-tabs">
+    <button class="sub-tab active" data-sub="agent-run">⚙ Agent Run</button>
+    <button class="sub-tab" data-sub="events">🗓 Events</button>
+    <button class="sub-tab" data-sub="email">✉ Email</button>
+    <button class="sub-tab" data-sub="runs">📋 Runs Log</button>
+  </div>
+
+  <!-- Agent sub-view -->
+  <div class="sub-view active" id="sub-agent-run">
+    <div class="agent-panel">
+      <div>
+        <div class="card">
+          <h3>Company</h3>
+          <select id="agentCompanySelect"><option value="">Select a company…</option></select>
+          <div id="agentCompanyInfo" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6"></div>
+        </div>
+        <div class="card">
+          <h3>Network Context</h3>
+          <textarea id="networkContext" placeholder="Describe your network: investors you know, operators, advisors, sector connections…"></textarea>
+          <div style="margin-top:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span style="color:var(--muted);font-size:11px">Saved contexts</span>
+              <button class="btn-sm btn-secondary" id="saveCtxBtn">Save current</button>
+            </div>
+            <div id="savedContexts"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Run Agent</h3>
+          <div style="display:flex;gap:8px">
+            <button class="btn-primary" id="runBriefBtn" style="flex:1">Company Brief</button>
+            <button class="btn-secondary" id="runMapBtn" style="flex:1">Investor Map</button>
+          </div>
+          <div id="agentStatus" style="margin-top:10px;font-size:12px;color:var(--muted);min-height:20px"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h2 id="agentOutputLabel">Output</h2>
+          <button class="btn-sm btn-secondary" id="copyOutputBtn" style="display:none">Copy</button>
+        </div>
+        <div class="agent-output" id="agentOutput"><span style="color:var(--muted)">Select a company and run an agent to see output here.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Events sub-view -->
+  <div class="sub-view" id="sub-events">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <h2 style="margin:0">Luma Events</h2>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Flag investors in Investors tab → Scan → find events where they're speaking or hosting</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-secondary btn-sm" id="scanEventsBtn">🔍 Scan Now</button>
+        <button class="btn-secondary btn-sm" id="refreshEventsBtn">↺ Refresh</button>
+      </div>
+    </div>
+    <div id="scanEventsStatus" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px"></div>
+    <div id="eventsList"><div class="empty">Click "Scan Now" to search for upcoming events featuring your flagged investors.</div></div>
+  </div>
+
+  <!-- Email sub-view -->
+  <div class="sub-view" id="sub-email">
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">Email Automation</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--bg);border-radius:8px;padding:16px">
+          <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Daily Outreach</div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:10px">3 rotating company suggestions every morning at <strong>8:00 AM PT</strong></div>
+          <button id="btnTestDaily" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px">Send Test Now</button>
+        </div>
+        <div style="background:var(--bg);border-radius:8px;padding:16px">
+          <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Weekly Recap</div>
+          <div style="font-size:13px;color:var(--text);margin-bottom:10px">Pipeline review every <strong>Monday 7:00 AM PT</strong></div>
+          <button id="btnTestWeekly" style="background:#7c3aed;color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px">Send Test Now</button>
+        </div>
+      </div>
+      <div id="emailTestStatus" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">Email Log</div>
+      <div id="emailLog"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- Runs sub-view -->
+  <div class="sub-view" id="sub-runs">
+    <h2>Agent Runs Log</h2>
+    <div id="runsListFull"></div>
+  </div>
+</div>
+
+<!-- ── Log modal ── -->
 <div id="logModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
   <div class="card" style="width:440px;max-width:92vw;position:relative">
     <div style="font-size:14px;font-weight:700;margin-bottom:4px">Log Outreach</div>
@@ -300,7 +471,7 @@
     <label>Who did you reach out to?</label>
     <input type="text" id="logContact" placeholder="e.g. Ryan Chen, Courtside Ventures" style="margin-bottom:10px">
     <label>What happened / quick note</label>
-    <textarea id="logNote" style="min-height:60px" placeholder="Sent LinkedIn request, got a reply, mentioned a role opening…"></textarea>
+    <textarea id="logNote" style="min-height:60px" placeholder="Sent LinkedIn request, got a reply…"></textarea>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn-primary" id="logSaveBtn">Done — schedule follow-up</button>
       <button class="btn-secondary" id="logCancelBtn">Cancel</button>
@@ -309,21 +480,7 @@
   </div>
 </div>
 
-<!-- Draft modal -->
-<div id="draftModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
-  <div class="card" style="width:500px;max-width:92vw">
-    <div style="font-size:14px;font-weight:700;margin-bottom:4px">Outreach Draft</div>
-    <div id="draftContext" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
-    <div id="draftLoading" style="text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Writing personalized draft…</div>
-    <textarea id="draftText" style="display:none;min-height:140px;font-size:13px;line-height:1.6"></textarea>
-    <div style="display:flex;gap:8px;margin-top:10px">
-      <button class="btn-primary" id="draftCopyBtn" style="display:none">Copy to Clipboard</button>
-      <button class="btn-secondary" id="draftCloseBtn">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- Dossier modal -->
+<!-- ── Dossier modal ── -->
 <div id="dossierModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
   <div class="card" style="width:540px;max-width:92vw;max-height:85vh;overflow-y:auto">
     <div style="font-size:14px;font-weight:700;margin-bottom:4px">Investor Dossier</div>
@@ -334,150 +491,60 @@
   </div>
 </div>
 
-<!-- ===== RUNS LOG VIEW ===== -->
-<div class="view" id="view-log">
-  <h2>Agent Runs Log</h2>
-  <div id="runsList"></div>
-</div>
-
-<!-- ===== CONTACTS VIEW ===== -->
-<div class="view" id="view-contacts">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <h2>My Contacts</h2>
-    <button class="btn-primary btn-sm" id="showAddContactBtn">+ Add Contact</button>
-  </div>
-
-  <div class="card" id="addContactForm" style="display:none;margin-bottom:16px">
-    <h3 id="contactFormTitle">Add Contact</h3>
-    <input type="hidden" id="editContactId">
-    <div class="row" style="margin-bottom:10px">
-      <div><label>Name</label><input type="text" id="cName" placeholder="John Borchers"></div>
-      <div><label>Firm</label><input type="text" id="cFirm" placeholder="Decathlon Capital Partners"></div>
-    </div>
-    <div class="row" style="margin-bottom:10px">
-      <div><label>Role / Title</label><input type="text" id="cRole" placeholder="Partner, Associate…"></div>
-      <div><label>How I Know Them</label><input type="text" id="cHow" placeholder="working relationship, connection…"></div>
-    </div>
-    <div style="margin-bottom:10px"><label>Notes</label><textarea id="cNotes" style="min-height:60px" placeholder="Any context about this relationship…"></textarea></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn-primary" id="saveContactBtn">Save</button>
-      <button class="btn-secondary" id="cancelContactBtn">Cancel</button>
-    </div>
-  </div>
-
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Name</th><th>Firm</th><th>Role</th><th>How I Know Them</th><th>Notes</th><th></th></tr>
-      </thead>
-      <tbody id="contactsBody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- ===== INVESTORS VIEW ===== -->
-<div class="view" id="view-investors">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <h2>Investors</h2>
-    <button class="btn-primary btn-sm" id="showAddInvestorBtn">+ Add Investor</button>
-  </div>
-
-  <div class="card" id="addInvestorForm" style="display:none;margin-bottom:16px">
-    <h3 id="investorFormTitle">Add Investor</h3>
-    <input type="hidden" id="editInvestorId">
-    <div class="row" style="margin-bottom:10px">
-      <div><label>Name *</label><input type="text" id="iName" placeholder="Kent Goldman"></div>
-      <div><label>Firm</label><input type="text" id="iFirm" placeholder="Upside Partnership"></div>
-    </div>
-    <div class="row" style="margin-bottom:10px">
-      <div><label>Role / Title</label><input type="text" id="iRole" placeholder="General Partner, Scout…"></div>
-      <div><label>Relationship</label>
-        <select id="iRelStatus">
-          <option value="cold">Cold</option>
-          <option value="met">Met</option>
-          <option value="warm">Warm</option>
-          <option value="outreach_sent">Outreach Sent</option>
-        </select>
-      </div>
-    </div>
-    <div class="row" style="margin-bottom:10px">
-      <div><label>Stage Focus</label><input type="text" id="iStage" placeholder="Pre-seed, Seed, Series A…"></div>
-      <div><label>Sector Focus</label><input type="text" id="iSector" placeholder="AI, fitness, clean tech…"></div>
-    </div>
-    <div class="row" style="margin-bottom:10px">
-      <div><label>How I Know Them</label><input type="text" id="iHow" placeholder="met at YC demo day, intro from…"></div>
-    </div>
-    <div style="margin-bottom:10px"><label>Notes</label><textarea id="iNotes" style="min-height:60px" placeholder="Any context…"></textarea></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn-primary" id="saveInvestorBtn">Save</button>
-      <button class="btn-secondary" id="cancelInvestorBtn">Cancel</button>
-    </div>
-  </div>
-
-  <div id="investorList"></div>
-</div>
-
-<!-- ===== EVENTS VIEW ===== -->
-<div class="view" id="view-events">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div>
-      <h2 style="margin:0">Luma Events</h2>
-      <div style="font-size:12px;color:var(--muted);margin-top:2px">Flag investors in the Investors tab → scan → find events where they're speaking or hosting</div>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn-secondary btn-sm" id="scanEventsBtn">🔍 Scan Now</button>
-      <button class="btn-secondary btn-sm" id="refreshEventsBtn">↺ Refresh</button>
-    </div>
-  </div>
-  <div id="scanEventsStatus" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:16px"></div>
-  <div id="eventsList"><div class="empty">Click "Scan Now" to search for upcoming events featuring your flagged investors.</div></div>
-</div>
-
-<!-- ===== EMAIL VIEW ===== -->
-<div class="view" id="view-email">
-  <div class="card" style="margin-bottom:16px">
-    <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">Email Automation</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div style="background:var(--bg);border-radius:8px;padding:16px">
-        <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Daily Outreach</div>
-        <div style="font-size:13px;color:var(--text);margin-bottom:10px">3 rotating company suggestions every morning at <strong>8:00 AM PT</strong></div>
-        <button id="btnTestDaily" onclick="testEmail('daily')" style="background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px">Send Test Now</button>
-      </div>
-      <div style="background:var(--bg);border-radius:8px;padding:16px">
-        <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Weekly Recap</div>
-        <div style="font-size:13px;color:var(--text);margin-bottom:10px">Pipeline review + priorities every <strong>Monday 7:00 AM PT</strong></div>
-        <button id="btnTestWeekly" onclick="testEmail('weekly')" style="background:#7c3aed;color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px">Send Test Now</button>
-      </div>
-    </div>
-    <div id="emailTestStatus" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
-  </div>
-  <div class="card">
-    <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">Email Log</div>
-    <div id="emailLog"><div class="empty">Loading…</div></div>
-  </div>
-</div>
-
 </main>
-
 <div class="flash" id="flash"></div>
 
 <script>
 // ─── NAV ───────────────────────────────────────────────────────────────────
+let wbLoaded = false; // persist queue across tab switches
+
 document.querySelectorAll('nav button[data-view]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('view-' + btn.dataset.view).classList.add('active');
-    if (btn.dataset.view === 'agents') loadAgentCompanies();
-    if (btn.dataset.view === 'queue') loadWorkbench();
-    if (btn.dataset.view === 'log') loadRuns();
-    if (btn.dataset.view === 'contacts') loadContacts();
-    if (btn.dataset.view === 'investors') loadInvestors();
-    if (btn.dataset.view === 'events') loadEvents();
-    if (btn.dataset.view === 'email') loadEmailLog();
+    const v = btn.dataset.view;
+    if (v === 'queue') { if (!wbLoaded) loadWorkbench(); }
+    if (v === 'companies') loadCompanies();
+    if (v === 'contacts') loadContacts();
+    if (v === 'investors') loadInvestors();
+    if (v === 'agents') loadAgentCompanies();
   });
 });
+
+// Sub-tabs within Agent Run
+document.querySelectorAll('.sub-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const parent = tab.closest('.view');
+    parent.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+    parent.querySelectorAll('.sub-view').forEach(v => v.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('sub-' + tab.dataset.sub).classList.add('active');
+    if (tab.dataset.sub === 'events') loadEvents();
+    if (tab.dataset.sub === 'email') loadEmailLog();
+    if (tab.dataset.sub === 'runs') loadRunsFull();
+  });
+});
+
+function switchSubTab(view, sub) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const navBtn = document.querySelector(`nav button[data-view="${view}"]`);
+  if (navBtn) navBtn.classList.add('active');
+  const viewEl = document.getElementById('view-' + view);
+  if (viewEl) viewEl.classList.add('active');
+  // activate the sub-tab
+  viewEl.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  viewEl.querySelectorAll('.sub-view').forEach(v => v.classList.remove('active'));
+  const subTab = viewEl.querySelector(`.sub-tab[data-sub="${sub}"]`);
+  if (subTab) subTab.classList.add('active');
+  const subView = document.getElementById('sub-' + sub);
+  if (subView) subView.classList.add('active');
+  if (sub === 'events') loadEvents();
+  if (sub === 'email') loadEmailLog();
+  if (sub === 'runs') loadRunsFull();
+}
 
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 async function api(method, path, body) {
@@ -491,10 +558,8 @@ async function api(method, path, body) {
 
 function flash(msg, ok = true) {
   const el = document.getElementById('flash');
-  el.textContent = msg;
-  el.style.background = ok ? 'var(--accent2)' : 'var(--danger)';
-  el.style.display = 'block';
-  setTimeout(() => el.style.display = 'none', 3000);
+  el.textContent = msg; el.style.background = ok ? 'var(--accent2)' : 'var(--danger)';
+  el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 3000);
 }
 
 function sectorBadge(sector = '') {
@@ -507,22 +572,19 @@ function sectorBadge(sector = '') {
 
 function scoreDots(score) {
   if (!score) return '<span style="color:var(--muted)">—</span>';
-  return '<span class="score-dots">' +
-    [1,2,3,4,5].map(i => `<span class="${i <= score ? 'filled' : ''}"></span>`).join('') + '</span>';
+  return '<span class="score-dots">' + [1,2,3,4,5].map(i => `<span class="${i<=score?'filled':''}"></span>`).join('') + '</span>';
 }
 
-function fmtDate(dt) {
-  if (!dt) return '<span style="color:var(--muted)">—</span>';
-  return dt.slice(0,10);
-}
-
+function fmtDate(dt) { if (!dt) return '<span style="color:var(--muted)">—</span>'; return dt.slice(0,10); }
+function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
 function relBadge(status) {
-  const labels = { met: 'Met', warm: 'Warm', cold: 'Cold', outreach_sent: 'Outreach Sent' };
-  return `<span class="rel-badge rel-${status}">${labels[status] || status}</span>`;
+  const labels = { met:'Met', warm:'Warm', cold:'Cold', outreach_sent:'Outreach Sent' };
+  return `<span class="rel-badge rel-${status}">${labels[status]||status}</span>`;
 }
 
 // ─── COMPANIES ─────────────────────────────────────────────────────────────
 let allCompanies = [];
+let selectedCompanyId = null;
 
 async function loadCompanies() {
   allCompanies = await api('GET', '/companies');
@@ -533,62 +595,112 @@ function renderCompanies(rows) {
   document.getElementById('companyCount').textContent = `Companies (${rows.length})`;
   const tbody = document.getElementById('companyBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">No companies yet. Import a CSV to get started.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No companies yet. Import a CSV to get started.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(c => `
-    <tr>
-      <td><strong>${c.name}</strong>${c.website ? `<br><a href="${c.website}" target="_blank" style="color:var(--muted);font-size:11px">${c.website.replace(/https?:\/\//,'')}</a>` : ''}</td>
+    <tr class="data-row${selectedCompanyId==c.id?' selected':''}" data-id="${c.id}">
+      <td><strong>${c.name}</strong>${c.website?`<br><a href="${c.website}" target="_blank" style="color:var(--muted);font-size:11px">${c.website.replace(/https?:\/\//,'')}</a>`:''}</td>
       <td>${sectorBadge(c.sector)}</td>
-      <td style="color:var(--muted)">${c.stage || '—'}</td>
+      <td style="color:var(--muted)">${c.stage||'—'}</td>
       <td><select class="status-select" data-id="${c.id}" style="background:none;border:none;color:var(--text);padding:0;width:auto;cursor:pointer">
-        ${['new','researching','outreach','archived'].map(s => `<option value="${s}" ${c.status===s?'selected':''}>${s}</option>`).join('')}
+        ${['new','researching','outreach','archived'].map(s=>`<option value="${s}"${c.status===s?' selected':''}>${s}</option>`).join('')}
       </select></td>
       <td>${scoreDots(c.score)}</td>
       <td>${fmtDate(c.last_touched)}</td>
-      <td>
-        <button class="btn-sm btn-secondary run-brief-btn" data-id="${c.id}" data-name="${c.name}">Brief</button>
-        <button class="btn-sm btn-secondary run-map-btn" data-id="${c.id}" data-name="${c.name}" style="margin-left:4px">Map</button>
-      </td>
     </tr>`).join('');
 
   tbody.querySelectorAll('.status-select').forEach(sel => {
-    sel.addEventListener('change', async () => {
+    sel.addEventListener('change', async e => {
+      e.stopPropagation();
       await api('PATCH', '/companies/' + sel.dataset.id, { status: sel.value });
     });
   });
-  tbody.querySelectorAll('.run-brief-btn').forEach(btn => {
-    btn.addEventListener('click', () => openAgentForCompany(btn.dataset.id, btn.dataset.name, 'brief'));
+  tbody.querySelectorAll('.data-row').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.tagName === 'SELECT' || e.target.tagName === 'A') return;
+      const id = parseInt(row.dataset.id);
+      if (selectedCompanyId === id) { closeCompanyDetail(); return; }
+      selectedCompanyId = id;
+      tbody.querySelectorAll('.data-row').forEach(r => r.classList.toggle('selected', parseInt(r.dataset.id) === id));
+      const c = allCompanies.find(x => x.id === id);
+      if (c) showCompanyDetail(c);
+    });
   });
-  tbody.querySelectorAll('.run-map-btn').forEach(btn => {
-    btn.addEventListener('click', () => openAgentForCompany(btn.dataset.id, btn.dataset.name, 'map'));
-  });
+}
+
+function showCompanyDetail(c) {
+  const panel = document.getElementById('companyDetailPanel');
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="company-detail">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+        <div>
+          <h4>${c.name}</h4>
+          <div style="margin-top:6px">${sectorBadge(c.sector)} ${c.stage?`<span class="badge badge-other">${c.stage}</span>`:''}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn-primary btn-sm" onclick="openAgentForCompany('${c.id}','${esc(c.name)}','brief')">Run Brief</button>
+          <button class="btn-secondary btn-sm" onclick="openAgentForCompany('${c.id}','${esc(c.name)}','map')">Investor Map</button>
+          <button class="btn-ghost btn-sm" onclick="closeCompanyDetail()">✕</button>
+        </div>
+      </div>
+      ${c.description?`<div style="margin-top:12px;font-size:13px;color:var(--muted);line-height:1.7">${c.description}</div>`:''}
+      <div class="detail-grid">
+        ${field('Website', c.website ? `<a href="${c.website}" target="_blank" style="color:var(--accent)">${c.website.replace(/https?:\/\//,'')}</a>` : '—')}
+        ${field('Location', c.location)}
+        ${field('Founded', c.founded_year)}
+        ${field('Last Funding', c.last_funding)}
+        ${field('Amount', c.funding_amount ? '$' + c.funding_amount : '—')}
+        ${field('Status', c.status)}
+        ${field('Score', c.score || '—')}
+        ${field('Added', c.date_added)}
+        ${field('Last Touched', c.last_touched)}
+      </div>
+      ${c.investor_firms?`<div style="margin-top:14px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Investor Firms (from CSV)</div><div style="font-size:13px;color:var(--text)">${c.investor_firms}</div></div>`:''}
+      ${c.notes?`<div style="margin-top:12px"><label>Notes</label><div style="font-size:13px;color:var(--muted);margin-top:4px">${c.notes}</div></div>`:''}
+    </div>`;
+}
+
+function field(label, val) {
+  return `<div class="detail-field"><label>${label}</label><div class="val">${val||'—'}</div></div>`;
+}
+
+function closeCompanyDetail() {
+  selectedCompanyId = null;
+  document.getElementById('companyDetailPanel').style.display = 'none';
+  document.querySelectorAll('.data-row').forEach(r => r.classList.remove('selected'));
 }
 
 document.getElementById('searchInput').addEventListener('input', function() {
   const q = this.value.toLowerCase();
-  renderCompanies(allCompanies.filter(c =>
-    c.name.toLowerCase().includes(q) || (c.sector||'').toLowerCase().includes(q)
-  ));
+  renderCompanies(allCompanies.filter(c => c.name.toLowerCase().includes(q) || (c.sector||'').toLowerCase().includes(q)));
 });
 
 function openAgentForCompany(id, name, type) {
   document.querySelectorAll('nav button[data-view]').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelector('nav button[data-view="agents"]').classList.add('active');
+  const navBtn = document.querySelector('nav button[data-view="agents"]');
+  navBtn.classList.add('active');
   document.getElementById('view-agents').classList.add('active');
+  // Ensure Agent Run sub-tab is active
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sub-view').forEach(v => v.classList.remove('active'));
+  document.querySelector('.sub-tab[data-sub="agent-run"]').classList.add('active');
+  document.getElementById('sub-agent-run').classList.add('active');
   loadAgentCompanies().then(() => {
     document.getElementById('agentCompanySelect').value = id;
     document.getElementById('agentCompanySelect').dispatchEvent(new Event('change'));
-    if (type === 'map') document.getElementById('runMapBtn').focus();
-    else document.getElementById('runBriefBtn').focus();
+    setTimeout(() => {
+      if (type === 'map') document.getElementById('runMapBtn').focus();
+      else document.getElementById('runBriefBtn').focus();
+    }, 100);
   });
 }
 
 // ─── IMPORT ────────────────────────────────────────────────────────────────
 const importZone = document.getElementById('importZone');
 const fileInput = document.getElementById('fileInput');
-
 importZone.addEventListener('click', () => fileInput.click());
 importZone.addEventListener('dragover', e => { e.preventDefault(); importZone.style.borderColor = 'var(--accent)'; });
 importZone.addEventListener('dragleave', () => importZone.style.borderColor = '');
@@ -597,22 +709,17 @@ fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
 
 async function handleFile(file) {
   if (!file) return;
-  const fd = new FormData();
-  fd.append('file', file);
+  const fd = new FormData(); fd.append('file', file);
   importZone.textContent = 'Importing…';
   const r = await fetch('/api/companies/import', { method: 'POST', body: fd });
   const data = await r.json();
-  importZone.textContent = 'Drop a Crunchbase CSV here or click to select';
+  importZone.innerHTML = 'Drop a Crunchbase CSV here or click to select<div style="font-size:11px;margin-top:6px;color:var(--muted)">Detects duplicates · Flags out-of-focus sectors</div>';
   const resultEl = document.getElementById('importResult');
   resultEl.style.display = 'block';
-  if (data.error) {
-    resultEl.className = 'import-result warn';
-    resultEl.textContent = 'Error: ' + data.error;
-  } else {
-    const hasFlagged = data.flagged > 0;
-    resultEl.className = 'import-result ' + (hasFlagged ? 'warn' : 'ok');
-    resultEl.innerHTML = `Added ${data.added} · Skipped ${data.skipped} (duplicates)` +
-      (hasFlagged ? ` · Flagged ${data.flagged} out-of-focus:<br>${data.flaggedNames.join(', ')}` : '');
+  if (data.error) { resultEl.className = 'import-result warn'; resultEl.textContent = 'Error: ' + data.error; }
+  else {
+    resultEl.className = 'import-result ' + (data.flagged > 0 ? 'warn' : 'ok');
+    resultEl.innerHTML = `Added ${data.added} · Skipped ${data.skipped}` + (data.flagged > 0 ? ` · Flagged ${data.flagged} out-of-focus: ${data.flaggedNames.join(', ')}` : '');
     loadCompanies();
   }
 }
@@ -622,8 +729,7 @@ async function loadAgentCompanies() {
   const companies = await api('GET', '/companies');
   const sel = document.getElementById('agentCompanySelect');
   const cur = sel.value;
-  sel.innerHTML = '<option value="">Select a company…</option>' +
-    companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  sel.innerHTML = '<option value="">Select a company…</option>' + companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   if (cur) sel.value = cur;
 }
 
@@ -632,35 +738,26 @@ document.getElementById('agentCompanySelect').addEventListener('change', async f
   if (!id) { document.getElementById('agentCompanyInfo').innerHTML = ''; return; }
   const c = await api('GET', '/companies/' + id);
   document.getElementById('agentCompanyInfo').innerHTML =
-    `<strong>${c.name}</strong><br>${sectorBadge(c.sector)} ${c.stage || ''}<br>` +
-    `<span>${c.description ? c.description.slice(0,120) + '…' : ''}</span>`;
+    `<strong>${c.name}</strong><br>${sectorBadge(c.sector)} ${c.stage||''}<br><span>${c.description ? c.description.slice(0,120)+'…' : ''}</span>`;
 });
 
-function getSavedContexts() {
-  try { return JSON.parse(localStorage.getItem('ntv2_contexts') || '[]'); } catch { return []; }
-}
+function getSavedContexts() { try { return JSON.parse(localStorage.getItem('ntv2_contexts')||'[]'); } catch { return []; } }
 function renderSavedContexts() {
   const div = document.getElementById('savedContexts');
   const ctxs = getSavedContexts();
   if (!ctxs.length) { div.innerHTML = '<span style="color:var(--muted);font-size:11px">None saved yet</span>'; return; }
-  div.innerHTML = ctxs.map((c,i) =>
-    `<span class="ctx-chip" data-i="${i}" title="${c}">${c.slice(0,30)}${c.length>30?'…':''}</span>`
-  ).join('');
+  div.innerHTML = ctxs.map((c,i) => `<span class="ctx-chip" data-i="${i}" title="${c}">${c.slice(0,30)}${c.length>30?'…':''}</span>`).join('');
   div.querySelectorAll('.ctx-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      document.getElementById('networkContext').value = getSavedContexts()[chip.dataset.i];
-    });
+    chip.addEventListener('click', () => { document.getElementById('networkContext').value = getSavedContexts()[chip.dataset.i]; });
   });
 }
 renderSavedContexts();
 
 document.getElementById('saveCtxBtn').addEventListener('click', () => {
-  const val = document.getElementById('networkContext').value.trim();
-  if (!val) return;
+  const val = document.getElementById('networkContext').value.trim(); if (!val) return;
   const ctxs = getSavedContexts();
   if (!ctxs.includes(val)) { ctxs.push(val); localStorage.setItem('ntv2_contexts', JSON.stringify(ctxs)); }
-  renderSavedContexts();
-  flash('Context saved');
+  renderSavedContexts(); flash('Context saved');
 });
 
 async function runAgent(type) {
@@ -669,49 +766,146 @@ async function runAgent(type) {
   const network_context = document.getElementById('networkContext').value;
   const statusEl = document.getElementById('agentStatus');
   const outputEl = document.getElementById('agentOutput');
-  const label = document.getElementById('agentOutputLabel');
   statusEl.innerHTML = '<span class="spinner"></span>Running…';
   outputEl.textContent = '';
   document.getElementById('copyOutputBtn').style.display = 'none';
   try {
-    const endpoint = type === 'brief' ? '/agents/brief' : '/agents/investor-map';
-    const data = await api('POST', endpoint, { company_id: parseInt(company_id), network_context });
-    label.textContent = type === 'brief' ? 'Company Brief' : 'Investor Map';
+    const data = await api('POST', type === 'brief' ? '/agents/brief' : '/agents/investor-map', { company_id: parseInt(company_id), network_context });
+    document.getElementById('agentOutputLabel').textContent = type === 'brief' ? 'Company Brief' : 'Investor Map';
     outputEl.innerHTML = formatOutput(data.output);
     document.getElementById('copyOutputBtn').style.display = 'inline-block';
     statusEl.textContent = 'Done — saved as run #' + data.run_id;
-    loadCompanies();
-  } catch (err) {
-    statusEl.textContent = '';
-    flash('Agent error: ' + err.message, false);
-  }
+  } catch (err) { statusEl.textContent = ''; flash('Agent error: ' + err.message, false); }
 }
 
-function formatOutput(text) {
-  return text.replace(/(SECTION \d+ —[^\n]+)/g, '<span class="section-head">$1</span>');
-}
-
+function formatOutput(text) { return text.replace(/(SECTION \d+ —[^\n]+)/g, '<span class="section-head">$1</span>'); }
 document.getElementById('runBriefBtn').addEventListener('click', () => runAgent('brief'));
 document.getElementById('runMapBtn').addEventListener('click', () => runAgent('map'));
-document.getElementById('copyOutputBtn').addEventListener('click', () => {
-  const text = document.getElementById('agentOutput').innerText;
-  navigator.clipboard.writeText(text).then(() => flash('Copied'));
-});
+document.getElementById('copyOutputBtn').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('agentOutput').innerText).then(() => flash('Copied')); });
 
 // ─── ACTION QUEUE ──────────────────────────────────────────────────────────
-// ─── WORKBENCH ─────────────────────────────────────────────────────────────
-let wbShownIds = []; // company IDs already shown in the feed
+let wbShownIds = [];
+// Per-card state: draft text, accordion open/closed
+const cardState = {}; // { [companyId]: { draftText, draftInvestorIndex, briefOutput } }
+
+function getCardState(cid) {
+  if (!cardState[cid]) cardState[cid] = { draftText: '', draftInvestorIndex: 0, briefOutput: '' };
+  return cardState[cid];
+}
 
 function tierBadge(tier) {
   const labels = {1:'Scout',2:'Associate',3:'EIR/VP',4:'Principal',5:'Partner'};
   return `<span class="tier-badge tier-${tier||5}">${labels[tier]||'Investor'}</span>`;
 }
 
+function renderCard(card) {
+  const cid = card.company_id;
+  const cs = getCardState(cid);
+
+  // Build investor list for draft dropdown
+  const investors = [
+    ...(card.warm ? [{ ...card.warm, _type: 'warm' }] : []),
+    ...(card.cold || []).map(i => ({ ...i, _type: 'cold' })),
+  ];
+
+  const investorOptions = investors.map((inv, i) =>
+    `<option value="${i}">${inv.name} · ${inv.firm} (${inv._type === 'warm' ? '🔗 Warm' : '📡 Cold'})</option>`
+  ).join('');
+
+  // Brief section content
+  const briefContent = `
+    <div class="brief-grid">
+      ${card.description ? `<div class="brief-field" style="grid-column:1/-1"><label>Description</label><div class="val">${card.description}</div></div>` : ''}
+      ${bfield('Website', card.website ? `<a href="${card.website}" target="_blank" style="color:var(--accent)">${card.website.replace(/https?:\/\//,'')}</a>` : '')}
+      ${bfield('Location', card.location)}
+      ${bfield('Founded', card.founded_year)}
+      ${bfield('Last Funding', card.last_funding)}
+      ${bfield('Amount', card.funding_amount ? '$'+card.funding_amount : '')}
+      ${card.investor_firms ? `<div class="brief-field" style="grid-column:1/-1"><label>Investor Firms (CSV)</label><div class="val">${card.investor_firms}</div></div>` : ''}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn-secondary btn-sm" onclick="runInCardBrief(${cid})" id="incard-brief-btn-${cid}">⚙ Generate Agent Brief</button>
+    </div>
+    <div id="incard-brief-output-${cid}" style="display:${cs.briefOutput?'block':'none'}">
+      <div class="brief-agent-output">${cs.briefOutput ? formatOutput(cs.briefOutput) : ''}</div>
+    </div>`;
+
+  // Investors section content
+  const warmHtml = card.warm ? `
+    <div class="oc-section warm">🔗 Warm Path</div>
+    ${investorRowHtml(card.warm, cid, card.company_name, true)}` : '';
+  const coldHtml = card.cold && card.cold.length ? `
+    <div class="oc-section cold">📡 Cold Outreach</div>
+    ${card.cold.map(inv => investorRowHtml(inv, cid, card.company_name, false)).join('')}` : '';
+  const investorContent = (warmHtml + coldHtml) || '<div style="color:var(--muted);font-size:12px;padding:8px 0">No investor targets generated yet.</div>';
+
+  // Draft section content
+  const draftContent = `
+    ${investors.length ? `<div class="draft-investor-select"><label>Drafting for</label>
+      <select id="draft-inv-sel-${cid}" onchange="getCardState(${cid}).draftInvestorIndex=this.selectedIndex">${investorOptions}</select>
+    </div>` : '<div style="color:var(--muted);font-size:12px;margin-bottom:10px">No investors — expand the Investors section first.</div>'}
+    <button class="btn-secondary btn-sm" onclick="runInCardDraft(${cid})" id="incard-draft-btn-${cid}" ${!investors.length?'disabled':''}>✍ Generate LinkedIn DM</button>
+    <textarea id="incard-draft-ta-${cid}" style="margin-top:10px;min-height:110px;font-size:13px;line-height:1.6" placeholder="Draft will appear here — or type your own…">${cs.draftText}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-primary btn-sm" onclick="copyInCardDraft(${cid})">Copy</button>
+      <button class="btn-success btn-sm" onclick="openLogFromCard(${cid},'${esc(card.company_name)}',${investors.length?`'${esc(investors[0].name)}','${esc(investors[0].firm)}','${esc(investors[0].role)}'`:"'','',''"})" >Log It</button>
+    </div>`;
+
+  return `
+  <div class="oc" data-cid="${cid}">
+    <div class="oc-head">
+      <span class="oc-company">${card.company_name}</span>
+      ${sectorBadge(card.sector)}
+      ${card.stage ? `<span style="font-size:11px;color:var(--muted)">${card.stage}</span>` : ''}
+      <button class="btn-secondary btn-sm oc-skip" onclick="skipCard(${cid})">Skip</button>
+    </div>
+    ${card.timing ? `<div class="oc-timing">${card.timing}</div>` : ''}
+
+    <div class="acc-section">
+      <div class="acc-header" onclick="toggleAcc(${cid},'brief')">
+        <span class="acc-title" id="acc-title-${cid}-brief">📋 Company Brief</span>
+        <span class="acc-icon" id="acc-icon-${cid}-brief">▸</span>
+      </div>
+      <div class="acc-body" id="acc-body-${cid}-brief">${briefContent}</div>
+    </div>
+
+    <div class="acc-section">
+      <div class="acc-header" onclick="toggleAcc(${cid},'investors')">
+        <span class="acc-title" id="acc-title-${cid}-investors">👥 Investors</span>
+        <span class="acc-icon" id="acc-icon-${cid}-investors">▸</span>
+      </div>
+      <div class="acc-body" id="acc-body-${cid}-investors">${investorContent}</div>
+    </div>
+
+    <div class="acc-section">
+      <div class="acc-header" onclick="toggleAcc(${cid},'draft')">
+        <span class="acc-title" id="acc-title-${cid}-draft">✍ Draft Workspace</span>
+        <span class="acc-icon" id="acc-icon-${cid}-draft">▸</span>
+      </div>
+      <div class="acc-body" id="acc-body-${cid}-draft">${draftContent}</div>
+    </div>
+  </div>`;
+}
+
+function bfield(label, val) {
+  if (!val) return '';
+  return `<div class="brief-field"><label>${label}</label><div class="val">${val}</div></div>`;
+}
+
+function toggleAcc(cid, section) {
+  const body = document.getElementById(`acc-body-${cid}-${section}`);
+  const icon = document.getElementById(`acc-icon-${cid}-${section}`);
+  const title = document.getElementById(`acc-title-${cid}-${section}`);
+  const isOpen = body.classList.toggle('open');
+  icon.textContent = isOpen ? '▾' : '▸';
+  if (title) title.classList.toggle('active', isOpen);
+}
+
 function investorRowHtml(inv, companyId, companyName, isWarm) {
   const via = isWarm && inv.via ? `<div style="font-size:11px;color:#a78bfa;margin-top:3px">Via: ${inv.via}</div>` : '';
   const angle = inv.angle ? `<div class="investor-angle">"${inv.angle}"</div>` : '';
   return `
-    <div class="investor-row">
+    <div class="investor-row" id="inv-row-${companyId}-${esc(inv.name).replace(/[^a-z0-9]/gi,'_')}">
       <div class="investor-info">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="investor-name">${inv.name}</span>
@@ -719,61 +913,104 @@ function investorRowHtml(inv, companyId, companyName, isWarm) {
           <span style="font-size:11px;color:var(--muted)">${inv.role} · ${inv.firm}</span>
         </div>
         ${via}${angle}
+        <div id="email-result-${companyId}-${esc(inv.name).replace(/[^a-z0-9]/gi,'_')}" style="display:none"></div>
       </div>
       <div class="investor-btns">
-        <button class="btn-secondary btn-sm" onclick="openDraftModal(${companyId},'${esc(inv.name)}','${esc(inv.firm)}','${esc(inv.role)}','${esc(companyName)}')">Draft</button>
         <button class="btn-secondary btn-sm" onclick="openDossierModal('${esc(inv.name)}','${esc(inv.firm)}')">Dossier</button>
+        <button class="btn-secondary btn-sm" onclick="findEmail(${companyId},'${esc(inv.name)}','${esc(inv.firm)}')">Find Email</button>
         <button class="btn-success btn-sm" onclick="openLogFromCard(${companyId},'${esc(companyName)}','${esc(inv.name)}','${esc(inv.firm)}','${esc(inv.role)}')">Log It</button>
       </div>
     </div>`;
 }
 
-function renderCard(card) {
-  const warmHtml = card.warm ? `
-    <div class="oc-section warm">🔗 Warm Path</div>
-    ${investorRowHtml(card.warm, card.company_id, card.company_name, true)}` : '';
-
-  const coldHtml = card.cold && card.cold.length ? `
-    <div class="oc-section cold">📡 Cold Outreach</div>
-    ${card.cold.map(inv => investorRowHtml(inv, card.company_id, card.company_name, false)).join('')}` : '';
-
-  return `
-  <div class="oc" data-cid="${card.company_id}">
-    <div class="oc-head">
-      <span class="oc-company">${card.company_name}</span>
-      ${sectorBadge(card.sector)}
-      ${card.stage ? `<span style="font-size:11px;color:var(--muted)">${card.stage}</span>` : ''}
-    </div>
-    ${card.timing ? `<div class="oc-timing">${card.timing}</div>` : ''}
-    ${warmHtml}${coldHtml}
-    <div class="oc-actions">
-      <button class="btn-secondary btn-sm" onclick="skipCard(${card.company_id})">Skip</button>
-    </div>
-  </div>`;
+async function findEmail(companyId, name, firm) {
+  const key = `${companyId}-${name.replace(/[^a-z0-9]/gi,'_')}`;
+  const el = document.getElementById(`email-result-${key}`);
+  if (!el) return;
+  el.style.display = 'block';
+  el.innerHTML = '<span class="spinner"></span><span style="font-size:11px;color:var(--muted)">Searching…</span>';
+  try {
+    const data = await api('GET', `/queue/find-email?name=${encodeURIComponent(name)}&firm=${encodeURIComponent(firm)}`);
+    if (data.email) {
+      el.innerHTML = `<span class="email-found">✉ ${data.email}</span> <button class="btn-ghost" onclick="navigator.clipboard.writeText('${data.email}').then(()=>flash('Email copied'))">Copy</button>`;
+    } else {
+      el.innerHTML = `<span style="font-size:11px;color:var(--muted)">No email found via public sources</span>`;
+    }
+  } catch { el.innerHTML = `<span style="font-size:11px;color:var(--muted)">Search failed</span>`; }
 }
 
-function esc(s) { return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+async function runInCardBrief(cid) {
+  const btn = document.getElementById(`incard-brief-btn-${cid}`);
+  const outDiv = document.getElementById(`incard-brief-output-${cid}`);
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Running…';
+  try {
+    const data = await api('POST', '/agents/brief', { company_id: cid, network_context: '' });
+    getCardState(cid).briefOutput = data.output;
+    outDiv.style.display = 'block';
+    outDiv.querySelector('.brief-agent-output').innerHTML = formatOutput(data.output);
+    btn.textContent = '⚙ Regenerate Brief';
+  } catch (err) {
+    outDiv.style.display = 'block';
+    outDiv.innerHTML = `<div style="color:#f87171;font-size:12px;padding:8px">Error: ${err.message}</div>`;
+    btn.textContent = '⚙ Generate Agent Brief';
+  }
+  btn.disabled = false;
+}
 
+async function runInCardDraft(cid) {
+  const sel = document.getElementById(`draft-inv-sel-${cid}`);
+  const ta = document.getElementById(`incard-draft-ta-${cid}`);
+  const btn = document.getElementById(`incard-draft-btn-${cid}`);
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Writing…';
+  ta.value = '';
+  // Get the card data from DOM context — find the card
+  const oc = document.querySelector(`.oc[data-cid="${cid}"]`);
+  if (!oc) return;
+  // Get selected investor index
+  const idx = sel ? parseInt(sel.value) : 0;
+  // We need company name and investor info. Reconstruct from the row
+  const companyNameEl = oc.querySelector('.oc-company');
+  const companyName = companyNameEl ? companyNameEl.textContent : '';
+  // Find the investor row at that index
+  const invRows = oc.querySelectorAll('.investor-row');
+  const invRow = invRows[idx];
+  let invName = '', invFirm = '', invRole = '';
+  if (invRow) {
+    invName = invRow.querySelector('.investor-name')?.textContent?.trim() || '';
+    const meta = invRow.querySelector('.investor-meta')?.textContent || '';
+    const parts = meta.split('·').map(s => s.trim());
+    invRole = parts[0] || ''; invFirm = parts[1] || '';
+  }
+  try {
+    const data = await api('POST', '/queue/draft', { company_id: cid, investor_name: invName, investor_firm: invFirm, investor_role: invRole });
+    ta.value = data.draft;
+    getCardState(cid).draftText = data.draft;
+    btn.textContent = '✍ Regenerate';
+  } catch (err) {
+    ta.value = 'Error: ' + err.message;
+    btn.textContent = '✍ Generate LinkedIn DM';
+  }
+  btn.disabled = false;
+}
+
+function copyInCardDraft(cid) {
+  const ta = document.getElementById(`incard-draft-ta-${cid}`);
+  if (ta) navigator.clipboard.writeText(ta.value).then(() => flash('Draft copied'));
+}
+
+// ─── WORKBENCH LOAD ────────────────────────────────────────────────────────
 async function loadWorkbench() {
-  // Stats
+  wbLoaded = true;
   try {
     const stats = await api('GET', '/queue/stats');
     document.getElementById('statSent').textContent = stats.sentThisWeek;
     document.getElementById('statOverdue').textContent = stats.overdue;
     document.getElementById('statOpen').textContent = stats.openActions;
   } catch(_) {}
-
-  // Events (compact preview)
   loadWbEvents();
-
-  // Radar
   loadRadar();
-
-  // Up Next (fresh load)
   wbShownIds = [];
   loadUpNext(true);
-
-  // Logged (hidden by default)
   loadLogged();
 }
 
@@ -786,18 +1023,16 @@ async function loadRadar() {
     el.innerHTML = items.map(a => {
       const step = a.sequence_step || 1;
       const stepNames = {1:'Initial outreach',2:'Follow-up 1',3:'Final check-in'};
-      const overdueDays = a.due_date ? Math.floor((Date.now() - new Date(a.due_date))/(1000*60*60*24)) : 0;
+      const overdueDays = a.due_date ? Math.floor((Date.now()-new Date(a.due_date))/(1000*60*60*24)) : 0;
       return `
       <div class="radar-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
             <div style="font-weight:600;font-size:13px">${a.company_name} <span style="color:var(--muted);font-weight:400">·</span> <span style="color:var(--muted);font-size:12px">${stepNames[step]||'Follow-up'}</span></div>
-            ${a.contact_context ? `<div class="contact-ctx" style="margin-top:4px">→ ${a.contact_context}</div>` : ''}
-            <div class="radar-overdue" style="margin-top:4px">Overdue ${overdueDays > 0 ? overdueDays+'d' : 'today'}</div>
+            ${a.contact_context?`<div class="contact-ctx" style="margin-top:4px">→ ${a.contact_context}</div>`:''}
+            <div class="radar-overdue" style="margin-top:4px">Overdue ${overdueDays>0?overdueDays+'d':'today'}</div>
           </div>
-          <div style="display:flex;gap:6px">
-            <button class="btn-secondary btn-sm" onclick="openLogModal(${a.id},'${esc(a.company_name)}')">Log It</button>
-          </div>
+          <button class="btn-secondary btn-sm" onclick="openLogModal(${a.id},'${esc(a.company_name)}')">Log It</button>
         </div>
       </div>`;
     }).join('');
@@ -808,37 +1043,22 @@ async function loadUpNext(reset = false) {
   const el = document.getElementById('upNextList');
   const loading = document.getElementById('upNextLoading');
   const btn = document.getElementById('loadMoreBtn');
-
   if (reset) el.innerHTML = '';
-  loading.style.display = 'block';
-  btn.style.display = 'none';
-
+  loading.style.display = 'block'; btn.style.display = 'none';
   try {
     const skip = wbShownIds.join(',');
-    const cards = await api('GET', `/queue/suggestions?n=3${skip ? '&skip='+skip : ''}`);
-
-    loading.style.display = 'none';
-    btn.style.display = 'block';
-
+    const cards = await api('GET', `/queue/suggestions?n=3${skip?'&skip='+skip:''}`);
+    loading.style.display = 'none'; btn.style.display = 'block';
     if (!cards.length && !wbShownIds.length) {
-      el.innerHTML = '<div class="empty" style="padding:16px">No companies in pipeline. Import a Crunchbase CSV to get started.</div>';
-      btn.style.display = 'none';
-      return;
+      el.innerHTML = '<div class="empty" style="padding:16px">No companies in pipeline. Import a CSV to get started.</div>';
+      btn.style.display = 'none'; return;
     }
     if (!cards.length) {
-      el.insertAdjacentHTML('beforeend', '<div class="empty" style="padding:16px">You\'ve worked through the whole pipeline — great work! Refresh to cycle again.</div>');
-      btn.style.display = 'none';
-      return;
+      el.insertAdjacentHTML('beforeend', '<div class="empty" style="padding:16px">You\'ve worked through the pipeline — great work! Refresh to cycle again.</div>');
+      btn.style.display = 'none'; return;
     }
-
-    cards.forEach(card => {
-      wbShownIds.push(card.company_id);
-      el.insertAdjacentHTML('beforeend', renderCard(card));
-    });
-  } catch(e) {
-    loading.style.display = 'none';
-    el.insertAdjacentHTML('beforeend', `<div class="empty" style="color:#f87171">${e.message}</div>`);
-  }
+    cards.forEach(card => { wbShownIds.push(card.company_id); el.insertAdjacentHTML('beforeend', renderCard(card)); });
+  } catch(e) { loading.style.display = 'none'; el.insertAdjacentHTML('beforeend', `<div class="empty" style="color:#f87171">${e.message}</div>`); }
 }
 
 async function loadLogged() {
@@ -846,29 +1066,59 @@ async function loadLogged() {
   try {
     const items = await api('GET', '/queue/logged');
     document.getElementById('loggedCount').textContent = `${items.length} total ▾`;
-    if (!items.length) { el.innerHTML = '<div class="empty" style="padding:12px">Nothing logged yet — use "Log It" on any outreach.</div>'; return; }
+    if (!items.length) { el.innerHTML = '<div class="empty" style="padding:12px">Nothing logged yet.</div>'; return; }
     el.innerHTML = items.map(a => `
-      <div class="logged-card${a.contact_context ? ' responded' : ''}">
+      <div class="logged-card${a.contact_context?' responded':''}">
         <div style="flex:1">
-          <div style="font-weight:600">${a.company_name} <span style="color:var(--muted);font-weight:400;font-size:12px">· ${a.contact_context || a.suggested_action}</span></div>
-          ${a.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${a.notes}</div>` : ''}
+          <div style="font-weight:600">${a.company_name} <span style="color:var(--muted);font-weight:400;font-size:12px">· ${a.contact_context||a.suggested_action}</span></div>
+          ${a.notes?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${a.notes}</div>`:''}
         </div>
         <div style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.created_at)}</div>
       </div>`).join('');
   } catch(_) {}
 }
 
-function skipCard(companyId) {
-  document.querySelector(`.oc[data-cid="${companyId}"]`)?.remove();
-}
+function skipCard(companyId) { document.querySelector(`.oc[data-cid="${companyId}"]`)?.remove(); }
 
 document.getElementById('loggedToggle').addEventListener('click', () => {
   const el = document.getElementById('loggedList');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 });
-
 document.getElementById('loadMoreBtn').addEventListener('click', () => loadUpNext(false));
-document.getElementById('refreshQueueBtn').addEventListener('click', loadWorkbench);
+document.getElementById('refreshQueueBtn').addEventListener('click', () => { wbLoaded = false; loadWorkbench(); });
+
+// ─── RUNS DROPDOWN ─────────────────────────────────────────────────────────
+const runsDropdown = document.getElementById('runsDropdown');
+document.getElementById('runsDropdownBtn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const isOpen = runsDropdown.classList.toggle('open');
+  if (isOpen) {
+    const list = document.getElementById('runsDropdownList');
+    list.innerHTML = '<div style="padding:16px;color:var(--muted);text-align:center"><span class="spinner"></span></div>';
+    try {
+      const runs = await api('GET', '/runs');
+      if (!runs.length) { list.innerHTML = '<div style="padding:16px;color:var(--muted);text-align:center">No runs yet.</div>'; return; }
+      list.innerHTML = runs.slice(0,20).map(r => `
+        <div class="runs-dropdown-item" onclick="openRunInAgentTab(${r.id},'${esc(r.company_name||'')}','${r.agent_type}')">
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="run-type ${r.agent_type}" style="flex-shrink:0">${r.agent_type}</span>
+            <strong style="font-size:12px">${r.company_name||'Unknown'}</strong>
+            <span style="font-size:11px;color:var(--muted);margin-left:auto">${fmtDate(r.created_at)}</span>
+          </div>
+        </div>`).join('');
+    } catch(e) { list.innerHTML = `<div style="padding:16px;color:#f87171">${e.message}</div>`; }
+  }
+});
+document.addEventListener('click', () => runsDropdown.classList.remove('open'));
+runsDropdown.addEventListener('click', e => e.stopPropagation());
+
+async function openRunInAgentTab(id, companyName, agentType) {
+  runsDropdown.classList.remove('open');
+  switchSubTab('agents', 'runs');
+  await loadRunsFull();
+  const item = document.querySelector(`.run-item[data-id="${id}"]`);
+  if (item) { item.click(); item.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+}
 
 // ─── LOG MODAL ─────────────────────────────────────────────────────────────
 function openLogModal(actionId, companyName) {
@@ -888,20 +1138,16 @@ function openLogFromCard(companyId, companyName, investorName, investorFirm, inv
   document.getElementById('logInvestorName').value = investorName;
   document.getElementById('logInvestorFirm').value = investorFirm;
   document.getElementById('logInvestorRole').value = investorRole;
-  document.getElementById('logContact').value = `${investorName}, ${investorFirm}`;
+  document.getElementById('logContact').value = investorName ? `${investorName}, ${investorFirm}` : '';
   document.getElementById('logNote').value = '';
   document.getElementById('logFeedback').textContent = '';
-  document.getElementById('logModalContext').textContent = `${companyName} · ${investorName} (${investorRole}, ${investorFirm})`;
+  document.getElementById('logModalContext').textContent = `${companyName}${investorName?' · '+investorName+' ('+investorRole+', '+investorFirm+')':''}`;
   document.getElementById('logModal').style.display = 'flex';
   setTimeout(() => document.getElementById('logNote').focus(), 50);
 }
 
-document.getElementById('logCancelBtn').addEventListener('click', () => {
-  document.getElementById('logModal').style.display = 'none';
-});
-document.getElementById('logModal').addEventListener('click', function(e) {
-  if (e.target === this) this.style.display = 'none';
-});
+document.getElementById('logCancelBtn').addEventListener('click', () => { document.getElementById('logModal').style.display = 'none'; });
+document.getElementById('logModal').addEventListener('click', function(e) { if (e.target===this) this.style.display='none'; });
 
 document.getElementById('logSaveBtn').addEventListener('click', async () => {
   const actionId = document.getElementById('logActionId').value;
@@ -909,11 +1155,9 @@ document.getElementById('logSaveBtn').addEventListener('click', async () => {
   const ctx = document.getElementById('logContact').value.trim();
   const note = document.getElementById('logNote').value.trim();
   const fb = document.getElementById('logFeedback');
-  fb.style.color = 'var(--muted)';
-  fb.textContent = 'Saving…';
+  fb.style.color = 'var(--muted)'; fb.textContent = 'Saving…';
   try {
     if (actionId) {
-      // Completing an existing follow-up action
       const payload = { completed: 1 };
       if (ctx) payload.contact_context = ctx;
       if (note) payload.notes = note;
@@ -922,147 +1166,95 @@ document.getElementById('logSaveBtn').addEventListener('click', async () => {
         const stepNames = {2:'Follow-up 1',3:'Final check-in'};
         fb.style.color = '#4ade80';
         fb.textContent = `✓ Logged. ${stepNames[res.followUp.step]||'Follow-up'} scheduled for ${res.followUp.due_date}.`;
-        setTimeout(() => { document.getElementById('logModal').style.display = 'none'; loadWorkbench(); }, 1600);
+        setTimeout(() => { document.getElementById('logModal').style.display = 'none'; loadRadar(); loadLogged(); }, 1600);
       } else {
-        document.getElementById('logModal').style.display = 'none';
-        loadWorkbench();
+        document.getElementById('logModal').style.display = 'none'; loadRadar(); loadLogged();
       }
     } else if (companyId) {
-      // Logging a new outreach from the feed
       const investorName = document.getElementById('logInvestorName').value;
-      const res = await api('POST', '/actions', {
+      await api('POST', '/actions', {
         company_id: +companyId,
-        suggested_action: `Reached out to ${investorName || ctx}`,
-        contact_context: ctx,
-        notes: note,
-        sequence_step: 1,
-        outreach_type: 'investor',
+        suggested_action: `Reached out to ${investorName||ctx}`,
+        contact_context: ctx, notes: note, sequence_step: 1, outreach_type: 'investor',
       });
-      // Mark company as last_suggested
       await api('PATCH', '/companies/' + companyId, { last_touched: new Date().toISOString() });
-      fb.style.color = '#4ade80';
-      fb.textContent = '✓ Logged. Follow-up 1 will be due in 7 days.';
+      fb.style.color = '#4ade80'; fb.textContent = '✓ Logged. Follow-up 1 due in 7 days.';
       setTimeout(() => {
         document.getElementById('logModal').style.display = 'none';
-        // Remove the card from UP NEXT
         document.querySelector(`.oc[data-cid="${companyId}"]`)?.remove();
-        loadRadar();
-        loadLogged();
-        // reload stats
-        api('GET','/queue/stats').then(s=>{
-          document.getElementById('statSent').textContent=s.sentThisWeek;
-          document.getElementById('statOverdue').textContent=s.overdue;
-          document.getElementById('statOpen').textContent=s.openActions;
+        loadRadar(); loadLogged();
+        api('GET','/queue/stats').then(s => {
+          document.getElementById('statSent').textContent = s.sentThisWeek;
+          document.getElementById('statOverdue').textContent = s.overdue;
+          document.getElementById('statOpen').textContent = s.openActions;
         }).catch(()=>{});
       }, 1400);
     }
-  } catch(err) {
-    fb.style.color = '#f87171';
-    fb.textContent = 'Error: ' + err.message;
-  }
+  } catch(err) { fb.style.color = '#f87171'; fb.textContent = 'Error: ' + err.message; }
 });
 
-// ─── DRAFT MODAL ────────────────────────────────────────────────────────────
-function openDraftModal(companyId, investorName, investorFirm, investorRole, companyName) {
-  document.getElementById('draftContext').textContent = `${investorName} · ${investorRole} · ${investorFirm} → ${companyName}`;
-  document.getElementById('draftLoading').style.display = 'block';
-  document.getElementById('draftText').style.display = 'none';
-  document.getElementById('draftCopyBtn').style.display = 'none';
-  document.getElementById('draftModal').style.display = 'flex';
-
-  api('POST', '/queue/draft', { company_id: companyId, investor_name: investorName, investor_firm: investorFirm, investor_role: investorRole })
-    .then(res => {
-      document.getElementById('draftLoading').style.display = 'none';
-      const ta = document.getElementById('draftText');
-      ta.value = res.draft;
-      ta.style.display = 'block';
-      document.getElementById('draftCopyBtn').style.display = 'inline-block';
-    })
-    .catch(err => {
-      document.getElementById('draftLoading').style.display = 'none';
-      document.getElementById('draftText').value = 'Error: ' + err.message;
-      document.getElementById('draftText').style.display = 'block';
-    });
-}
-
-document.getElementById('draftCopyBtn').addEventListener('click', () => {
-  const text = document.getElementById('draftText').value;
-  navigator.clipboard.writeText(text).then(() => flash('Copied to clipboard'));
-});
-document.getElementById('draftCloseBtn').addEventListener('click', () => {
-  document.getElementById('draftModal').style.display = 'none';
-});
-document.getElementById('draftModal').addEventListener('click', function(e) {
-  if (e.target === this) this.style.display = 'none';
-});
-
-// ─── DOSSIER MODAL ──────────────────────────────────────────────────────────
+// ─── DOSSIER MODAL ─────────────────────────────────────────────────────────
 function openDossierModal(name, firm) {
   document.getElementById('dossierContext').textContent = `${name} · ${firm}`;
   document.getElementById('dossierLoading').style.display = 'block';
   document.getElementById('dossierText').style.display = 'none';
   document.getElementById('dossierModal').style.display = 'flex';
-
   api('POST', '/queue/dossier', { name, firm })
     .then(res => {
       document.getElementById('dossierLoading').style.display = 'none';
       const pre = document.getElementById('dossierText');
-      pre.textContent = res.dossier;
-      pre.style.display = 'block';
+      pre.textContent = res.dossier; pre.style.display = 'block';
     })
     .catch(err => {
       document.getElementById('dossierLoading').style.display = 'none';
-      document.getElementById('dossierText').textContent = 'Error: ' + err.message;
-      document.getElementById('dossierText').style.display = 'block';
+      const pre = document.getElementById('dossierText');
+      pre.textContent = 'Error: ' + err.message; pre.style.display = 'block';
     });
 }
-document.getElementById('dossierCloseBtn').addEventListener('click', () => {
-  document.getElementById('dossierModal').style.display = 'none';
-});
-document.getElementById('dossierModal').addEventListener('click', function(e) {
-  if (e.target === this) this.style.display = 'none';
-});
+document.getElementById('dossierCloseBtn').addEventListener('click', () => { document.getElementById('dossierModal').style.display = 'none'; });
+document.getElementById('dossierModal').addEventListener('click', function(e) { if (e.target===this) this.style.display='none'; });
 
-// ─── RUNS LOG ──────────────────────────────────────────────────────────────
-async function loadRuns() {
-  const runs = await api('GET', '/runs');
-  const el = document.getElementById('runsList');
-  if (!runs.length) { el.innerHTML = '<div class="empty">No runs yet.</div>'; return; }
-  el.innerHTML = runs.map(r => `
-    <div class="run-item" data-id="${r.id}">
-      <div class="run-meta">
-        <span class="run-type ${r.agent_type}">${r.agent_type}</span>
-        <strong>${r.company_name || 'Unknown'}</strong>
-        <span style="color:var(--muted);font-size:11px">${r.created_at}</span>
-      </div>
-      <div class="run-detail" id="rd-${r.id}"></div>
-    </div>`).join('');
-  el.querySelectorAll('.run-item').forEach(item => {
-    item.addEventListener('click', async () => {
-      const detail = document.getElementById('rd-' + item.dataset.id);
-      if (detail.classList.toggle('open') && !detail.textContent) {
-        const run = await api('GET', '/runs/' + item.dataset.id);
-        detail.innerHTML = formatOutput(run.output_text);
-      }
+// ─── RUNS LOG (full, in Agent Run tab) ─────────────────────────────────────
+async function loadRunsFull() {
+  const el = document.getElementById('runsListFull');
+  if (!el) return;
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const runs = await api('GET', '/runs');
+    if (!runs.length) { el.innerHTML = '<div class="empty">No runs yet.</div>'; return; }
+    el.innerHTML = runs.map(r => `
+      <div class="run-item" data-id="${r.id}">
+        <div class="run-meta">
+          <span class="run-type ${r.agent_type}">${r.agent_type}</span>
+          <strong>${r.company_name||'Unknown'}</strong>
+          <span style="color:var(--muted);font-size:11px">${r.created_at}</span>
+        </div>
+        <div class="run-detail" id="rdf-${r.id}"></div>
+      </div>`).join('');
+    el.querySelectorAll('.run-item').forEach(item => {
+      item.addEventListener('click', async () => {
+        const detail = document.getElementById('rdf-' + item.dataset.id);
+        if (detail.classList.toggle('open') && !detail.textContent) {
+          const run = await api('GET', '/runs/' + item.dataset.id);
+          detail.innerHTML = formatOutput(run.output_text);
+        }
+      });
     });
-  });
+  } catch(e) { el.innerHTML = `<div class="empty" style="color:#f87171">${e.message}</div>`; }
 }
 
 // ─── CONTACTS ──────────────────────────────────────────────────────────────
 async function loadContacts() {
   const contacts = await api('GET', '/contacts');
   const tbody = document.getElementById('contactsBody');
-  if (!contacts.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">No contacts yet.</td></tr>';
-    return;
-  }
+  if (!contacts.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No contacts yet.</td></tr>'; return; }
   tbody.innerHTML = contacts.map(c => `
     <tr>
-      <td>${c.name || '<span style="color:var(--muted)">—</span>'}</td>
-      <td><strong>${c.firm || '—'}</strong></td>
-      <td style="color:var(--muted)">${c.role || '—'}</td>
-      <td style="color:var(--muted)">${c.how_i_know_them || '—'}</td>
-      <td style="color:var(--muted);font-size:12px">${c.notes || ''}</td>
+      <td>${c.name||'<span style="color:var(--muted)">—</span>'}</td>
+      <td><strong>${c.firm||'—'}</strong></td>
+      <td style="color:var(--muted)">${c.role||'—'}</td>
+      <td style="color:var(--muted)">${c.how_i_know_them||'—'}</td>
+      <td style="color:var(--muted);font-size:12px">${c.notes||''}</td>
       <td>
         <button class="btn-sm btn-secondary edit-contact-btn" data-id="${c.id}">Edit</button>
         <button class="btn-sm btn-danger del-contact-btn" data-id="${c.id}" style="margin-left:4px">×</button>
@@ -1072,83 +1264,60 @@ async function loadContacts() {
     btn.addEventListener('click', () => {
       const c = contacts.find(x => x.id == btn.dataset.id);
       document.getElementById('editContactId').value = c.id;
-      document.getElementById('cName').value = c.name || '';
-      document.getElementById('cFirm').value = c.firm || '';
-      document.getElementById('cRole').value = c.role || '';
-      document.getElementById('cHow').value = c.how_i_know_them || '';
-      document.getElementById('cNotes').value = c.notes || '';
+      document.getElementById('cName').value = c.name||'';
+      document.getElementById('cFirm').value = c.firm||'';
+      document.getElementById('cRole').value = c.role||'';
+      document.getElementById('cHow').value = c.how_i_know_them||'';
+      document.getElementById('cNotes').value = c.notes||'';
       document.getElementById('contactFormTitle').textContent = 'Edit Contact';
       document.getElementById('addContactForm').style.display = 'block';
     });
   });
   tbody.querySelectorAll('.del-contact-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Delete this contact?')) return;
-      await api('DELETE', '/contacts/' + btn.dataset.id);
-      loadContacts();
-    });
+    btn.addEventListener('click', async () => { if (!confirm('Delete?')) return; await api('DELETE', '/contacts/'+btn.dataset.id); loadContacts(); });
   });
 }
-
 document.getElementById('showAddContactBtn').addEventListener('click', () => {
   document.getElementById('editContactId').value = '';
   ['cName','cFirm','cRole','cHow','cNotes'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('contactFormTitle').textContent = 'Add Contact';
   document.getElementById('addContactForm').style.display = 'block';
 });
-document.getElementById('cancelContactBtn').addEventListener('click', () => {
-  document.getElementById('addContactForm').style.display = 'none';
-});
+document.getElementById('cancelContactBtn').addEventListener('click', () => { document.getElementById('addContactForm').style.display = 'none'; });
 document.getElementById('saveContactBtn').addEventListener('click', async () => {
   const id = document.getElementById('editContactId').value;
-  const payload = {
-    name: document.getElementById('cName').value.trim(),
-    firm: document.getElementById('cFirm').value.trim(),
-    role: document.getElementById('cRole').value.trim(),
-    how_i_know_them: document.getElementById('cHow').value.trim(),
-    notes: document.getElementById('cNotes').value.trim(),
-  };
-  if (id) await api('PATCH', '/contacts/' + id, payload);
-  else await api('POST', '/contacts', payload);
-  document.getElementById('addContactForm').style.display = 'none';
-  loadContacts();
-  flash('Contact saved');
+  const payload = { name: document.getElementById('cName').value.trim(), firm: document.getElementById('cFirm').value.trim(), role: document.getElementById('cRole').value.trim(), how_i_know_them: document.getElementById('cHow').value.trim(), notes: document.getElementById('cNotes').value.trim() };
+  if (id) await api('PATCH', '/contacts/'+id, payload); else await api('POST', '/contacts', payload);
+  document.getElementById('addContactForm').style.display = 'none'; loadContacts(); flash('Contact saved');
 });
 
 // ─── INVESTORS ─────────────────────────────────────────────────────────────
 async function loadInvestors() {
   const investors = await api('GET', '/investors');
   const el = document.getElementById('investorList');
-  if (!investors.length) {
-    el.innerHTML = '<div class="empty">No investors yet. Add one above.</div>';
-    return;
-  }
+  if (!investors.length) { el.innerHTML = '<div class="empty">No investors yet.</div>'; return; }
   el.innerHTML = investors.map(inv => `
     <div class="card" id="inv-card-${inv.id}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
         <div>
           <strong style="font-size:14px">${inv.name}</strong>
-          ${inv.firm ? `<span style="color:var(--muted)"> · ${inv.firm}</span>` : ''}
-          ${inv.role ? `<span style="color:var(--muted);font-size:11px"> · ${inv.role}</span>` : ''}
+          ${inv.firm?`<span style="color:var(--muted)"> · ${inv.firm}</span>`:''}
+          ${inv.role?`<span style="color:var(--muted);font-size:11px"> · ${inv.role}</span>`:''}
           <br>
           ${relBadge(inv.relationship_status)}
-          ${inv.stage_focus ? `<span class="badge badge-other" style="margin-left:4px">${inv.stage_focus}</span>` : ''}
-          ${inv.sector_focus ? `<span class="badge badge-other" style="margin-left:4px">${inv.sector_focus}</span>` : ''}
+          ${inv.stage_focus?`<span class="badge badge-other" style="margin-left:4px">${inv.stage_focus}</span>`:''}
+          ${inv.sector_focus?`<span class="badge badge-other" style="margin-left:4px">${inv.sector_focus}</span>`:''}
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn-sm ${inv.track_events ? 'btn-primary' : 'btn-secondary'} track-events-btn" data-id="${inv.id}" title="${inv.track_events ? 'Tracking events — click to stop' : 'Click to track events for this investor'}" style="font-size:12px">${inv.track_events ? '📍 Tracking' : '📍 Track Events'}</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <button class="btn-sm ${inv.track_events?'btn-primary':'btn-secondary'} track-events-btn" data-id="${inv.id}">${inv.track_events?'📍 Tracking':'📍 Track Events'}</button>
           <button class="btn-sm btn-success research-btn" data-id="${inv.id}">Research Portfolio</button>
           <button class="btn-sm btn-secondary edit-inv-btn" data-id="${inv.id}">Edit</button>
           <button class="btn-sm btn-danger del-inv-btn" data-id="${inv.id}">×</button>
         </div>
       </div>
-      ${inv.how_i_know_them ? `<div style="color:var(--muted);font-size:12px;margin-top:6px">How I know them: ${inv.how_i_know_them}</div>` : ''}
-      ${inv.notes ? `<div style="color:var(--muted);font-size:12px;margin-top:4px">${inv.notes}</div>` : ''}
-      ${inv.portfolio_companies ? `
-        <div style="margin-top:10px">
-          <div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Portfolio</div>
-          <div class="portfolio-box">${inv.portfolio_companies}</div>
-        </div>` : ''}
+      ${inv.how_i_know_them?`<div style="color:var(--muted);font-size:12px;margin-top:6px">How I know them: ${inv.how_i_know_them}</div>`:''}
+      ${inv.notes?`<div style="color:var(--muted);font-size:12px;margin-top:4px">${inv.notes}</div>`:''}
+      ${inv.portfolio_companies?`<div style="margin-top:10px"><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Portfolio</div><div class="portfolio-box">${inv.portfolio_companies}</div></div>`:''}
       <div class="inv-matches" id="inv-matches-${inv.id}" style="margin-top:8px"></div>
       <div class="inv-status" id="inv-status-${inv.id}" style="font-size:12px;color:var(--muted);margin-top:6px;min-height:16px"></div>
     </div>`).join('');
@@ -1157,72 +1326,50 @@ async function loadInvestors() {
     btn.addEventListener('click', async () => {
       const inv = investors.find(x => x.id == btn.dataset.id);
       const newVal = inv.track_events ? 0 : 1;
-      await api('PATCH', '/investors/' + btn.dataset.id, { track_events: newVal });
+      await api('PATCH', '/investors/'+btn.dataset.id, { track_events: newVal });
       flash(newVal ? `📍 Tracking events for ${inv.name}` : `Stopped tracking ${inv.name}`);
       loadInvestors();
     });
   });
-  el.querySelectorAll('.research-btn').forEach(btn => {
-    btn.addEventListener('click', () => researchPortfolio(btn.dataset.id, btn));
-  });
+  el.querySelectorAll('.research-btn').forEach(btn => { btn.addEventListener('click', () => researchPortfolio(btn.dataset.id, btn)); });
   el.querySelectorAll('.edit-inv-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const inv = investors.find(x => x.id == btn.dataset.id);
       document.getElementById('editInvestorId').value = inv.id;
-      document.getElementById('iName').value = inv.name || '';
-      document.getElementById('iFirm').value = inv.firm || '';
-      document.getElementById('iRole').value = inv.role || '';
-      document.getElementById('iRelStatus').value = inv.relationship_status || 'cold';
-      document.getElementById('iStage').value = inv.stage_focus || '';
-      document.getElementById('iSector').value = inv.sector_focus || '';
-      document.getElementById('iHow').value = inv.how_i_know_them || '';
-      document.getElementById('iNotes').value = inv.notes || '';
+      document.getElementById('iName').value = inv.name||'';
+      document.getElementById('iFirm').value = inv.firm||'';
+      document.getElementById('iRole').value = inv.role||'';
+      document.getElementById('iRelStatus').value = inv.relationship_status||'cold';
+      document.getElementById('iStage').value = inv.stage_focus||'';
+      document.getElementById('iSector').value = inv.sector_focus||'';
+      document.getElementById('iHow').value = inv.how_i_know_them||'';
+      document.getElementById('iNotes').value = inv.notes||'';
       document.getElementById('investorFormTitle').textContent = 'Edit Investor';
       document.getElementById('addInvestorForm').style.display = 'block';
       document.getElementById('addInvestorForm').scrollIntoView({ behavior: 'smooth' });
     });
   });
   el.querySelectorAll('.del-inv-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Delete this investor?')) return;
-      await api('DELETE', '/investors/' + btn.dataset.id);
-      loadInvestors();
-    });
+    btn.addEventListener('click', async () => { if (!confirm('Delete?')) return; await api('DELETE', '/investors/'+btn.dataset.id); loadInvestors(); });
   });
 }
 
 async function researchPortfolio(id, btn) {
-  const statusEl = document.getElementById('inv-status-' + id);
-  const matchesEl = document.getElementById('inv-matches-' + id);
-  btn.disabled = true;
-  btn.textContent = 'Researching…';
+  const statusEl = document.getElementById('inv-status-'+id);
+  const matchesEl = document.getElementById('inv-matches-'+id);
+  btn.disabled = true; btn.textContent = 'Researching…';
   statusEl.innerHTML = '<span class="spinner"></span>Searching Exa + extracting with Claude…';
   matchesEl.innerHTML = '';
   try {
-    const data = await api('POST', '/investors/' + id + '/research');
-    btn.textContent = 'Research Portfolio';
-    btn.disabled = false;
-    if (data.message) {
-      statusEl.textContent = data.message;
-    } else {
-      statusEl.textContent = `Found ${data.portfolio_companies.split('\n').filter(Boolean).length} companies · Last updated now`;
-    }
+    const data = await api('POST', '/investors/'+id+'/research');
+    btn.textContent = 'Research Portfolio'; btn.disabled = false;
+    statusEl.textContent = data.message || `Found ${data.portfolio_companies.split('\n').filter(Boolean).length} companies`;
     if (data.matches && data.matches.length) {
       matchesEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Already in your pipeline:</div>' +
-        data.matches.map(m =>
-          `<span class="match-pill" onclick="openAgentForCompany('${m.id}','${m.name}','brief')" title="Open ${m.name}">
-            ✓ ${m.name} <span style="opacity:.7">(${m.status})</span>
-          </span>`
-        ).join('');
+        data.matches.map(m => `<span class="match-pill" onclick="openAgentForCompany('${m.id}','${m.name}','brief')">✓ ${m.name} <span style="opacity:.7">(${m.status})</span></span>`).join('');
     }
-    // Reload to show updated portfolio
     loadInvestors();
-  } catch (err) {
-    btn.textContent = 'Research Portfolio';
-    btn.disabled = false;
-    statusEl.textContent = '';
-    flash('Research error: ' + err.message, false);
-  }
+  } catch (err) { btn.textContent = 'Research Portfolio'; btn.disabled = false; statusEl.textContent = ''; flash('Research error: '+err.message, false); }
 }
 
 document.getElementById('showAddInvestorBtn').addEventListener('click', () => {
@@ -1232,112 +1379,47 @@ document.getElementById('showAddInvestorBtn').addEventListener('click', () => {
   document.getElementById('investorFormTitle').textContent = 'Add Investor';
   document.getElementById('addInvestorForm').style.display = 'block';
 });
-document.getElementById('cancelInvestorBtn').addEventListener('click', () => {
-  document.getElementById('addInvestorForm').style.display = 'none';
-});
+document.getElementById('cancelInvestorBtn').addEventListener('click', () => { document.getElementById('addInvestorForm').style.display = 'none'; });
 document.getElementById('saveInvestorBtn').addEventListener('click', async () => {
   const id = document.getElementById('editInvestorId').value;
   const name = document.getElementById('iName').value.trim();
   if (!name) { flash('Name is required', false); return; }
-  const payload = {
-    name,
-    firm: document.getElementById('iFirm').value.trim(),
-    role: document.getElementById('iRole').value.trim(),
-    relationship_status: document.getElementById('iRelStatus').value,
-    stage_focus: document.getElementById('iStage').value.trim(),
-    sector_focus: document.getElementById('iSector').value.trim(),
-    how_i_know_them: document.getElementById('iHow').value.trim(),
-    notes: document.getElementById('iNotes').value.trim(),
-  };
-  if (id) await api('PATCH', '/investors/' + id, payload);
-  else await api('POST', '/investors', payload);
-  document.getElementById('addInvestorForm').style.display = 'none';
-  loadInvestors();
-  flash('Investor saved');
+  const payload = { name, firm: document.getElementById('iFirm').value.trim(), role: document.getElementById('iRole').value.trim(), relationship_status: document.getElementById('iRelStatus').value, stage_focus: document.getElementById('iStage').value.trim(), sector_focus: document.getElementById('iSector').value.trim(), how_i_know_them: document.getElementById('iHow').value.trim(), notes: document.getElementById('iNotes').value.trim() };
+  if (id) await api('PATCH', '/investors/'+id, payload); else await api('POST', '/investors', payload);
+  document.getElementById('addInvestorForm').style.display = 'none'; loadInvestors(); flash('Investor saved');
 });
-
-// ─── EMAIL ─────────────────────────────────────────────────────────────────
-async function loadEmailLog() {
-  const el = document.getElementById('emailLog');
-  el.innerHTML = '<div class="empty">Loading…</div>';
-  try {
-    const logs = await api('GET', '/email/logs');
-    if (!logs.length) { el.innerHTML = '<div class="empty">No emails sent yet. Use the buttons above to send a test.</div>'; return; }
-    el.innerHTML = logs.map(l => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div>
-          <span style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${l.email_type === 'daily_outreach' ? 'var(--accent)' : '#a78bfa'}">${l.email_type === 'daily_outreach' ? 'Daily' : 'Weekly'}</span>
-          <span style="font-size:13px;margin-left:10px;color:var(--text)">${l.subject}</span>
-        </div>
-        <span style="font-size:11px;color:var(--muted)">${fmtDate(l.created_at)}</span>
-      </div>`).join('');
-  } catch (e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
-}
-
-async function testEmail(type) {
-  const statusEl = document.getElementById('emailTestStatus');
-  const btn = document.getElementById(type === 'daily' ? 'btnTestDaily' : 'btnTestWeekly');
-  btn.disabled = true;
-  btn.textContent = 'Sending…';
-  statusEl.textContent = '';
-  try {
-    await api('POST', `/email/test-${type}`);
-    statusEl.style.color = '#4ade80';
-    statusEl.textContent = `✓ ${type === 'daily' ? 'Daily outreach' : 'Weekly recap'} email sent — check lukestruthers22@gmail.com`;
-    loadEmailLog();
-  } catch (e) {
-    statusEl.style.color = '#f87171';
-    statusEl.textContent = `Error: ${e.message}`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Send Test Now';
-  }
-}
 
 // ─── EVENTS ────────────────────────────────────────────────────────────────
 function fmtEventDate(dateStr) {
   if (!dateStr) return 'Date TBD';
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' });
-  } catch(_) { return dateStr; }
+  try { return new Date(dateStr).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZone:'America/Los_Angeles' }); }
+  catch(_) { return dateStr; }
 }
-
-function isPast(dateStr) {
-  if (!dateStr) return false;
-  return new Date(dateStr) < new Date();
-}
+function isPast(dateStr) { if (!dateStr) return false; return new Date(dateStr) < new Date(); }
 
 function eventCardHtml(ev, compact = false) {
   const past = isPast(ev.event_date);
-  const matchBadge = ev.matched_investor_names
-    ? `<span style="font-size:11px;background:rgba(167,139,250,.15);color:#a78bfa;padding:2px 8px;border-radius:10px;margin-left:6px">📍 ${ev.matched_investor_names}</span>`
-    : '';
+  const matchBadge = ev.matched_investor_names ? `<span style="font-size:11px;background:rgba(167,139,250,.15);color:#a78bfa;padding:2px 8px;border-radius:10px;margin-left:6px">📍 ${ev.matched_investor_names}</span>` : '';
   if (compact) {
-    return `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;${past ? 'opacity:.5' : ''}">
-      <div>
-        <div style="font-weight:600;font-size:13px">${ev.title}${matchBadge}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtEventDate(ev.event_date)}${ev.location ? ' · ' + ev.location : ''}</div>
-      </div>
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;${past?'opacity:.5':''}">
+      <div><div style="font-weight:600;font-size:13px">${ev.title}${matchBadge}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtEventDate(ev.event_date)}${ev.location?' · '+ev.location:''}</div></div>
       <a href="${ev.event_url}" target="_blank" style="font-size:11px;color:var(--accent);white-space:nowrap;margin-left:12px;text-decoration:none">View →</a>
     </div>`;
   }
-  return `
-  <div class="card" style="${past ? 'opacity:.6' : ''}${ev.registered ? ';border-color:rgba(78,204,163,.3)' : ''}">
+  return `<div class="card" style="${past?'opacity:.6':''}${ev.registered?';border-color:rgba(78,204,163,.3)':''}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
       <div style="flex:1">
         <div style="font-weight:700;font-size:14px;margin-bottom:4px">${ev.title}</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
-          <span style="font-size:12px;color:${past ? 'var(--muted)' : 'var(--accent)'}">📅 ${fmtEventDate(ev.event_date)}</span>
-          ${ev.location ? `<span style="font-size:12px;color:var(--muted)">📍 ${ev.location}</span>` : ''}
-          ${ev.host_name ? `<span style="font-size:12px;color:var(--muted)">Hosted by ${ev.host_name}</span>` : ''}
+          <span style="font-size:12px;color:${past?'var(--muted)':'var(--accent)'}">📅 ${fmtEventDate(ev.event_date)}</span>
+          ${ev.location?`<span style="font-size:12px;color:var(--muted)">📍 ${ev.location}</span>`:''}
         </div>
-        ${ev.matched_investor_names ? `<div style="margin-bottom:8px">${matchBadge.replace('margin-left:6px','margin-left:0')}</div>` : ''}
-        ${ev.description ? `<div style="font-size:12px;color:var(--muted);line-height:1.5">${ev.description.slice(0,200)}${ev.description.length>200?'…':''}</div>` : ''}
+        ${ev.matched_investor_names?`<div style="margin-bottom:8px">${matchBadge.replace('margin-left:6px','margin-left:0')}</div>`:''}
+        ${ev.description?`<div style="font-size:12px;color:var(--muted);line-height:1.5">${ev.description.slice(0,200)}${ev.description.length>200?'…':''}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
         <a href="${ev.event_url}" target="_blank" class="btn-primary btn-sm" style="text-decoration:none;text-align:center">Register →</a>
-        <button class="btn-secondary btn-sm event-register-btn" data-id="${ev.id}" data-registered="${ev.registered}">${ev.registered ? '✓ Registered' : 'Mark Registered'}</button>
+        <button class="btn-secondary btn-sm event-register-btn" data-id="${ev.id}" data-registered="${ev.registered}">${ev.registered?'✓ Registered':'Mark Registered'}</button>
         <button class="btn-secondary btn-sm event-dismiss-btn" data-id="${ev.id}" style="color:var(--muted)">Dismiss</button>
       </div>
     </div>
@@ -1349,10 +1431,7 @@ async function loadEvents() {
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
     const events = await api('GET', '/events');
-    if (!events.length) {
-      el.innerHTML = '<div class="empty">No events found yet.<br><br>1. Go to the <strong>Investors</strong> tab and click <strong>📍 Track Events</strong> on the investors you want to follow.<br>2. Come back here and click <strong>Scan Now</strong>.</div>';
-      return;
-    }
+    if (!events.length) { el.innerHTML = '<div class="empty">No events found yet.<br><br>1. Go to <strong>Investors</strong> and click <strong>📍 Track Events</strong>.<br>2. Come back here and click <strong>Scan Now</strong>.</div>'; return; }
     el.innerHTML = events.map(ev => eventCardHtml(ev)).join('');
     wireEventButtons(el);
   } catch(e) { el.innerHTML = `<div class="empty" style="color:#f87171">${e.message}</div>`; }
@@ -1360,7 +1439,7 @@ async function loadEvents() {
 
 async function loadWbEvents() {
   try {
-    const events = (await api('GET', '/events')).filter(e => !e.dismissed).slice(0, 3);
+    const events = (await api('GET', '/events')).filter(e => !e.dismissed).slice(0,3);
     const section = document.getElementById('wbEventsSection');
     const list = document.getElementById('wbEventsList');
     if (!events.length) { section.style.display = 'none'; return; }
@@ -1371,56 +1450,64 @@ async function loadWbEvents() {
 
 function wireEventButtons(container) {
   container.querySelectorAll('.event-register-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const newVal = btn.dataset.registered === '1' ? 0 : 1;
-      await api('PATCH', '/events/' + btn.dataset.id, { registered: newVal });
-      loadEvents();
-    });
+    btn.addEventListener('click', async () => { await api('PATCH', '/events/'+btn.dataset.id, { registered: btn.dataset.registered==='1'?0:1 }); loadEvents(); });
   });
   container.querySelectorAll('.event-dismiss-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      await api('PATCH', '/events/' + btn.dataset.id, { dismissed: 1 });
-      loadEvents();
-    });
+    btn.addEventListener('click', async () => { await api('PATCH', '/events/'+btn.dataset.id, { dismissed: 1 }); loadEvents(); });
   });
-}
-
-function switchToTab(viewName) {
-  document.querySelectorAll('nav button[data-view]').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  const btn = document.querySelector(`nav button[data-view="${viewName}"]`);
-  if (btn) btn.classList.add('active');
-  const view = document.getElementById('view-' + viewName);
-  if (view) view.classList.add('active');
-  if (viewName === 'events') loadEvents();
 }
 
 document.getElementById('scanEventsBtn').addEventListener('click', async () => {
   const status = document.getElementById('scanEventsStatus');
   const btn = document.getElementById('scanEventsBtn');
-  btn.disabled = true;
-  status.style.color = 'var(--muted)';
+  btn.disabled = true; status.style.color = 'var(--muted)';
   status.textContent = '🔍 Scanning Luma for events featuring your tracked investors…';
   try {
     const res = await api('POST', '/events/scan');
     status.style.color = '#4ade80';
-    status.textContent = res.found > 0
-      ? `✓ Found ${res.found} new event${res.found > 1 ? 's' : ''}! Loading…`
-      : res.message || '✓ Scan complete — no new events found. Try flagging more investors.';
+    status.textContent = res.found > 0 ? `✓ Found ${res.found} new event${res.found>1?'s':''}!` : res.message || '✓ Scan complete — no new events found.';
     if (res.found > 0) loadEvents();
-  } catch(e) {
-    status.style.color = '#f87171';
-    status.textContent = 'Error: ' + e.message;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🔍 Scan Now';
-  }
+  } catch(e) { status.style.color = '#f87171'; status.textContent = 'Error: ' + e.message; }
+  finally { btn.disabled = false; btn.textContent = '🔍 Scan Now'; }
 });
-
 document.getElementById('refreshEventsBtn').addEventListener('click', loadEvents);
 
+// ─── EMAIL ─────────────────────────────────────────────────────────────────
+async function loadEmailLog() {
+  const el = document.getElementById('emailLog');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const logs = await api('GET', '/email/logs');
+    if (!logs.length) { el.innerHTML = '<div class="empty">No emails sent yet.</div>'; return; }
+    el.innerHTML = logs.map(l => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <span style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:${l.email_type==='daily_outreach'?'var(--accent)':'#a78bfa'}">${l.email_type==='daily_outreach'?'Daily':'Weekly'}</span>
+          <span style="font-size:13px;margin-left:10px;color:var(--text)">${l.subject}</span>
+        </div>
+        <span style="font-size:11px;color:var(--muted)">${fmtDate(l.created_at)}</span>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>`; }
+}
+
+async function testEmail(type) {
+  const statusEl = document.getElementById('emailTestStatus');
+  const btn = document.getElementById(type==='daily'?'btnTestDaily':'btnTestWeekly');
+  btn.disabled = true; btn.textContent = 'Sending…'; statusEl.textContent = '';
+  try {
+    await api('POST', `/email/test-${type}`);
+    statusEl.style.color = '#4ade80';
+    statusEl.textContent = `✓ ${type==='daily'?'Daily outreach':'Weekly recap'} sent — check your inbox`;
+    loadEmailLog();
+  } catch(e) { statusEl.style.color = '#f87171'; statusEl.textContent = 'Error: ' + e.message; }
+  finally { btn.disabled = false; btn.textContent = 'Send Test Now'; }
+}
+
+document.getElementById('btnTestDaily').addEventListener('click', () => testEmail('daily'));
+document.getElementById('btnTestWeekly').addEventListener('click', () => testEmail('weekly'));
+
 // ─── INIT ──────────────────────────────────────────────────────────────────
-loadCompanies();
+loadWorkbench();
 </script>
 </body>
 </html>
