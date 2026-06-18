@@ -142,6 +142,18 @@ async function initSchema() {
       notes TEXT DEFAULT '',
       created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
     );
+
+    CREATE TABLE IF NOT EXISTS drafts (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER REFERENCES companies(id),
+      investor_name TEXT,
+      investor_email TEXT,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      approve_token TEXT UNIQUE,
+      created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
   `);
 
   // Seed default contacts if table is empty

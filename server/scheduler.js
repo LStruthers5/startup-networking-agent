@@ -1,7 +1,7 @@
 const cron = require('node-cron');
-const { query, queryOne, today } = require('./db');
+const { query, queryOne, today, daysFromNow } = require('./db');
 const { runDailyOutreachSuggestions, runWeeklyRecap } = require('./agents');
-const { sendDailyOutreach, sendWeeklyRecap } = require('./email');
+const { sendMorningBriefing, sendWeeklyRecap: sendWeeklyEmail } = require('./email');
 
 async function pickDailyCandidates(n = 3) {
   return query(`
@@ -16,29 +16,30 @@ async function pickDailyCandidates(n = 3) {
   `, [n]);
 }
 
-async function getPipelineStats() {
-  const totalRow = await queryOne('SELECT COUNT(*) as n FROM companies');
-  const statusRows = await query('SELECT status, COUNT(*) as n FROM companies GROUP BY status');
-  const byStatus = {};
-  for (const r of statusRows) byStatus[r.status || 'new'] = parseInt(r.n);
+async function getPendingDrafts(limit = 5) {
+  return query(
+    `SELECT d.*, c.name as company_name
+     FROM drafts d
+     LEFT JOIN companies c ON c.id = d.company_id
+     WHERE d.status = 'pending'
+     ORDER BY d.created_at ASC
+     LIMIT $1`,
+    [limit]
+  );
+}
 
-  const recentActions = await query(`
-    SELECT a.suggested_action, c.name as company_name
-    FROM actions a
-    LEFT JOIN companies c ON c.id = a.company_id
-    WHERE a.completed = 0
-    ORDER BY a.created_at DESC
-    LIMIT 5
-  `);
-
-  const topCompanies = await query(`
-    SELECT name, sector, status, score FROM companies
-    WHERE score IS NOT NULL
-    ORDER BY score DESC
-    LIMIT 5
-  `);
-
-  return { total: parseInt(totalRow.n), byStatus, recentActions, topCompanies };
+async function getUpcomingEvents(limit = 4) {
+  return query(
+    `SELECT * FROM events
+     WHERE dismissed = 0
+       AND registered = 0
+       AND event_date IS NOT NULL
+       AND event_date >= $1
+       AND event_date <= $2
+     ORDER BY event_date ASC
+     LIMIT $3`,
+    [today(), daysFromNow(14), limit]
+  );
 }
 
 async function getOverdueFollowUps() {
@@ -55,22 +56,55 @@ async function getOverdueFollowUps() {
   `, [today()]);
 }
 
+async function getPipelineStats() {
+  const totalRow = await queryOne('SELECT COUNT(*) as n FROM companies');
+  const statusRows = await query('SELECT status, COUNT(*) as n FROM companies GROUP BY status');
+  const byStatus = {};
+  for (const r of statusRows) byStatus[r.status || 'new'] = parseInt(r.n);
+
+  const topCompanies = await query(`
+    SELECT name, sector, status, score FROM companies
+    WHERE score IS NOT NULL
+    ORDER BY score DESC
+    LIMIT 5
+  `);
+
+  return { total: parseInt(totalRow.n), byStatus, topCompanies };
+}
+
 async function runDailyJob() {
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
-  const companies = await pickDailyCandidates(3);
-  if (!companies.length) throw new Error('No companies to suggest — add some companies first');
-  const overdueFollowUps = await getOverdueFollowUps();
-  const output = await runDailyOutreachSuggestions(companies, overdueFollowUps);
-  await sendDailyOutreach(output, companies.map(c => c.id));
-  console.log(`[Scheduler] Daily outreach sent — ${companies.length} companies, ${overdueFollowUps.length} overdue follow-ups`);
-  return companies.length;
+
+  const [pendingDrafts, upcomingEvents, overdueActions, companies] = await Promise.all([
+    getPendingDrafts(5),
+    getUpcomingEvents(4),
+    getOverdueFollowUps(),
+    pickDailyCandidates(3),
+  ]);
+
+  // Always generate pipeline intel text for context
+  let pipelineText = '';
+  if (companies.length) {
+    pipelineText = await runDailyOutreachSuggestions(companies, overdueActions);
+  }
+
+  await sendMorningBriefing({
+    pendingDrafts,
+    upcomingEvents,
+    overdueActions,
+    pipelineText,
+    companyIds: companies.map(c => c.id),
+  });
+
+  console.log(`[Scheduler] Morning briefing sent — ${pendingDrafts.length} drafts, ${upcomingEvents.length} events, ${overdueActions.length} overdue, ${companies.length} pipeline companies`);
+  return { drafts: pendingDrafts.length, events: upcomingEvents.length };
 }
 
 async function runWeeklyJob() {
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
   const stats = await getPipelineStats();
   const output = await runWeeklyRecap(stats);
-  await sendWeeklyRecap(output);
+  await sendWeeklyEmail(output);
   console.log('[Scheduler] Weekly recap sent.');
 }
 

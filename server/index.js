@@ -16,7 +16,9 @@ app.use(express.json());
 
 // ─── Basic Auth ───────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
-  if (req.path === '/api/health') return next(); // allow uptime checks
+  // allow uptime checks and one-click approve/skip links from email (token is the auth)
+  if (req.path === '/api/health') return next();
+  if (req.path.startsWith('/api/drafts/approve/') || req.path.startsWith('/api/drafts/skip/')) return next();
 
   const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
   if (!AUTH_PASSWORD) return next(); // no password set → open (dev mode)
@@ -43,6 +45,7 @@ app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/investors', require('./routes/investors'));
 app.use('/api/queue', require('./routes/queue'));
 app.use('/api/events', require('./routes/events'));
+app.use('/api/drafts', require('./routes/drafts'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -55,14 +58,12 @@ app.get('/api/email/logs', async (req, res) => {
 
 // Email: trigger test sends manually
 app.post('/api/email/test-daily', async (req, res) => {
-  const { runDailyJob } = require('./scheduler');
-  try { await runDailyJob(); res.json({ ok: true }); }
+  try { const r = await require('./scheduler').runDailyJob(); res.json({ ok: true, ...r }); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/email/test-weekly', async (req, res) => {
-  const { runWeeklyJob } = require('./scheduler');
-  try { await runWeeklyJob(); res.json({ ok: true }); }
+  try { await require('./scheduler').runWeeklyJob(); res.json({ ok: true }); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 

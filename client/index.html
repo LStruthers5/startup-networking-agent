@@ -969,7 +969,7 @@ function renderCard(card) {
   ];
 
   const investorOptions = investors.map((inv, i) =>
-    `<option value="${i}">${inv.name} · ${inv.firm} (${inv._type === 'warm' ? 'Warm' : 'Cold'})</option>`
+    `<option value="${i}" data-name="${esc(inv.name)}" data-firm="${esc(inv.firm)}" data-role="${esc(inv.role||'')}">${inv.name} · ${inv.firm} (${inv._type === 'warm' ? 'Warm' : 'Cold'})</option>`
   ).join('');
 
   const briefContent = `
@@ -1003,9 +1003,10 @@ function renderCard(card) {
     </div>` : '<div style="color:var(--muted);font-size:13px;margin-bottom:10px">No investors &mdash; expand the Investors section first.</div>'}
     <button class="btn-secondary btn-sm" onclick="runInCardDraft(${cid})" id="incard-draft-btn-${cid}" ${!investors.length?'disabled':''}>Generate LinkedIn DM</button>
     <textarea id="incard-draft-ta-${cid}" style="margin-top:10px;min-height:110px;font-size:14px;line-height:1.6" placeholder="Draft will appear here — or type your own…">${cs.draftText}</textarea>
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn-primary btn-sm" onclick="copyInCardDraft(${cid})">Copy</button>
       <button class="btn-success btn-sm" onclick="openLogFromCard(${cid},'${esc(card.company_name)}',${investors.length?`'${esc(investors[0].name)}','${esc(investors[0].firm)}','${esc(investors[0].role)}'`:"'','',''"})" >Log It</button>
+      <button class="btn-secondary btn-sm" id="save-draft-btn-${cid}" onclick="saveDraftFromCard(${cid})">Queue for Morning</button>
     </div>`;
 
   return `
@@ -1090,6 +1091,7 @@ async function findEmail(companyId, name, firm) {
   try {
     const data = await api('GET', `/queue/find-email?name=${encodeURIComponent(name)}&firm=${encodeURIComponent(firm)}`);
     if (data.email) {
+      foundEmails[`${companyId}-${name}`] = data.email;
       el.innerHTML = `<span class="email-found">${data.email}</span> <button class="btn-ghost" onclick="navigator.clipboard.writeText('${data.email}').then(()=>flash('Email copied'))">Copy</button>`;
     } else {
       el.innerHTML = `<span style="font-size:12px;color:var(--muted)">No email found via public sources</span>`;
@@ -1165,6 +1167,34 @@ async function saveInvestorFromQueue(btn) {
 function copyInCardDraft(cid) {
   const ta = document.getElementById(`incard-draft-ta-${cid}`);
   if (ta) navigator.clipboard.writeText(ta.value).then(() => flash('Draft copied'));
+}
+
+// Cache emails found via findEmail so saveDraftFromCard can include them
+const foundEmails = {}; // key: `${companyId}-${investorName}` → email string
+
+async function saveDraftFromCard(cid) {
+  const ta = document.getElementById(`incard-draft-ta-${cid}`);
+  const sel = document.getElementById(`draft-inv-sel-${cid}`);
+  const btn = document.getElementById(`save-draft-btn-${cid}`);
+  const body = ta ? ta.value.trim() : '';
+  if (!body) { flash('Write or generate a draft first', false); return; }
+
+  const opt = sel ? sel.options[sel.selectedIndex] : null;
+  const invName = opt ? (opt.dataset.name || opt.text.split('·')[0].trim()) : '';
+  const oc = document.querySelector(`.oc[data-cid="${cid}"]`);
+  const companyName = oc ? (oc.querySelector('.oc-company')?.textContent || '') : '';
+  const subject = `Introduction — ${companyName || 'Mutual Interest'}`;
+  const email = foundEmails[`${cid}-${invName}`] || null;
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await api('POST', '/drafts', { company_id: cid, investor_name: invName, investor_email: email, subject, body });
+    if (btn) { btn.textContent = 'Queued'; btn.classList.replace('btn-secondary', 'btn-success'); }
+    flash(`Draft queued for morning approval${email ? '' : ' (no email on file — will note in briefing)'}`);
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Queue for Morning'; }
+    flash('Save failed: ' + err.message, false);
+  }
 }
 
 // ─── WORKBENCH LOAD ────────────────────────────────────────────────────────
