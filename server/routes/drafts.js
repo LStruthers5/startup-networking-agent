@@ -3,23 +3,61 @@ const router = express.Router();
 const crypto = require('crypto');
 const { query, queryOne, execute } = require('../db');
 
-const APP_URL = () => process.env.APP_URL || 'http://localhost:3000';
+function APP_URL() {
+  if (process.env.APP_URL) return process.env.APP_URL;
+  // Railway injects this automatically — no manual env var needed
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  return 'http://localhost:3000';
+}
+
+const pageStyle = `
+  body { font-family: system-ui, sans-serif; background: #edf5f9; color: #0d1e30; margin: 0; padding: 32px 16px; }
+  .box { background: #fff; border: 1px solid #bdd6e6; border-radius: 12px; padding: 36px; max-width: 560px; margin: 0 auto; box-shadow: 0 4px 24px rgba(13,30,48,.08); }
+  h1 { font-size: 20px; margin: 0 0 8px; color: #0d7ea5; }
+  .sub { color: #5a7f9e; font-size: 14px; margin: 0 0 20px; }
+  .draft-box { background: #f0f7fa; border-left: 4px solid #0d7ea5; border-radius: 0 8px 8px 0; padding: 16px 18px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; margin-bottom: 20px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .btn { display: inline-block; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; cursor: pointer; border: none; }
+  .btn-primary { background: #0d1e30; color: #fff; }
+  .btn-secondary { background: #fff; color: #0d7ea5; border: 1px solid #bdd6e6; }
+  .btn-copy { background: #0d7ea5; color: #fff; }
+  .back { font-size: 13px; color: #5a7f9e; }
+  .back a { color: #0d7ea5; }`;
 
 function confirmPage(heading, message) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  body { font-family: system-ui, sans-serif; background: #edf5f9; color: #0d1e30; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-  .box { background: #fff; border: 1px solid #bdd6e6; border-radius: 12px; padding: 40px; max-width: 480px; text-align: center; box-shadow: 0 4px 24px rgba(13,30,48,.08); }
-  h1 { font-size: 22px; margin: 0 0 10px; color: #0d7ea5; }
-  p { color: #5a7f9e; font-size: 15px; margin: 0 0 24px; line-height: 1.6; }
-  a { display: inline-block; background: #0d1e30; color: #fff; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; }
-</style></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>${pageStyle}</style></head><body>
 <div class="box">
   <h1>${heading}</h1>
-  <p>${message}</p>
-  <a href="${APP_URL()}">Back to Tower</a>
+  <p class="sub">${message}</p>
+  <p class="back"><a href="${APP_URL()}">Back to Tower</a></p>
 </div></body></html>`;
+}
+
+function noEmailPage(draft) {
+  const linkedinUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent((draft.investor_name || '') + ' ' + (draft.investor_firm || ''))}`;
+  const escaped = (draft.body || '').replace(/`/g, '\\`').replace(/\\/g, '\\\\');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>${pageStyle}</style></head><body>
+<div class="box">
+  <h1>Draft Ready — No Email Found</h1>
+  <p class="sub">No email address on file for <strong>${draft.investor_name}</strong>. Copy the message below and send via LinkedIn or email.</p>
+  <div class="draft-box" id="draftText">${(draft.body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+  <div class="actions">
+    <button class="btn btn-copy" onclick="copyDraft()">Copy Message</button>
+    <a class="btn btn-secondary" href="${linkedinUrl}" target="_blank">Find on LinkedIn</a>
+    <a class="btn btn-primary" href="${APP_URL()}">Back to Tower</a>
+  </div>
+  <p id="copyConfirm" style="color:#0d7ea5;font-size:13px;display:none">Copied to clipboard</p>
+</div>
+<script>
+function copyDraft() {
+  navigator.clipboard.writeText(\`${escaped}\`).then(() => {
+    document.getElementById('copyConfirm').style.display = 'block';
+  });
+}
+</script>
+</body></html>`;
 }
 
 // GET /api/drafts — list drafts by status
@@ -65,10 +103,7 @@ router.get('/approve/:token', async (req, res) => {
 
     if (!draft.investor_email) {
       await execute('UPDATE drafts SET status = $1 WHERE id = $2', ['approved_manual', draft.id]);
-      return res.send(confirmPage(
-        'Draft Approved',
-        `No email address on file for <strong>${draft.investor_name}</strong>. The draft is marked approved — send it manually via LinkedIn or copy from the Tower.`
-      ));
+      return res.send(noEmailPage(draft));
     }
 
     const { Resend } = require('resend');

@@ -5,7 +5,11 @@ function getResend() {
 
 const FROM = 'Networking Tower <onboarding@resend.dev>';
 const RECIPIENT = () => process.env.RECIPIENT_EMAIL || 'lukestruthers22@gmail.com';
-const APP_URL = () => process.env.APP_URL || 'http://localhost:3000';
+function APP_URL() {
+  if (process.env.APP_URL) return process.env.APP_URL;
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  return 'http://localhost:3000';
+}
 
 function dateStr() {
   return new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -35,7 +39,7 @@ function buildMorningHtml({ pendingDrafts = [], upcomingEvents = [], overdueActi
           ${d.investor_name || 'Unknown Contact'}${d.company_name ? ` &mdash; re: ${d.company_name}` : ''}
         </div>
         <div style="font-size:12px;color:${muted};margin-bottom:10px">Subject: ${d.subject}</div>
-        <div style="font-size:13px;color:${text};line-height:1.65;border-left:3px solid ${teal};padding-left:12px;margin-bottom:14px;white-space:pre-wrap">${d.body.slice(0, 400)}${d.body.length > 400 ? '\n\n[…full message in Tower]' : ''}</div>
+        <div style="font-size:13px;color:${text};line-height:1.65;border-left:3px solid ${teal};padding-left:12px;margin-bottom:14px;white-space:pre-wrap">${d.body}</div>
         <div>
           <a href="${APP_URL()}/api/drafts/approve/${d.approve_token}"
              style="background:${teal};color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;margin-right:10px;display:inline-block">
