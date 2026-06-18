@@ -539,37 +539,52 @@ ${companySections}`;
 }
 
 // ─── OUTREACH DRAFT ────────────────────────────────────────────────────────
-async function runOutreachDraft(company, investor) {
+// userProfile shape (populated by profile UI when built — pass null to use defaults):
+// { name, background, targetRoles, sectors, pitch, linkedinUrl, portfolioUrl, emailSignature }
+async function runOutreachDraft(company, investor, userProfile = null) {
   const client = getClient();
   const EXA_KEY = process.env.EXA_API_KEY;
+
+  // TODO: replace default profile with DB lookup once profile UI is built
+  const profile = userProfile || {
+    name: 'Luke',
+    background: 'venture researcher',
+    targetRoles: 'operations, business development, research, or strategy',
+    sectors: 'AI, fitness/wearables, and clean tech startups',
+    pitch: 'analytically sharp and well-networked, with experience mapping startup ecosystems and sourcing deals',
+    emailSignature: 'Luke Struthers',
+  };
 
   // Search for recent public activity from this investor
   let recentActivity = '';
   if (EXA_KEY) {
     try {
-      const query = `"${investor.name}" "${investor.firm}" investment portfolio recent`;
       const resp = await fetch('https://api.exa.ai/search', {
         method: 'POST',
         headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, num_results: 3, text: { maxCharacters: 500 } }),
+        body: JSON.stringify({
+          query: `"${investor.name}" "${investor.firm}" investment portfolio recent`,
+          num_results: 3,
+          text: { maxCharacters: 500 },
+        }),
       });
       const data = await resp.json();
-      const results = (data.results || []).slice(0, 3);
-      recentActivity = results.map(r => `- ${r.title}: ${r.text || ''}`).join('\n');
+      recentActivity = (data.results || []).slice(0, 3).map(r => `- ${r.title}: ${r.text || ''}`).join('\n');
     } catch (_) {}
   }
 
-  const prompt = `You are writing a cold LinkedIn DM or email for a venture researcher looking for a job at an early-stage startup.
+  const prompt = `You are writing a cold outreach message on behalf of ${profile.name}, a ${profile.background}.
 
-The researcher is targeting roles in operations, business development, research, or strategy at early-stage AI, fitness/wearables, and clean tech startups. They are well-networked, analytically sharp, and interested in how investors think about markets.
+${profile.name} is targeting roles in ${profile.targetRoles} at early-stage ${profile.sectors}. ${profile.pitch}.
 
-Write ONE ready-to-send LinkedIn connection request message (150 words MAX). It must:
+Write ONE ready-to-send message (150 words MAX). It must:
 1. Open with a specific, genuine hook — reference their firm's investment in ${company.name} or a recent move from the activity below
-2. State who the researcher is in 1 sentence (venture researcher, focused on AI/fitness/clean tech)
+2. State who ${profile.name} is in 1 sentence
 3. Make a soft ask: learn about their portfolio / 15-minute call / just connect
 4. Sound human, not corporate. No "I hope this message finds you well."
+5. Close with: ${profile.emailSignature}
 
-Target: ${investor.name} | ${investor.firm} | ${investor.role}
+Target: ${investor.name} | ${investor.firm} | ${investor.role || 'Investor'}
 Company context: ${company.name} — ${company.sector} startup — "${company.description || 'no description'}"
 
 ${recentActivity ? `Recent activity found:\n${recentActivity}` : '(no recent activity found — write based on firm/company context)'}
@@ -578,11 +593,94 @@ Output ONLY the message text, nothing else.`;
 
   const msg = await client.messages.create({
     model: MODEL,
-    max_tokens: 300,
+    max_tokens: 350,
     messages: [{ role: 'user', content: prompt }],
   });
 
   return msg.content[0].text.trim();
+}
+
+// ─── AUTONOMOUS DRAFT GENERATION ───────────────────────────────────────────
+// Called nightly by the scheduler. Picks targets from runQueueSuggestions,
+// finds emails, writes personalized drafts, saves to drafts table.
+async function runAutonomousDraftGeneration(companies, userProfile = null) {
+  const crypto = require('crypto');
+  const { execute, queryOne, today } = require('./db');
+  const EXA_KEY = process.env.EXA_API_KEY;
+  const savedDrafts = [];
+
+  // Get structured investor targets for each company (runs Exa firm search internally)
+  const cards = await runQueueSuggestions(companies);
+
+  for (const card of cards) {
+    const company = companies.find(c => c.id === card.company_id);
+    if (!company) continue;
+
+    // Best target: warm path first, then first cold contact
+    const target = card.warm || (card.cold && card.cold[0]);
+    if (!target || !target.name) continue;
+
+    // Skip if a pending draft for this investor + company already exists today
+    const existing = await queryOne(
+      `SELECT id FROM drafts
+       WHERE company_id = $1 AND LOWER(investor_name) = LOWER($2)
+         AND status = 'pending' AND created_at >= $3`,
+      [card.company_id, target.name, today() + ' 00:00:00']
+    );
+    if (existing) {
+      console.log(`[AutoDraft] Skipping ${target.name} — draft already pending`);
+      continue;
+    }
+
+    // Find email via Exa
+    let email = null;
+    if (EXA_KEY) {
+      try {
+        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+        const skipList = ['noreply', 'no-reply', 'support', 'info@', 'hello@', 'contact@', 'privacy@', 'press@', 'jobs@'];
+        const searchQueries = [
+          `"${target.name}" "${target.firm}" email contact`,
+          `"${target.name}" site:linkedin.com email`,
+        ];
+        emailSearch: for (const q of searchQueries) {
+          const resp = await fetch('https://api.exa.ai/search', {
+            method: 'POST',
+            headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q, num_results: 5, text: { maxCharacters: 500 } }),
+          });
+          const data = await resp.json();
+          for (const result of (data.results || [])) {
+            const blob = `${result.text || ''} ${result.url}`;
+            const emails = blob.match(emailRegex) || [];
+            const found = emails.find(e => !skipList.some(s => e.toLowerCase().includes(s)));
+            if (found) { email = found; break emailSearch; }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Generate personalized draft
+    let body = '';
+    try {
+      body = await runOutreachDraft(company, target, userProfile);
+    } catch (err) {
+      console.error(`[AutoDraft] Draft failed for ${target.name}: ${err.message}`);
+      continue;
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    await execute(
+      `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, approve_token)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [company.id, target.name, email || null,
+       `Introduction — ${company.name} / ${target.firm}`, body, token]
+    );
+
+    savedDrafts.push({ company: company.name, investor: target.name, hasEmail: !!email });
+    console.log(`[AutoDraft] ${target.name} @ ${target.firm} — email: ${email || 'not found'}`);
+  }
+
+  return savedDrafts;
 }
 
 // ─── INVESTOR DOSSIER ──────────────────────────────────────────────────────
@@ -829,4 +927,4 @@ async function runEventDiscovery(trackedInvestors) {
   return newEvents;
 }
 
-module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runInvestorDossier, runEventDiscovery, runFirmDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms };
+module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runAutonomousDraftGeneration, runInvestorDossier, runEventDiscovery, runFirmDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms };

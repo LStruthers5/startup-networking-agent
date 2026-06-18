@@ -1,9 +1,10 @@
 const cron = require('node-cron');
 const { query, queryOne, today, daysFromNow } = require('./db');
-const { runDailyOutreachSuggestions, runWeeklyRecap } = require('./agents');
+const { runAutonomousDraftGeneration, runWeeklyRecap } = require('./agents');
 const { sendMorningBriefing, sendWeeklyRecap: sendWeeklyEmail } = require('./email');
 
-async function pickDailyCandidates(n = 3) {
+// Pick 2 companies that haven't been suggested recently
+async function pickDailyCandidates(n = 2) {
   return query(`
     SELECT * FROM companies
     WHERE status != 'passed'
@@ -61,43 +62,50 @@ async function getPipelineStats() {
   const statusRows = await query('SELECT status, COUNT(*) as n FROM companies GROUP BY status');
   const byStatus = {};
   for (const r of statusRows) byStatus[r.status || 'new'] = parseInt(r.n);
-
-  const topCompanies = await query(`
-    SELECT name, sector, status, score FROM companies
-    WHERE score IS NOT NULL
-    ORDER BY score DESC
-    LIMIT 5
-  `);
-
+  const topCompanies = await query(
+    'SELECT name, sector, status, score FROM companies WHERE score IS NOT NULL ORDER BY score DESC LIMIT 5'
+  );
   return { total: parseInt(totalRow.n), byStatus, topCompanies };
 }
 
 async function runDailyJob() {
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
 
-  const [pendingDrafts, upcomingEvents, overdueActions, companies] = await Promise.all([
+  const companies = await pickDailyCandidates(2);
+
+  // Step 1: autonomously source targets → find emails → write drafts → save to DB
+  let autoDrafts = [];
+  if (companies.length) {
+    console.log(`[Scheduler] Auto-drafting for: ${companies.map(c => c.name).join(', ')}`);
+    autoDrafts = await runAutonomousDraftGeneration(companies);
+    console.log(`[Scheduler] ${autoDrafts.length} draft(s) generated`);
+
+    // Mark companies as last_suggested
+    const { execute, nowText } = require('./db');
+    const ts = nowText();
+    for (const c of companies) {
+      await execute('UPDATE companies SET last_suggested = $1 WHERE id = $2', [ts, c.id]);
+    }
+  }
+
+  // Step 2: collect everything for the email (pending drafts now include today's auto-drafts)
+  const [pendingDrafts, upcomingEvents, overdueActions] = await Promise.all([
     getPendingDrafts(5),
     getUpcomingEvents(4),
     getOverdueFollowUps(),
-    pickDailyCandidates(3),
   ]);
 
-  // Always generate pipeline intel text for context
-  let pipelineText = '';
-  if (companies.length) {
-    pipelineText = await runDailyOutreachSuggestions(companies, overdueActions);
-  }
-
+  // Step 3: send morning briefing — approve-these section is the headline
   await sendMorningBriefing({
     pendingDrafts,
     upcomingEvents,
     overdueActions,
-    pipelineText,
+    pipelineText: '',
     companyIds: companies.map(c => c.id),
   });
 
-  console.log(`[Scheduler] Morning briefing sent — ${pendingDrafts.length} drafts, ${upcomingEvents.length} events, ${overdueActions.length} overdue, ${companies.length} pipeline companies`);
-  return { drafts: pendingDrafts.length, events: upcomingEvents.length };
+  console.log(`[Scheduler] Morning briefing sent — ${autoDrafts.length} new drafts, ${pendingDrafts.length} total pending, ${upcomingEvents.length} events, ${overdueActions.length} overdue`);
+  return { autoDrafts: autoDrafts.length, pendingDrafts: pendingDrafts.length, events: upcomingEvents.length };
 }
 
 async function runWeeklyJob() {
@@ -110,14 +118,16 @@ async function runWeeklyJob() {
 
 function startScheduler() {
   if (!process.env.RESEND_API_KEY) {
-    console.log('[Scheduler] No RESEND_API_KEY — scheduler disabled. Add key to enable email automation.');
+    console.log('[Scheduler] No RESEND_API_KEY — scheduler disabled.');
     return;
   }
 
-  cron.schedule('0 8 * * *', () => runDailyJob().catch(e => console.error('[Scheduler] Daily job error:', e.message)), { timezone: 'America/Los_Angeles' });
-  cron.schedule('0 7 * * 1', () => runWeeklyJob().catch(e => console.error('[Scheduler] Weekly job error:', e.message)), { timezone: 'America/Los_Angeles' });
+  // Daily 8am PT: pick 2 companies → source contacts → write drafts → send approval email
+  cron.schedule('0 8 * * *', () => runDailyJob().catch(e => console.error('[Scheduler] Daily error:', e.message)), { timezone: 'America/Los_Angeles' });
+  // Weekly Monday 7am PT: pipeline recap
+  cron.schedule('0 7 * * 1', () => runWeeklyJob().catch(e => console.error('[Scheduler] Weekly error:', e.message)), { timezone: 'America/Los_Angeles' });
 
-  console.log('[Scheduler] Email scheduler started — daily 8am, weekly Monday 7am (PT)');
+  console.log('[Scheduler] Started — daily 8am, weekly Monday 7am (PT)');
 }
 
 module.exports = { startScheduler, runDailyJob, runWeeklyJob };
