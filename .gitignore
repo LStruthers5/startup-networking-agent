@@ -47,3 +47,7 @@ frontend/.env.local
 # Mac
 .DS_Store
 .env
+
+# Claude Design handoff bundle (source export, not app code)
+design/
+Pixel art water animation-handoff.zip

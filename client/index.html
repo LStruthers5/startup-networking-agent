@@ -3,33 +3,44 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Networking Tower v2</title>
+<title>Networking River</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #edf5f9;
+    --bg: #eef6e8;
     --surface: #ffffff;
-    --border: #bdd6e6;
-    --accent: #0d7ea5;
-    --accent2: #0891b2;
-    --accent-bg: #d4f0f9;
-    --rose: #1d6fa8;
-    --rose-bg: #bae6fd;
-    --rose-deep: #0a4666;
+    --border: #cbe3ba;
+    --accent: #2f9e44;
+    --accent2: #40c057;
+    --accent-bg: #dcf5cf;
+    --rose: #099268;
+    --rose-bg: #c3fae8;
+    --rose-deep: #1b4332;
     --warn: #c07a20;
     --danger: #c13333;
-    --text: #0d1e30;
-    --muted: #5a7f9e;
+    --text: #15291c;
+    --muted: #56745a;
     --radius: 10px;
   }
   body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; }
 
+  /* ── River banner (LinkedIn-style, pixel art) ── */
+  .river-banner { position: relative; width: 100%; height: 184px; overflow: hidden; background: #0e2a0e; border-bottom: 5px solid #1b4332; }
+  .river-scene { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .river-brand { position: absolute; left: 32px; bottom: 20px; font-family: 'Inter', system-ui, sans-serif; font-weight: 800; font-size: 34px; line-height: 1.1; color: #fff; letter-spacing: -.5px; text-shadow: 0 2px 12px rgba(8,30,14,.55), 0 1px 2px rgba(8,30,14,.8); }
+  .river-brand .ver { color: #8ce99a; font-weight: 700; font-size: 13px; margin-left: 10px; letter-spacing: 0; vertical-align: middle; }
+  .river-tagline { display: block; font-family: 'Inter', system-ui, sans-serif; font-weight: 500; font-size: 13px; color: #e4f7da; margin-top: 6px; letter-spacing: .3px; text-shadow: 0 1px 6px rgba(8,30,14,.6); }
+  @media (max-width: 640px) { .river-banner { height: 132px; } .river-brand { font-size: 24px; left: 18px; bottom: 14px; } .river-tagline { font-size: 11px; } }
+
   /* ── Nav ── */
-  nav { background: #0d1e30; border-bottom: none; padding: 0 32px; display: flex; align-items: center; gap: 4px; height: 56px; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 16px rgba(13,30,48,.3); }
-  nav h1 { font-size: 14px; font-weight: 800; color: #22d3ee; margin-right: 28px; letter-spacing: 2px; text-transform: uppercase; }
+  nav { background: #16351f; border-bottom: none; padding: 0 32px; display: flex; align-items: center; gap: 4px; height: 56px; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 16px rgba(12,40,18,.32); }
+  nav h1 { font-family: 'Inter', system-ui, sans-serif; font-size: 17px; font-weight: 800; color: #8ce99a; margin-right: 28px; letter-spacing: -.3px; }
   nav button { background: none; border: none; color: rgba(255,255,255,.5); cursor: pointer; padding: 6px 15px; border-radius: var(--radius); font-size: 14px; font-family: inherit; font-weight: 500; transition: color .15s, background .15s; white-space: nowrap; }
   nav button:hover { color: rgba(255,255,255,.9); background: rgba(255,255,255,.08); }
-  nav button.active { color: #22d3ee; background: rgba(34,211,238,.12); font-weight: 700; }
+  nav button.active { color: #8ce99a; background: rgba(140,233,154,.14); font-weight: 700; }
 
   main { padding: 28px; max-width: 1200px; margin: 0 auto; }
   .view { display: none; }
@@ -309,8 +320,17 @@
 </head>
 <body>
 
+<!-- ===== RIVER BANNER (live pixel-art canoe animation) ===== -->
+<div class="river-banner">
+  <canvas id="riverCanvas" class="river-scene" width="320" height="80" role="img" aria-label="Animated pixel-art river scene with a figure rowing a boat downstream"></canvas>
+
+  <div class="river-brand">Networking River<span class="ver">v2.1</span>
+    <span class="river-tagline">harness the river of data</span>
+  </div>
+</div>
+
 <nav>
-  <h1>TOWER v2</h1>
+  <h1>Networking River</h1>
   <button class="active" data-view="queue">Action Queue</button>
   <button data-view="companies">Companies</button>
   <button data-view="investors">Investors</button>
@@ -2323,6 +2343,445 @@ async function uploadResume(file) {
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
 loadWorkbench();
+</script>
+
+<!-- ===== RIVER BANNER ANIMATION (from Claude Design handoff: Pixel Art River) ===== -->
+<script>
+(function riverAnimation() {
+  const canvas = document.getElementById('riverCanvas');
+  if (!canvas) return;
+
+  // ── PIXEL ART RIVER — direct canvas 2D rendering ──────────────
+  const CW = 320, CH = 80;
+  const SW  = 256;    // scroll tile width
+  const SPD = 22;     // scroll speed px/s
+  const OAR_T = 2.8;  // oar cycle seconds
+
+  // ── PALETTE ──
+  const SKY  = [14, 42, 14];
+  const FB   = [24, 72, 12];
+  const FD1  = [18, 58, 10];
+  const FM1  = [24, 68, 12];
+  const FM2  = [18, 54, 9];
+  const FL1  = [20, 58, 10];
+  const FL2  = [26, 74, 13];
+  const FTP  = [34, 94, 17];
+  const TRK  = [52, 32, 10];
+  const FM1D=[16,50, 9], FM2D=[12,40, 7], FL1D=[14,44, 8], FL2D=[18,56,10], FTPD=[24,72,13];
+  const FM1L=[32,82,15], FM2L=[24,64,11], FL1L=[28,72,13], FL2L=[34,88,16], FTPL=[44,108,20];
+  const SH0  = [92, 200, 46];
+  const SH1  = [68, 158, 30];
+  const SH2  = [116, 218, 58];
+  const WD0  = [62, 144, 222];
+  const WD1  = [78, 162, 230];
+  const WM0  = [96, 180, 236];
+  const WM1  = [116, 198, 242];
+  const WL0  = [140, 214, 247];
+  const WG0  = [168, 228, 252];
+  const WG1  = [198, 240, 255];
+  const WG2  = [228, 250, 255];
+  const BT0  = [100, 22, 10];
+  const BT1  = [140, 32, 14];
+  const BT2  = [178, 50, 20];
+  const BT3  = [210, 74, 28];
+  const BT4  = [238, 104, 40];
+  const PSK  = [208, 138, 76];
+  const PSL  = [230, 166, 106];
+  const PSH  = [38, 78, 196];
+  const PPT  = [18, 28, 86];
+  const OAR  = [158, 108, 56];
+  const OBL  = [118, 78, 34];
+  const WK0  = [60, 130, 200];
+  const WK1  = [80, 152, 216];
+  const WRP  = [100, 174, 226];
+  const LG0  = [72, 46, 18];
+  const LG1  = [108, 72, 30];
+  const LG2  = [140, 98, 46];
+  const LGS  = [38, 22, 8];
+  const RK0  = [62, 66, 58];
+  const RK1  = [88, 94, 82];
+  const RK2  = [112, 118, 104];
+
+  // ── CANVAS CONTEXT (set per-frame) ───────────────────────────
+  let _ctx = null;
+  const _cs = new Map();
+  function cstr(c) {
+    if (!_cs.has(c)) _cs.set(c, `rgb(${c[0]},${c[1]},${c[2]})`);
+    return _cs.get(c);
+  }
+  function dot(x, y, c) {
+    const ix=x|0, iy=y|0;
+    if (ix<0||ix>=CW||iy<0||iy>=CH) return;
+    _ctx.fillStyle = cstr(c);
+    _ctx.fillRect(ix, iy, 1, 1);
+  }
+  function rect(x, y, w, h, c) {
+    const x0=Math.max(0,x|0), y0=Math.max(0,y|0);
+    const x1=Math.min(CW,(x+w)|0), y1=Math.min(CH,(y+h)|0);
+    if (x1<=x0||y1<=y0) return;
+    _ctx.fillStyle = cstr(c);
+    _ctx.fillRect(x0, y0, x1-x0, y1-y0);
+  }
+  function oval(cx, cy, rx, ry, c) {
+    _ctx.fillStyle = cstr(c);
+    const ry2=ry*ry, rx2=rx*rx;
+    for (let dy=-ry; dy<=ry; dy++) {
+      const iy=(cy+dy)|0;
+      if (iy<0||iy>=CH) continue;
+      const w2=rx2*(1-dy*dy/ry2);
+      if (w2<0) continue;
+      const sr=Math.sqrt(w2);
+      const ix0=Math.max(0,(cx-sr)|0), ix1=Math.min(CW,(cx+sr+1)|0);
+      if (ix1>ix0) _ctx.fillRect(ix0, iy, ix1-ix0, 1);
+    }
+  }
+  function pline(x1,y1,x2,y2,c) {
+    _ctx.fillStyle = cstr(c);
+    let dx=Math.abs(x2-x1)|0, dy=Math.abs(y2-y1)|0;
+    let sx=x1<x2?1:-1, sy=y1<y2?1:-1, err=dx-dy;
+    let cx=x1|0, cy=y1|0, n=0;
+    while (n++<220) {
+      if (cx>=0&&cx<CW&&cy>=0&&cy<CH) _ctx.fillRect(cx,cy,1,1);
+      if (cx===(x2|0)&&cy===(y2|0)) break;
+      const e2=err<<1;
+      if (e2>-dy){err-=dy;cx+=sx;}
+      if (e2<dx){err+=dx;cy+=sy;}
+    }
+  }
+  function ring(cx,cy,r,c) {
+    _ctx.fillStyle = cstr(c);
+    const steps=Math.max(8,(r*5.5)|0);
+    for (let i=0;i<steps;i++) {
+      const a=i/steps*Math.PI*2;
+      const ix=(cx+Math.cos(a)*r)|0, iy=(cy+Math.sin(a)*r)|0;
+      if (ix>=0&&ix<CW&&iy>=0&&iy<CH) _ctx.fillRect(ix,iy,1,1);
+    }
+  }
+
+  // ── MATH ─────────────────────────────────────────────────────
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const eio=t=>t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+  function prng(seed) {
+    let s=seed;
+    return ()=>{
+      s+=0x6D2B79F5; let t=s;
+      t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61);
+      return((t^t>>>14)>>>0)/4294967296;
+    };
+  }
+
+  // ── SCENE DATA ────────────────────────────────────────────────
+  function makeTrees() {
+    const r=prng(137), T=[];
+    for (let i=0;i<30;i++) T.push({x:r()*SW, y:r()*6+5,   rx:r()*4+5,  ry:r()*3+4,  l:0});
+    for (let i=0;i<24;i++) T.push({x:r()*SW, y:r()*5+13,  rx:r()*5+9,  ry:r()*4+7,  l:1});
+    for (let i=0;i<20;i++) T.push({x:r()*SW, y:r()*3+23,  rx:r()*5+13, ry:r()*4+10, l:2});
+    return T;
+  }
+  function makeGlints() {
+    const r=prng(311), G=[];
+    for (let i=0;i<20;i++) G.push({x:r()*SW, y:r()*16+44, rx:r()*2+1.5, ry:r()*1+0.9});
+    return G;
+  }
+  function makeLogs() {
+    const r=prng(512), L=[], TW=SW*4;
+    L.push({x:r()*TW*0.8+50,  y:r()*3+41, len:r()*3+3, big:false});
+    L.push({x:r()*TW*0.7+300, y:r()*3+62, len:r()*3+3, big:false});
+    L.push({x:r()*TW*0.4+550, y:r()*3+41, len:r()*5+7, big:true});
+    return L;
+  }
+  function makeRocks() {
+    const r=prng(789), R=[], TW=SW*4;
+    R.push({x:r()*TW*0.7+80,  y:42+(r()*3)|0, rx:(r()*2+3)|0, ry:2});
+    R.push({x:r()*TW*0.6+450, y:62+(r()*3)|0, rx:(r()*2+2)|0, ry:2});
+    return R;
+  }
+
+  // ── OAR KEYFRAMES ─────────────────────────────────────────────
+  const OKF=[
+    {rx:10,  ry:6,   w:0, t:0.00},
+    {rx:6,   ry:10,  w:0, t:0.10},
+    {rx:6,   ry:10,  w:1, t:0.12},
+    {rx:0,   ry:12,  w:1, t:0.22},
+    {rx:-6,  ry:10,  w:1, t:0.32},
+    {rx:-6,  ry:10,  w:0, t:0.34},
+    {rx:-10, ry:6,   w:0, t:0.44},
+    {rx:-10, ry:6,   w:0, t:0.47},
+    {rx:-6,  ry:10,  w:0, t:0.58},
+    {rx:0,   ry:12,  w:0, t:0.68},
+    {rx:6,   ry:10,  w:0, t:0.79},
+    {rx:10,  ry:6,   w:0, t:0.90},
+    {rx:10,  ry:6,   w:0, t:1.00},
+  ];
+  function getOar(ph) {
+    let a=OKF[0],b=OKF[1];
+    for (let i=0;i<OKF.length-1;i++) {
+      if (ph>=OKF[i].t&&ph<=OKF[i+1].t){a=OKF[i];b=OKF[i+1];break;}
+    }
+    const lt=b.t>a.t?(ph-a.t)/(b.t-a.t):0, et=eio(lt);
+    return {rx:lerp(a.rx,b.rx,et), ry:lerp(a.ry,b.ry,et), w:a.w||b.w};
+  }
+
+  // ── SPRITES ───────────────────────────────────────────────────
+  function drawBoat(bx, by) {
+    oval(bx+1,  by+4, 13, 2, BT0);
+    oval(bx,    by+2, 13, 3, BT1);
+    oval(bx,    by,   13, 3, BT2);
+    rect(bx-12, by-2, 24, 2, BT3);
+    rect(bx-9,  by-2, 16, 1, BT1);
+    dot(bx+13,  by-2,        BT4);
+    dot(bx+14,  by-1,        BT4);
+    dot(bx+14,  by,          BT3);
+    dot(bx-13,  by-2,        BT3);
+    dot(bx-14,  by-1,        BT3);
+  }
+  function drawPerson(px, py, oar) {
+    const armY = Math.round(-oar.rx / 13);
+    rect(px-2, py+1, 5, 2, PPT);
+    rect(px-2, py-3, 4, 4, PSH);
+    dot (px-1, py-4,        PSK);
+    dot (px,   py-4,        PSK);
+    rect(px-1, py-7, 3, 3, PSK);
+    dot (px,   py-7,        PSL);
+    dot (px+1, py-7,        PSL);
+    rect(px-2, py-9, 5, 2, PPT);
+    rect(px-1, py-11,3, 2, PPT);
+    rect(px+2, py-2+armY, 2, 2, PSK);
+    dot(px-3, py-2-armY, PSK);
+  }
+  function drawOarSprite(hx, hy, bx, by, inWater) {
+    const ang=Math.atan2(by-hy, bx-hx);
+    const px=Math.cos(ang+Math.PI/2), py=Math.sin(ang+Math.PI/2);
+    pline(hx,hy,bx,by,OAR);
+    pline(hx+Math.round(px),hy+Math.round(py),bx+Math.round(px),by+Math.round(py),OAR);
+    const bc=inWater?WM0:OBL;
+    for (let i=-1;i<=1;i++) {
+      const bpx=Math.round(bx+px*i), bpy=Math.round(by+py*i);
+      dot(bpx,bpy,bc);
+      dot(bpx+Math.round(Math.cos(ang)*2),bpy+Math.round(Math.sin(ang)*2),OBL);
+      dot(bpx+Math.round(Math.cos(ang)*3),bpy+Math.round(Math.sin(ang)*3),OBL);
+    }
+  }
+  function drawTreeCanopy(cx, cy, rx, ry, seed, pals) {
+    const h = i => { let v=((seed*2654435761+i*2246822519)>>>0); return v/4294967296; };
+    oval(cx, cy, rx, ry, pals[0]);
+    const nb = 3 + (h(0)*3)|0;
+    for (let b=0; b<nb; b++) {
+      const ang = (b/nb)*Math.PI*2 + h(b+1)*1.4 - 0.7;
+      const dist = rx*0.42 + h(b+6)*rx*0.38;
+      const bx = (cx + Math.cos(ang)*dist)|0;
+      const by = (cy + Math.sin(ang)*dist*0.62)|0;
+      const br = Math.max(2, (rx*0.28 + h(b+12)*rx*0.3)|0);
+      oval(bx, by, br, Math.max(2, (br*0.82)|0), pals[0]);
+    }
+    oval(cx-1, cy-1, (rx*0.56)|0, (ry*0.56)|0, pals[1]);
+    if (pals[2]) oval(cx-1, cy-2, (rx*0.3)|0, (ry*0.3)|0, pals[2]);
+  }
+  function drawLog(cx, cy, len, big) {
+    if (big) {
+      oval(cx+1, cy+3, len, 2, LGS);
+      oval(cx, cy, len, 3, LG0);
+      rect((cx-len+3)|0, cy, (len*2-6)|0, 1, LG1);
+      rect((cx-len+5)|0, cy-1, (len*2-10)|0, 1, LG2);
+      oval((cx-len+1)|0, cy, 2, 2, LGS);
+      oval((cx+len-1)|0, cy, 2, 2, LGS);
+    } else {
+      oval(cx+1, cy+2, len, 1, LGS);
+      oval(cx, cy, len, 1, LG0);
+      dot(cx-len+1, cy, LG1);
+      dot(cx+len-1, cy, LG1);
+    }
+  }
+  function drawRock(cx, cy, rx, ry) {
+    oval(cx, cy, rx, ry, RK0);
+    oval(cx-1, cy-1, Math.max(1,(rx*0.55)|0), Math.max(1,(ry*0.55)|0), RK1);
+    dot(cx-1, cy-1, RK2);
+  }
+
+  // ── MAIN RENDER ───────────────────────────────────────────────
+  function renderFrame(t, trees, glints, logs, rocks) {
+    const scroll=(t*SPD)%SW;
+    const scrollTrees=(t*SPD*0.7)%SW;
+    const scrollShore=(t*SPD*0.75)%SW;
+    const oarPhase=(t%OAR_T)/OAR_T;
+    const oar=getOar(oarPhase);
+    const BX=160, BY=52;
+    const PX=158, PY=49;
+    const HX=161, HY=48;
+    const OBX=(HX+oar.rx)|0, OBY=(HY+oar.ry)|0;
+    const WLINE=40;
+
+    rect(0,0,CW,3,SKY);
+
+    rect(0,3,CW,30,FB);
+    for (let i=0;i<16;i++) rect((i*17+5)%CW, 5+(i*7)%9, 13+(i*7)%9, 3+(i*4)%6, FD1);
+
+    const palBases=[
+      [[FD1,FM1D,FM1D],[FM1D,FM2D,FL1D],[FL1D,FL2D,FTPD]],
+      [[FD1,FM1, FM1], [FM1, FM2, FL1], [FL1, FL2, FTP ]],
+      [[FD1,FM1L,FM1L],[FM1L,FM2L,FL1L],[FL1L,FL2L,FTPL]],
+    ];
+    [0,1,2].forEach(layer=>{
+      trees.filter(tr=>tr.l===layer).forEach(tr=>{
+        const shade=Math.floor(tr.x/(SW/3))%3;
+        const pals=palBases[shade][layer];
+        const vx=((tr.x-scrollTrees)%SW+SW)%SW;
+        [vx, vx-SW, vx+SW].forEach(dx=>{
+          if (dx+tr.rx<0||dx-tr.rx>CW) return;
+          drawTreeCanopy(dx, tr.y, tr.rx, tr.ry, tr.x, pals);
+          if (layer>=1&&tr.rx>=9) rect(dx-1,(tr.y+tr.ry*0.55)|0,3,(tr.ry*0.9)|0,TRK);
+        });
+      });
+    });
+
+    rect(0,33,CW,1,FL1);
+    rect(0,34,CW,4,SH0);
+    for (let i=0;i<22;i++) {
+      const gx=((i*19+3 - scrollShore + SW*10) % SW + SW) % SW;
+      const w=3+(i*7)%5;
+      rect(gx,     33+(i*3)%3, w, 2, SH1);
+      rect(gx-SW,  33+(i*3)%3, w, 2, SH1);
+      rect(gx+SW,  33+(i*3)%3, w, 2, SH1);
+    }
+    for (let i=0;i<14;i++) {
+      const gx=((i*29+11 - scrollShore + SW*10) % SW + SW) % SW;
+      const w=2+(i*3)%3;
+      rect(gx,    34+(i*5)%3, w, 1, SH2);
+      rect(gx-SW, 34+(i*5)%3, w, 1, SH2);
+      rect(gx+SW, 34+(i*5)%3, w, 1, SH2);
+    }
+    rect(0,38,CW,2,SH2);
+
+    rect(0,WLINE,CW,CH-WLINE,WD0);
+    rect(0,WLINE,CW,3,WD1);
+    rect(0,WLINE+3,CW,5,WM0);
+
+    for (let i=0;i<8;i++) {
+      const wy=WLINE+5+i*3;
+      const s1=((i*43-scroll*0.55+SW*10)%SW+SW)%SW;
+      const s2=(s1+90)%SW;
+      const s3=((i*71+38-scroll*0.6+SW*10)%SW+SW)%SW;
+      rect(s1,wy,   20,1,WM1); rect(s1-SW,wy,20,1,WM1); rect(s1+SW,wy,20,1,WM1);
+      rect(s2,wy,   13,1,WM1); rect(s2-SW,wy,13,1,WM1); rect(s2+SW,wy,13,1,WM1);
+      rect(s3,wy+2,  8,1,WL0); rect(s3-SW,wy+2,8,1,WL0); rect(s3+SW,wy+2,8,1,WL0);
+    }
+
+    glints.forEach(g=>{
+      const gx=((g.x-scroll)%SW+SW)%SW;
+      [gx, gx-SW, gx+SW].forEach(dx=>{
+        if (dx+g.rx+2<0||dx-g.rx-2>CW) return;
+        oval(dx,g.y,g.rx|0,g.ry|0,WG0);
+        oval(dx,g.y,Math.max(1,(g.rx*0.55)|0),Math.max(1,(g.ry*0.55)|0),WG1);
+        dot(dx|0,g.y|0,WG2);
+      });
+    });
+
+    rocks.forEach(rk=>{
+      const TW=SW*4, rx=((rk.x-scroll)%TW+TW)%TW;
+      [rx-3*SW, rx-2*SW, rx-SW, rx, rx+SW].forEach(dx=>{
+        if (dx+rk.rx+2<0||dx-rk.rx-2>CW) return;
+        drawRock(dx, rk.y, rk.rx, rk.ry);
+      });
+    });
+
+    logs.forEach(lg=>{
+      const TW=SW*4, lx=((lg.x-scroll)%TW+TW)%TW;
+      [lx-3*SW, lx-2*SW, lx-SW, lx, lx+SW].forEach(dx=>{
+        if (dx+lg.len+4<0||dx-lg.len-4>CW) return;
+        drawLog(dx, lg.y, lg.len, lg.big);
+      });
+    });
+
+    for (let i=0;i<4;i++) {
+      const cyc=1.8, age=((t*0.85+i*cyc/4)%cyc)/cyc;
+      const wx=(BX-8)-age*38, wy=BY+3;
+      const size=Math.max(2,(2+age*7)|0);
+      if (wx>-2&&wx<CW+2) {
+        _ctx.fillStyle=cstr(WG1);
+        for (let dx=0;dx<=size;dx++) {
+          const dy=Math.round((dx/size)*(dx/size)*Math.max(1,(size*0.4)|0));
+          _ctx.fillRect((wx-dx)|0,(wy-dy)|0,1,1);
+          if (dy>0) _ctx.fillRect((wx-dx)|0,(wy+dy)|0,1,1);
+        }
+      }
+    }
+    for (let i=1;i<=2;i++) {
+      const wx=BX-7-i*7, wy=BY+3;
+      if (wx>0) {
+        _ctx.fillStyle=cstr(WL0);
+        for (let dx=0;dx<=3;dx++) {
+          const dy=Math.round((dx/3)*(dx/3));
+          _ctx.fillRect((wx-dx)|0,(wy-dy)|0,1,1);
+          if (dy>0) _ctx.fillRect((wx-dx)|0,(wy+dy)|0,1,1);
+        }
+      }
+    }
+
+    drawBoat(BX,BY);
+    drawPerson(PX,PY,oar);
+    drawOarSprite(HX,HY,OBX,OBY,oar.w);
+
+    if (oar.w&&OBY>WLINE) {
+      const ripProg=(oarPhase-0.12)/0.22;
+      if (ripProg>=0&&ripProg<=1) { const rr=(ripProg*6+1)|0; ring(OBX,OBY,rr,WRP); }
+      if (oarPhase>0.10&&oarPhase<0.18) {
+        const p=(oarPhase-0.10)/0.08;
+        const sr=(p*4)|0; if (sr>=1) ring(OBX,OBY,sr,WG1);
+      }
+      if (oarPhase>0.32&&oarPhase<0.38) {
+        const p=1-(oarPhase-0.32)/0.06;
+        const sr=(p*3)|0; if (sr>=1) ring(OBX,OBY,sr,WG1);
+      }
+      oval(OBX,OBY,4,2,WM0);
+    }
+
+    const scroll3 = (t * SPD * 1.1) % SW;
+    rect(0, 68, CW, 2, FL1);
+    rect(0, 70, CW, 8, SH0);
+    for (let i=0;i<22;i++) {
+      const gx=((i*23+7 - scroll3 + SW*10)%SW+SW)%SW;
+      const w=3+(i*7)%5;
+      rect(gx,    70+(i*3)%4, w, 2, SH1);
+      rect(gx-SW, 70+(i*3)%4, w, 2, SH1);
+      rect(gx+SW, 70+(i*3)%4, w, 2, SH1);
+    }
+    for (let i=0;i<14;i++) {
+      const gx=((i*31+15 - scroll3 + SW*10)%SW+SW)%SW;
+      const w=2+(i*5)%4;
+      rect(gx,    69+(i*7)%2, w, 2, SH2);
+      rect(gx-SW, 69+(i*7)%2, w, 2, SH2);
+      rect(gx+SW, 69+(i*7)%2, w, 2, SH2);
+    }
+  }
+
+  // ── DRIVER (vanilla RAF; replaces the design's React/DCLogic wrapper) ──
+  canvas.width = CW;
+  canvas.height = CH;
+  const trees=makeTrees(), glints=makeGlints(), logs=makeLogs(), rocks=makeRocks();
+  const off=document.createElement('canvas');
+  off.width=CW; off.height=CH;
+  const octx=off.getContext('2d'); octx.imageSmoothingEnabled=false;
+  const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=false;
+
+  // Respect reduced-motion: render a single still frame and stop.
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) {
+    _ctx=octx; renderFrame(1.2, trees, glints, logs, rocks);
+    ctx.drawImage(off,0,0,canvas.width,canvas.height);
+    return;
+  }
+
+  let t0=null;
+  function frame(ts) {
+    if (!t0) t0=ts;
+    const t=(ts-t0)*0.001;
+    _ctx=octx;
+    renderFrame(t, trees, glints, logs, rocks);
+    ctx.drawImage(off,0,0,canvas.width,canvas.height);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
 </script>
 </body>
 </html>
