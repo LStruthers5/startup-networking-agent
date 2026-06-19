@@ -316,6 +316,7 @@
   <button data-view="investors">Investors</button>
   <button data-view="contacts">Contacts</button>
   <button data-view="agents">Agent Run</button>
+  <button data-view="profile">Profile</button>
 </nav>
 
 <main>
@@ -648,6 +649,101 @@
   </div>
 </div>
 
+<!-- ===== PROFILE ===== -->
+<div class="view" id="view-profile">
+  <div class="wb-header">
+    <h2 style="margin:0">Your Profile</h2>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary btn-sm" id="profileSaveBtn">Save Changes</button>
+    </div>
+  </div>
+
+  <!-- Resume Upload -->
+  <div class="card" id="resumeUploadCard" style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px">Resume Import</div>
+    <div id="resumeDropZone" style="border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s" onclick="document.getElementById('resumeFileInput').click()">
+      <div style="font-size:28px;margin-bottom:8px">📄</div>
+      <div style="font-weight:600;color:var(--text);margin-bottom:4px">Drop your resume here or click to upload</div>
+      <div style="font-size:13px;color:var(--muted)">PDF or plain text — Claude will extract experience, education, and skills</div>
+      <input type="file" id="resumeFileInput" accept=".pdf,.txt,.text" style="display:none">
+    </div>
+    <div id="resumeParseStatus" style="display:none;margin-top:12px;padding:12px 16px;border-radius:8px;font-size:14px"></div>
+  </div>
+
+  <!-- Bio / Identity -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:16px">Identity</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Full Name</label>
+        <input class="inp" id="pFullName" type="text" placeholder="Your name">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Email</label>
+        <input class="inp" id="pEmail" type="email" placeholder="you@example.com">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">LinkedIn URL</label>
+        <input class="inp" id="pLinkedin" type="url" placeholder="https://linkedin.com/in/you">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Portfolio / Website</label>
+        <input class="inp" id="pPortfolio" type="url" placeholder="https://yoursite.com">
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Elevator Pitch</label>
+      <textarea class="inp" id="pPitch" rows="3" placeholder="2–3 sentence intro used in outreach drafts..." style="resize:vertical"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Target Roles / Goals</label>
+        <input class="inp" id="pTargetRoles" type="text" placeholder="e.g. Founder, VC associate, Product lead">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Preferred Outreach Tone</label>
+        <select class="inp" id="pTone">
+          <option value="professional">Professional</option>
+          <option value="warm">Warm & conversational</option>
+          <option value="concise">Concise & direct</option>
+          <option value="enthusiastic">Enthusiastic</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skills -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px">Skills</div>
+    <div id="pSkillsTags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+    <input class="inp" id="pSkillsInput" type="text" placeholder="Comma-separated skills (edit or add here)">
+  </div>
+
+  <!-- Experience -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Experience</div>
+      <button class="btn-secondary btn-sm" onclick="addExperienceCard()">+ Add</button>
+    </div>
+    <div id="pExperiences"></div>
+  </div>
+
+  <!-- Education -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Education</div>
+      <button class="btn-secondary btn-sm" onclick="addEducationCard()">+ Add</button>
+    </div>
+    <div id="pEducation"></div>
+  </div>
+
+  <!-- Email Signature -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px">Email Signature</div>
+    <textarea class="inp" id="pSignature" rows="3" placeholder="Appended to outreach emails..." style="resize:vertical"></textarea>
+  </div>
+</div>
+
 </main>
 <div class="flash" id="flash"></div>
 
@@ -667,6 +763,7 @@ document.querySelectorAll('nav button[data-view]').forEach(btn => {
     if (v === 'contacts') loadContacts();
     if (v === 'investors') loadInvestorView();
     if (v === 'agents') loadAgentCompanies();
+    if (v === 'profile') loadProfile();
   });
 });
 
@@ -2047,6 +2144,182 @@ async function testEmail(type) {
 
 document.getElementById('btnTestDaily').addEventListener('click', () => testEmail('daily'));
 document.getElementById('btnTestWeekly').addEventListener('click', () => testEmail('weekly'));
+
+// ─── PROFILE ───────────────────────────────────────────────────────────────
+let profileData = {};
+let profileExperiences = [];
+let profileEducation = [];
+
+function renderSkillTags(skillsStr) {
+  const container = document.getElementById('pSkillsTags');
+  const skills = (skillsStr || '').split(',').map(s => s.trim()).filter(Boolean);
+  container.innerHTML = skills.map(s =>
+    `<span style="background:var(--accent-bg);color:var(--accent);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">${s}</span>`
+  ).join('');
+}
+
+function renderExperiences(exps) {
+  const el = document.getElementById('pExperiences');
+  if (!exps || !exps.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:14px;text-align:center;padding:16px 0">No experience yet — upload a resume or click + Add</div>`;
+    return;
+  }
+  el.innerHTML = exps.map((e, i) => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:var(--bg)" data-exp-idx="${i}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+        <input class="inp" style="font-size:13px" placeholder="Company" value="${e.company||''}" oninput="profileExperiences[${i}].company=this.value">
+        <input class="inp" style="font-size:13px" placeholder="Title" value="${e.title||''}" oninput="profileExperiences[${i}].title=this.value">
+        <input class="inp" style="font-size:13px" placeholder="Start (YYYY-MM)" value="${e.start_date||''}" oninput="profileExperiences[${i}].start_date=this.value">
+        <input class="inp" style="font-size:13px" placeholder="End (YYYY-MM or Present)" value="${e.end_date||''}" oninput="profileExperiences[${i}].end_date=this.value">
+      </div>
+      <textarea class="inp" rows="2" style="font-size:13px;resize:vertical" placeholder="Key contributions..." oninput="profileExperiences[${i}].description=this.value">${e.description||''}</textarea>
+      <button class="btn-secondary btn-sm" style="margin-top:8px;color:var(--danger);border-color:var(--danger)" onclick="removeExperience(${i})">Remove</button>
+    </div>`).join('');
+}
+
+function renderEducation(edu) {
+  const el = document.getElementById('pEducation');
+  if (!edu || !edu.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:14px;text-align:center;padding:16px 0">No education yet — upload a resume or click + Add</div>`;
+    return;
+  }
+  el.innerHTML = edu.map((e, i) => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:var(--bg)" data-edu-idx="${i}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+        <input class="inp" style="font-size:13px" placeholder="School" value="${e.school||''}" oninput="profileEducation[${i}].school=this.value">
+        <input class="inp" style="font-size:13px" placeholder="Degree" value="${e.degree||''}" oninput="profileEducation[${i}].degree=this.value">
+        <input class="inp" style="font-size:13px" placeholder="Field of study" value="${e.field||''}" oninput="profileEducation[${i}].field=this.value">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input class="inp" style="font-size:13px" placeholder="Start year" value="${e.start_date||''}" oninput="profileEducation[${i}].start_date=this.value">
+          <input class="inp" style="font-size:13px" placeholder="End year" value="${e.end_date||''}" oninput="profileEducation[${i}].end_date=this.value">
+        </div>
+      </div>
+      <button class="btn-secondary btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="removeEducation(${i})">Remove</button>
+    </div>`).join('');
+}
+
+function populateProfileForm(p) {
+  document.getElementById('pFullName').value = p.full_name || '';
+  document.getElementById('pEmail').value = p.email || '';
+  document.getElementById('pLinkedin').value = p.linkedin_url || '';
+  document.getElementById('pPortfolio').value = p.portfolio_url || '';
+  document.getElementById('pPitch').value = p.elevator_pitch || '';
+  document.getElementById('pTargetRoles').value = p.target_roles || '';
+  document.getElementById('pTone').value = p.preferred_tone || 'professional';
+  document.getElementById('pSignature').value = p.email_signature || '';
+  document.getElementById('pSkillsInput').value = p.skills || '';
+  renderSkillTags(p.skills || '');
+  profileExperiences = Array.isArray(p.experiences) ? p.experiences : (p.experiences ? JSON.parse(p.experiences) : []);
+  profileEducation = Array.isArray(p.education) ? p.education : (p.education ? JSON.parse(p.education) : []);
+  renderExperiences(profileExperiences);
+  renderEducation(profileEducation);
+}
+
+async function loadProfile() {
+  try {
+    const p = await api('GET', '/profile');
+    profileData = p;
+    populateProfileForm(p);
+  } catch(e) {
+    // empty profile is fine
+  }
+}
+
+function addExperienceCard() {
+  profileExperiences.push({ company: '', title: '', start_date: '', end_date: 'Present', description: '' });
+  renderExperiences(profileExperiences);
+}
+
+function removeExperience(i) {
+  profileExperiences.splice(i, 1);
+  renderExperiences(profileExperiences);
+}
+
+function addEducationCard() {
+  profileEducation.push({ school: '', degree: '', field: '', start_date: '', end_date: '' });
+  renderEducation(profileEducation);
+}
+
+function removeEducation(i) {
+  profileEducation.splice(i, 1);
+  renderEducation(profileEducation);
+}
+
+document.getElementById('pSkillsInput').addEventListener('input', function() {
+  renderSkillTags(this.value);
+});
+
+document.getElementById('profileSaveBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('profileSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('PUT', '/profile', {
+      full_name: document.getElementById('pFullName').value,
+      email: document.getElementById('pEmail').value,
+      elevator_pitch: document.getElementById('pPitch').value,
+      linkedin_url: document.getElementById('pLinkedin').value,
+      portfolio_url: document.getElementById('pPortfolio').value,
+      target_roles: document.getElementById('pTargetRoles').value,
+      preferred_tone: document.getElementById('pTone').value,
+      email_signature: document.getElementById('pSignature').value,
+      skills: document.getElementById('pSkillsInput').value,
+      experiences: profileExperiences,
+      education: profileEducation,
+    });
+    flash('Profile saved');
+    btn.textContent = 'Saved ✓';
+    setTimeout(() => { btn.textContent = 'Save Changes'; btn.disabled = false; }, 2000);
+  } catch(e) {
+    flash('Save failed: ' + e.message, true);
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+});
+
+// Resume upload
+const resumeInput = document.getElementById('resumeFileInput');
+const dropZone = document.getElementById('resumeDropZone');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent)'; dropZone.style.background = 'var(--accent-bg)'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; dropZone.style.background = ''; });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.style.borderColor = ''; dropZone.style.background = '';
+  const file = e.dataTransfer.files[0];
+  if (file) uploadResume(file);
+});
+resumeInput.addEventListener('change', () => { if (resumeInput.files[0]) uploadResume(resumeInput.files[0]); });
+
+async function uploadResume(file) {
+  const status = document.getElementById('resumeParseStatus');
+  status.style.display = 'block';
+  status.style.background = 'var(--accent-bg)';
+  status.style.color = 'var(--accent)';
+  status.innerHTML = '<span class="spinner"></span> Parsing resume with Claude…';
+
+  const formData = new FormData();
+  formData.append('resume', file);
+
+  try {
+    const res = await fetch('/api/profile/parse-resume', {
+      method: 'POST',
+      body: formData,
+      headers: { 'Authorization': 'Basic ' + btoa(':' + (window._authPass || '')) }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || res.statusText);
+    }
+    const profile = await res.json();
+    populateProfileForm(profile);
+    status.style.background = '#d4f4e5';
+    status.style.color = '#1a7a4a';
+    status.textContent = '✓ Resume parsed — review and save below';
+    resumeInput.value = '';
+  } catch(e) {
+    status.style.background = '#fde8e8';
+    status.style.color = 'var(--danger)';
+    status.textContent = 'Parse failed: ' + e.message;
+  }
+}
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
 loadWorkbench();

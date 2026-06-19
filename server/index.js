@@ -46,6 +46,7 @@ app.use('/api/investors', require('./routes/investors'));
 app.use('/api/queue', require('./routes/queue'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/drafts', require('./routes/drafts'));
+app.use('/api/profile', require('./routes/profile'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

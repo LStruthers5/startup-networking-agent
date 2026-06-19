@@ -154,6 +154,23 @@ async function initSchema() {
       approve_token TEXT UNIQUE,
       created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
     );
+
+    CREATE TABLE IF NOT EXISTS user_profile (
+      id SERIAL PRIMARY KEY,
+      full_name TEXT,
+      email TEXT,
+      elevator_pitch TEXT,
+      linkedin_url TEXT,
+      portfolio_url TEXT,
+      target_roles TEXT,
+      preferred_tone TEXT DEFAULT 'professional',
+      email_signature TEXT,
+      skills TEXT,
+      experiences JSONB DEFAULT '[]',
+      education JSONB DEFAULT '[]',
+      resume_raw TEXT,
+      updated_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
   `);
 
   // Seed default contacts if table is empty
