@@ -73,9 +73,10 @@
   .pref-label { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
   .pref-hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
   .ab-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-  .ab-option { border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 13px; cursor: pointer; background: var(--surface); transition: border-color .12s, background .12s; }
+  .ab-option { border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 13px; cursor: pointer; background: var(--surface); transition: border-color .12s, background .12s, opacity .14s ease, transform .14s ease; animation: duel-in .18s ease both; }
   .ab-option:hover { border-color: var(--accent2); }
   .ab-option.sel { border-color: var(--accent); background: var(--accent-bg); }
+  .ab-row.duel-out .ab-option { opacity: 0; transform: translateY(5px) scale(.985); pointer-events: none; }
   .ab-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); margin-bottom: 5px; }
   .ab-option.sel .ab-tag { color: var(--rose-deep); }
   .ab-sample { font-size: 12.5px; color: var(--text); line-height: 1.5; font-style: italic; }
@@ -92,6 +93,8 @@
   .chip-pick:hover { border-color: var(--accent2); }
   .chip-pick.sel { border-color: var(--accent); background: var(--accent-bg); color: var(--rose-deep); font-weight: 600; }
   .pref-summary { padding: 12px 14px; background: var(--accent-bg); border-radius: 10px; font-size: 13px; color: var(--rose-deep); line-height: 1.55; }
+  @keyframes duel-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) { .ab-option { animation: none; transition: border-color .12s, background .12s; } }
   @media (max-width: 560px) { .comfort-row { flex-direction: column; align-items: flex-start; gap: 6px; } }
 
   /* Import */
@@ -777,8 +780,9 @@
     <div id="duelArea" class="ab-row" style="margin-bottom:12px"></div>
 
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn-secondary btn-sm" id="duelSkip" onclick="chooseDuel('skip')">Skip</button>
+      <button class="btn-secondary btn-sm" id="duelBoth" onclick="chooseDuel('both')">Both</button>
       <button class="btn-secondary btn-sm" id="duelNeither" onclick="chooseDuel('neither')">Neither</button>
+      <button class="btn-secondary btn-sm" id="duelSkip" onclick="chooseDuel('skip')">Skip</button>
       <span style="flex:1"></span>
       <button class="btn-secondary btn-sm" id="duelRefine" onclick="refineTaste()">Refine my profile</button>
     </div>
@@ -2344,12 +2348,26 @@ function renderDuel() {
 
 async function chooseDuel(choice) {
   if (!currentDuel) return;
-  const payload = { category: currentDuel.category, left: currentDuel.left, right: currentDuel.right, choice };
-  buildNextDuel(); // advance immediately for snappy feel
+  const duel = currentDuel;
+  currentDuel = null; // prevent double-submits during the short transition
+  const payload = { category: duel.category, left: duel.left, right: duel.right, choice };
+  duelTotal += 1;
+  updateDuelCounter(); // optimistic: the tap feels instant, before the DB round trip
+  const area = document.getElementById('duelArea');
+  area.classList.add('duel-out');
+  setTimeout(() => {
+    area.classList.remove('duel-out');
+    buildNextDuel();
+  }, 140);
   try {
     const r = await api('POST', '/profile/duel', payload);
-    if (r && typeof r.total === 'number') { duelTotal = r.total; updateDuelCounter(); }
-  } catch(e) { /* keep tapping even if a save blips */ }
+    // Ignore stale responses from rapid taps, but accept a higher authoritative total.
+    if (r && typeof r.total === 'number') { duelTotal = Math.max(duelTotal, r.total); updateDuelCounter(); }
+  } catch(e) {
+    duelTotal = Math.max(0, duelTotal - 1);
+    updateDuelCounter();
+    flash('That preference was not saved — please try again.', false);
+  }
 }
 
 function updateDuelCounter() {
@@ -2359,15 +2377,32 @@ function updateDuelCounter() {
 async function refineTaste() {
   const btn = document.getElementById('duelRefine');
   const meta = document.getElementById('tasteMeta');
-  btn.disabled = true; btn.textContent = 'Distilling…';
+  const originalMeta = meta.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Distilling…';
+  meta.textContent = 'Claude is distilling your latest choices. This can take a few seconds…';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
   try {
-    const r = await api('POST', '/profile/refine');
+    const response = await fetch('/api/profile/refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    });
+    const r = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(r.error || response.statusText || 'Refine request failed');
     showTaste(r.taste_profile, r.taste_refined_at);
     flash('Taste profile refined');
   } catch(e) {
-    meta.textContent = 'Refine failed: ' + e.message;
+    const message = e.name === 'AbortError'
+      ? 'Profile refinement timed out. Your picks are safe—please try again.'
+      : `Could not refine your profile: ${e.message}`;
+    meta.textContent = originalMeta;
+    flash(message, false);
   } finally {
-    btn.disabled = false; btn.textContent = 'Refine my profile';
+    clearTimeout(timeout);
+    btn.disabled = false;
+    btn.textContent = 'Refine my profile';
   }
 }
 
@@ -2495,10 +2530,12 @@ async function uploadResume(file) {
   formData.append('resume', file);
 
   try {
+    // No manual Authorization header — let the browser attach its cached Basic Auth
+    // credentials (same as api()). Setting a bad header here caused a 401 re-login loop.
+    // Don't set Content-Type either; the browser adds the multipart boundary for FormData.
     const res = await fetch('/api/profile/parse-resume', {
       method: 'POST',
       body: formData,
-      headers: { 'Authorization': 'Basic ' + btoa(':' + (window._authPass || '')) }
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));

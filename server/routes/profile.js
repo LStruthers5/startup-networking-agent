@@ -152,7 +152,7 @@ ${resumeText.slice(0, 8000)}`
 router.post('/duel', async (req, res) => {
   try {
     const { category, left, right, choice } = req.body;
-    if (!choice || !['left', 'right', 'skip', 'neither'].includes(choice)) {
+    if (!choice || !['left', 'right', 'skip', 'neither', 'both'].includes(choice)) {
       return res.status(400).json({ error: 'valid choice required' });
     }
     await execute(
@@ -182,6 +182,7 @@ router.post('/refine', async (req, res) => {
       if (e.choice === 'left')    return `[${e.category}] PREFERRED "${lab(L)}" over "${lab(R)}"`;
       if (e.choice === 'right')   return `[${e.category}] PREFERRED "${lab(R)}" over "${lab(L)}"`;
       if (e.choice === 'neither') return `[${e.category}] DISLIKED BOTH "${lab(L)}" and "${lab(R)}"`;
+      if (e.choice === 'both')    return `[${e.category}] LIKED BOTH "${lab(L)}" and "${lab(R)}"`;
       return `[${e.category}] skipped "${lab(L)}" vs "${lab(R)}"`;
     });
 

@@ -572,6 +572,82 @@ async function loadUserProfile() {
   } catch (_) { return null; }
 }
 
+// Rerank a bounded, already-eligible company shortlist using the user's distilled taste.
+// The scheduler's deterministic ordering remains the fallback if Claude is unavailable.
+async function rankCompaniesByTaste(companies, limit = 2) {
+  if (!Array.isArray(companies) || !companies.length) return [];
+
+  const profile = await loadUserProfile();
+  if (!profile || !profile.taste || !process.env.ANTHROPIC_API_KEY) {
+    return companies.slice(0, limit);
+  }
+
+  const candidates = companies.map((c, index) => ({
+    baseline_rank: index + 1,
+    company_id: c.id,
+    name: c.name,
+    sector: c.sector || '',
+    stage: c.stage || '',
+    description: c.description || '',
+    location: c.location || '',
+    notes: c.notes || '',
+    pipeline_score: c.score ?? null,
+  }));
+
+  const prompt = `You are ranking an already-eligible shortlist of startup networking leads.
+
+Score companies higher when their documented sector, stage, mission, operating style, or other concrete attributes align with the user's distilled preferences. Use ONLY the supplied company data. Do not infer missing facts. Missing information should lower confidence, not become a negative signal. Treat the existing baseline rank as a tie-breaker so recency and pipeline score still matter.
+
+USER TASTE PROFILE:
+${profile.taste}
+
+Return ONLY a valid JSON array containing every company exactly once, ordered best match first:
+[
+  { "company_id": <number>, "taste_score": <integer 0-100>, "reason": "<one short evidence-based sentence>" }
+]
+
+CANDIDATES:
+${JSON.stringify(candidates, null, 2)}`;
+
+  try {
+    const client = getClient();
+    const msg = await client.messages.create({
+      model: MODEL,
+      max_tokens: 900,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const raw = msg.content[0].text.trim();
+    const jsonStr = raw.match(/\[[\s\S]*\]/)?.[0] || '[]';
+    const rankings = JSON.parse(jsonStr);
+    const byId = new Map(companies.map(c => [String(c.id), c]));
+    const seen = new Set();
+    const ordered = [];
+
+    for (const ranking of rankings) {
+      const id = String(ranking.company_id);
+      if (!byId.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      ordered.push(byId.get(id));
+    }
+    for (const company of companies) {
+      const id = String(company.id);
+      if (!seen.has(id)) ordered.push(company);
+    }
+
+    const { execute } = require('./db');
+    await execute(
+      `INSERT INTO agent_runs (company_id, agent_type, input_json, output_text)
+       VALUES ($1, $2, $3, $4)`,
+      [null, 'daily-candidate-ranking', JSON.stringify({ taste_profile: profile.taste, candidates }), JSON.stringify(rankings)]
+    );
+
+    return ordered.slice(0, limit);
+  } catch (error) {
+    console.warn('[DailyRanking] Taste reranking failed; using baseline order:', error.message);
+    return companies.slice(0, limit);
+  }
+}
+
 // userProfile: pass an explicit profile object, or null to load the saved profile from the DB
 // (falling back to sensible defaults if no profile has been set up yet).
 async function runOutreachDraft(company, investor, userProfile = null) {
@@ -979,4 +1055,4 @@ async function runEventDiscovery(trackedInvestors) {
   return newEvents;
 }
 
-module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runAutonomousDraftGeneration, runInvestorDossier, runEventDiscovery, runFirmDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms, loadUserProfile };
+module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runAutonomousDraftGeneration, runInvestorDossier, runEventDiscovery, runFirmDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms, loadUserProfile, rankCompaniesByTaste };

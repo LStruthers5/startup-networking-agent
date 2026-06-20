@@ -1,11 +1,11 @@
 const cron = require('node-cron');
 const { query, queryOne, today, daysFromNow } = require('./db');
-const { runAutonomousDraftGeneration, runWeeklyRecap } = require('./agents');
+const { runAutonomousDraftGeneration, runWeeklyRecap, rankCompaniesByTaste } = require('./agents');
 const { sendMorningBriefing, sendWeeklyRecap: sendWeeklyEmail } = require('./email');
 
 // Pick 2 companies that haven't been suggested recently
 async function pickDailyCandidates(n = 2) {
-  return query(`
+  const shortlist = await query(`
     SELECT * FROM companies
     WHERE status != 'passed'
     ORDER BY
@@ -14,7 +14,9 @@ async function pickDailyCandidates(n = 2) {
       score DESC NULLS LAST,
       last_touched ASC NULLS LAST
     LIMIT $1
-  `, [n]);
+  `, [Math.max(n * 6, 12)]);
+
+  return rankCompaniesByTaste(shortlist, n);
 }
 
 async function getPendingDrafts(limit = 5) {
