@@ -539,20 +539,57 @@ ${companySections}`;
 }
 
 // ─── OUTREACH DRAFT ────────────────────────────────────────────────────────
-// userProfile shape (populated by profile UI when built — pass null to use defaults):
-// { name, background, targetRoles, sectors, pitch, linkedinUrl, portfolioUrl, emailSignature }
+// Reads the saved profile (resume data + distilled taste profile) from the DB
+// and maps it to the shape runOutreachDraft uses. Returns null if no real profile yet.
+async function loadUserProfile() {
+  try {
+    const { queryOne } = require('./db');
+    const p = await queryOne('SELECT * FROM user_profile ORDER BY id LIMIT 1');
+    if (!p) return null;
+    const parse = v => { if (!v) return []; if (Array.isArray(v)) return v; try { return JSON.parse(v); } catch (_) { return []; } };
+    const exps = parse(p.experiences);
+    const edu = parse(p.education);
+    const hasContent = (p.full_name || '').trim() || p.elevator_pitch || exps.length || p.skills || p.taste_profile;
+    if (!hasContent) return null;
+    const name = (p.full_name || '').trim();
+    const firstName = name.split(/\s+/)[0] || name;
+    const recentExp = exps[0];
+    return {
+      name: firstName || 'I',
+      fullName: name,
+      background: recentExp ? `${recentExp.title || 'professional'}${recentExp.company ? ' at ' + recentExp.company : ''}` : '',
+      targetRoles: p.target_roles || '',
+      pitch: p.elevator_pitch || '',
+      skills: p.skills || '',
+      experienceSummary: exps.slice(0, 3).map(e => `${e.title || ''}${e.company ? ' @ ' + e.company : ''}`).filter(s => s.trim()).join('; '),
+      educationSummary: edu.slice(0, 2).map(e => `${e.degree || ''}${e.field ? ' in ' + e.field : ''}${e.school ? ', ' + e.school : ''}`).filter(s => s.replace(/[,]/g, '').trim()).join('; '),
+      preferredTone: p.preferred_tone || '',
+      emailSignature: p.email_signature || name || firstName,
+      taste: p.taste_profile || '',
+      linkedinUrl: p.linkedin_url || '',
+      portfolioUrl: p.portfolio_url || '',
+    };
+  } catch (_) { return null; }
+}
+
+// userProfile: pass an explicit profile object, or null to load the saved profile from the DB
+// (falling back to sensible defaults if no profile has been set up yet).
 async function runOutreachDraft(company, investor, userProfile = null) {
   const client = getClient();
   const EXA_KEY = process.env.EXA_API_KEY;
 
-  // TODO: replace default profile with DB lookup once profile UI is built
-  const profile = userProfile || {
+  const profile = userProfile || (await loadUserProfile()) || {
     name: 'Luke',
+    fullName: 'Luke Struthers',
     background: 'venture researcher',
     targetRoles: 'operations, business development, research, or strategy',
-    sectors: 'AI, fitness/wearables, and clean tech startups',
     pitch: 'analytically sharp and well-networked, with experience mapping startup ecosystems and sourcing deals',
+    skills: '',
+    experienceSummary: '',
+    educationSummary: '',
+    preferredTone: '',
     emailSignature: 'Luke Struthers',
+    taste: '',
   };
 
   // Search for recent public activity from this investor
@@ -573,14 +610,29 @@ async function runOutreachDraft(company, investor, userProfile = null) {
     } catch (_) {}
   }
 
-  const prompt = `You are writing a cold outreach message on behalf of ${profile.name}, a ${profile.background}.
+  const aboutLines = [
+    profile.pitch && `- Pitch: ${profile.pitch}`,
+    profile.background && `- Currently: ${profile.background}`,
+    profile.experienceSummary && `- Experience: ${profile.experienceSummary}`,
+    profile.educationSummary && `- Education: ${profile.educationSummary}`,
+    profile.skills && `- Skills: ${profile.skills}`,
+    profile.targetRoles && `- Targeting: ${profile.targetRoles}`,
+  ].filter(Boolean).join('\n');
 
-${profile.name} is targeting roles in ${profile.targetRoles} at early-stage ${profile.sectors}. ${profile.pitch}.
+  const voiceBlock = profile.taste
+    ? `VOICE & PREFERENCES — learned from ${profile.name}'s own "this or that" choices. Follow this closely; it defines the tone and the kind of ask ${profile.name} is comfortable making:\n${profile.taste}\n`
+    : (profile.preferredTone ? `Preferred tone: ${profile.preferredTone}\n` : '');
 
+  const prompt = `You are writing a cold outreach message on behalf of ${profile.name}${profile.fullName && profile.fullName !== profile.name ? ` (${profile.fullName})` : ''}.
+
+ABOUT ${(profile.name || '').toUpperCase()}:
+${aboutLines || '- An ambitious early-career professional breaking into the startup ecosystem.'}
+
+${voiceBlock}
 Write ONE ready-to-send message (150 words MAX). It must:
 1. Open with a specific, genuine hook — reference their firm's investment in ${company.name} or a recent move from the activity below
-2. State who ${profile.name} is in 1 sentence
-3. Make a soft ask: learn about their portfolio / 15-minute call / just connect
+2. Establish who ${profile.name} is in 1 sentence, grounded ONLY in the real background above (never invent credentials)
+3. Make an ask that matches ${profile.name}'s comfort level and voice described above — don't push a harder ask than their preferences suggest
 4. Sound human, not corporate. No "I hope this message finds you well."
 5. Close with: ${profile.emailSignature}
 
@@ -927,4 +979,4 @@ async function runEventDiscovery(trackedInvestors) {
   return newEvents;
 }
 
-module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runAutonomousDraftGeneration, runInvestorDossier, runEventDiscovery, runFirmDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms };
+module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runAutonomousDraftGeneration, runInvestorDossier, runEventDiscovery, runFirmDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms, loadUserProfile };
