@@ -6,8 +6,8 @@ const { normalizeSignals } = require('./signal-normalizer');
 const runStorage = new AsyncLocalStorage();
 
 const NATIVE_AGENTS = [
-  { key: 'company-brief', name: 'Company Brief', purpose: 'Turn a company record into an actionable networking brief.', capabilities: ['analysis', 'recommendation'], schedule: {}, outputs: ['brief', 'action'] },
-  { key: 'investor-map', name: 'Investor Mapper', purpose: 'Find and verify relevant investors and warm paths.', capabilities: ['research', 'exa-search', 'contact-mapping'], schedule: {}, outputs: ['person', 'recommendation'] },
+  { key: 'company-brief', name: 'Company Brief', purpose: 'Turn a company record into an actionable networking brief.', capabilities: ['analysis', 'recommendation'], schedule: {}, outputs: ['brief', 'action'], displayInRoster: true },
+  { key: 'investor-map', name: 'Investor Mapper', purpose: 'Find and verify relevant investors and warm paths.', capabilities: ['research', 'exa-search', 'contact-mapping'], schedule: {}, outputs: ['person', 'recommendation'], displayInRoster: true },
   { key: 'queue-suggestions', name: 'Opportunity Scout', purpose: 'Build outreach-ready company and investor opportunity cards.', capabilities: ['research', 'ranking', 'contact-mapping'], schedule: { cadence: 'on-demand' }, outputs: ['company', 'person', 'recommendation'] },
   { key: 'outreach-draft', name: 'Outreach Writer', purpose: 'Draft human-reviewed outreach using the saved profile and taste.', capabilities: ['drafting'], schedule: { cadence: 'on-demand' }, outputs: ['draft'] },
   { key: 'daily-candidate-ranking', name: 'Taste Ranker', purpose: 'Rerank eligible companies using the user taste profile.', capabilities: ['ranking', 'preferences'], schedule: { cadence: 'daily', cron: '0 8 * * *' }, outputs: ['company', 'recommendation'] },
@@ -32,12 +32,12 @@ async function ensureAgentRegistry() {
   for (const agent of NATIVE_AGENTS) {
     await execute(
       `INSERT INTO agent_registry
-        (agent_key, name, purpose, provider, model, capabilities, schedule_json, output_schema, dependencies, plan_constraints, config_json)
-       VALUES ($1,$2,$3,'native',$4,$5,$6,$7,$8,$9,$10)
+        (agent_key, name, purpose, provider, model, capabilities, schedule_json, output_schema, dependencies, plan_constraints, display_in_roster, config_json)
+       VALUES ($1,$2,$3,'native',$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (agent_key) DO UPDATE SET
          name=EXCLUDED.name, purpose=EXCLUDED.purpose, capabilities=EXCLUDED.capabilities,
          schedule_json=EXCLUDED.schedule_json, output_schema=EXCLUDED.output_schema,
-         dependencies=EXCLUDED.dependencies, updated_at=$11`,
+         dependencies=EXCLUDED.dependencies, display_in_roster=EXCLUDED.display_in_roster, updated_at=$12`,
       [
         agent.key, agent.name, agent.purpose, 'claude-sonnet-4-6',
         JSON.stringify(agent.capabilities || []), JSON.stringify(agent.schedule || {}),
@@ -46,7 +46,7 @@ async function ensureAgentRegistry() {
           human_approval: ['outreach', 'budget_change', 'adaptation'],
           estimated_cost_per_run_usd: agent.key.includes('event') ? 0.12 : agent.key.includes('map') || agent.key.includes('queue') ? 0.10 : 0.05,
         }),
-        JSON.stringify({}), nowText(),
+        agent.displayInRoster ? 1 : 0, JSON.stringify({}), nowText(),
       ]
     );
     await execute(

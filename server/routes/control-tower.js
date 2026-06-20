@@ -40,7 +40,7 @@ router.get('/summary', async (req, res) => {
         FROM agent_signals`),
       queryOne(`SELECT COUNT(*) AS n FROM agent_runs WHERE status='failed' AND created_at >= to_char(CURRENT_DATE - INTERVAL '7 days','YYYY-MM-DD')`),
       query(`
-        SELECT reg.agent_key, reg.name, reg.provider, reg.status, reg.current_version,
+        SELECT reg.agent_key, reg.name, reg.purpose, reg.provider, reg.status, reg.current_version,
           COUNT(ar.id) AS runs,
           COALESCE(SUM(CASE WHEN ar.status='completed' THEN 1 ELSE 0 END),0) AS successes,
           COALESCE(SUM(ar.output_count),0) AS outputs,
@@ -54,7 +54,8 @@ router.get('/summary', async (req, res) => {
         FROM agent_registry reg
         LEFT JOIN agent_runs ar ON reg.agent_key=ar.agent_key
           AND ar.created_at >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')
-        GROUP BY reg.agent_key, reg.name, reg.provider, reg.status, reg.current_version
+        WHERE reg.display_in_roster=1 OR reg.provider='dust'
+        GROUP BY reg.agent_key, reg.name, reg.purpose, reg.provider, reg.status, reg.current_version
         ORDER BY cost DESC, runs DESC`)
     ]);
 
@@ -125,7 +126,9 @@ router.get('/agents', async (req, res) => {
       (SELECT COALESCE(SUM(COALESCE(exact_cost_usd,estimated_cost_usd,0)),0)
        FROM agent_runs ar WHERE ar.agent_key=r.agent_key
          AND ar.created_at >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')) AS cost_30d
-    FROM agent_registry r ORDER BY provider, name`);
+    FROM agent_registry r
+    WHERE r.display_in_roster=1 OR r.provider='dust'
+    ORDER BY provider, name`);
   res.json(rows);
 });
 
@@ -384,8 +387,8 @@ router.post('/dust/sync', async (req, res) => {
       const key = `dust:${id}`;
       await execute(
         `INSERT INTO agent_registry
-         (agent_key,name,purpose,provider,model,capabilities,schedule_json,plan_constraints,config_json)
-         VALUES ($1,$2,$3,'dust',$4,$5,'{}',$6,$7)
+         (agent_key,name,purpose,provider,model,capabilities,schedule_json,plan_constraints,display_in_roster,config_json)
+         VALUES ($1,$2,$3,'dust',$4,$5,'{}',$6,1,$7)
          ON CONFLICT (agent_key) DO UPDATE SET name=EXCLUDED.name,purpose=EXCLUDED.purpose,
           model=EXCLUDED.model,config_json=EXCLUDED.config_json,updated_at=$8`,
         [

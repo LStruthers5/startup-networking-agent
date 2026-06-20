@@ -86,6 +86,7 @@ async function initSchema() {
       dependencies JSONB DEFAULT '[]',
       plan_constraints JSONB DEFAULT '{}',
       status TEXT DEFAULT 'active',
+      display_in_roster INTEGER DEFAULT 0,
       config_json JSONB DEFAULT '{}',
       current_version INTEGER DEFAULT 1,
       owner_id TEXT DEFAULT 'local',
@@ -310,6 +311,7 @@ async function initSchema() {
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS outreach_prefs JSONB DEFAULT '{}';
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS taste_profile TEXT;
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS taste_refined_at TEXT;
+    ALTER TABLE agent_registry ADD COLUMN IF NOT EXISTS display_in_roster INTEGER DEFAULT 0;
     ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS agent_key TEXT;
     ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS agent_version INTEGER DEFAULT 1;
     ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS parent_run_id INTEGER REFERENCES agent_runs(id);
