@@ -194,6 +194,18 @@ async function initSchema() {
     ALTER TABLE investors ADD COLUMN IF NOT EXISTS confirmed INTEGER DEFAULT 1;
     ALTER TABLE investors ADD COLUMN IF NOT EXISTS tier INTEGER DEFAULT 5;
     ALTER TABLE investors ADD COLUMN IF NOT EXISTS source_company_id INTEGER;
+    ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS outreach_prefs JSONB DEFAULT '{}';
+    ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS taste_profile TEXT;
+    ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS taste_refined_at TEXT;
+
+    CREATE TABLE IF NOT EXISTS preference_events (
+      id SERIAL PRIMARY KEY,
+      category TEXT,
+      left_json JSONB,
+      right_json JSONB,
+      choice TEXT,
+      created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
   `);
 
   console.log('[DB] Schema ready (PostgreSQL)');
