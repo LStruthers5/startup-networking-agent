@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { query, queryOne, today, daysFromNow } = require('./db');
-const { runAutonomousDraftGeneration, runWeeklyRecap, rankCompaniesByTaste } = require('./agents');
+const { runAutonomousDraftGeneration, runWeeklyRecap, rankCompaniesByTaste, runEventDiscovery } = require('./agents');
 const { sendMorningBriefing, sendWeeklyRecap: sendWeeklyEmail } = require('./email');
 
 // Pick 2 companies that haven't been suggested recently
@@ -73,7 +73,11 @@ async function getPipelineStats() {
 async function runDailyJob() {
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
 
-  const companies = await pickDailyCandidates(2);
+  const deskAgent = await queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='autonomous-drafts'`);
+  const schedule = typeof deskAgent?.schedule_json === 'string' ? JSON.parse(deskAgent.schedule_json || '{}') : (deskAgent?.schedule_json || {});
+  const multiplier = Number(schedule.frequency_multiplier || 1);
+  const candidateCount = Math.max(1, Math.min(5, Math.round(2 * multiplier)));
+  const companies = await pickDailyCandidates(candidateCount);
 
   // Step 1: autonomously source targets → find emails → write drafts → save to DB
   let autoDrafts = [];
@@ -110,6 +114,28 @@ async function runDailyJob() {
   return { autoDrafts: autoDrafts.length, pendingDrafts: pendingDrafts.length, events: upcomingEvents.length };
 }
 
+async function runSignalMonitorJob() {
+  const monitor = await queryOne(`SELECT schedule_json,status FROM agent_registry WHERE agent_key='event-discovery'`);
+  if (monitor?.status !== 'active') return { events: 0, skipped: 'paused' };
+  const schedule = typeof monitor?.schedule_json === 'string' ? JSON.parse(monitor.schedule_json || '{}') : (monitor?.schedule_json || {});
+  const multiplier = Math.max(0.25, Number(schedule.frequency_multiplier || 1));
+  const intervalHours = Math.max(2, 6 / multiplier);
+  const lastRun = await queryOne(`
+    SELECT completed_at FROM agent_runs
+    WHERE agent_key='event-discovery' AND status='completed'
+    ORDER BY completed_at DESC LIMIT 1
+  `);
+  if (lastRun?.completed_at) {
+    const elapsedHours = (Date.now() - new Date(lastRun.completed_at.replace(' ', 'T') + 'Z').getTime()) / 3_600_000;
+    if (elapsedHours < intervalHours) return { events: 0, skipped: 'not-due', next_in_hours: intervalHours - elapsedHours };
+  }
+  const trackedInvestors = await query('SELECT * FROM investors WHERE track_events=1 ORDER BY name');
+  if (!trackedInvestors.length) return { events: 0 };
+  const newEvents = await runEventDiscovery(trackedInvestors);
+  console.log(`[Scheduler] Event monitor found ${newEvents.length} new signal(s)`);
+  return { events: newEvents.length };
+}
+
 async function runWeeklyJob() {
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
   const stats = await getPipelineStats();
@@ -119,17 +145,17 @@ async function runWeeklyJob() {
 }
 
 function startScheduler() {
-  if (!process.env.RESEND_API_KEY) {
-    console.log('[Scheduler] No RESEND_API_KEY — scheduler disabled.');
-    return;
+  if (process.env.RESEND_API_KEY) {
+    // Daily 8am PT: pick companies → source contacts → write drafts → send approval email.
+    cron.schedule('0 8 * * *', () => runDailyJob().catch(e => console.error('[Scheduler] Daily error:', e.message)), { timezone: 'America/Los_Angeles' });
+    cron.schedule('0 7 * * 1', () => runWeeklyJob().catch(e => console.error('[Scheduler] Weekly error:', e.message)), { timezone: 'America/Los_Angeles' });
+  } else {
+    console.log('[Scheduler] No RESEND_API_KEY — email jobs disabled; research monitors remain active.');
   }
-
-  // Daily 8am PT: pick 2 companies → source contacts → write drafts → send approval email
-  cron.schedule('0 8 * * *', () => runDailyJob().catch(e => console.error('[Scheduler] Daily error:', e.message)), { timezone: 'America/Los_Angeles' });
-  // Weekly Monday 7am PT: pipeline recap
-  cron.schedule('0 7 * * 1', () => runWeeklyJob().catch(e => console.error('[Scheduler] Weekly error:', e.message)), { timezone: 'America/Los_Angeles' });
+  // Broad monitoring continues throughout the day; findings enter the river for human review.
+  cron.schedule('*/15 * * * *', () => runSignalMonitorJob().catch(e => console.error('[Scheduler] Monitor error:', e.message)), { timezone: 'America/Los_Angeles' });
 
   console.log('[Scheduler] Started — daily 8am, weekly Monday 7am (PT)');
 }
 
-module.exports = { startScheduler, runDailyJob, runWeeklyJob };
+module.exports = { startScheduler, runDailyJob, runWeeklyJob, runSignalMonitorJob };

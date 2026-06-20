@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne, execute, today, daysFromNow, daysAgo } = require('../db');
 const { runQueueSuggestions, runOutreachDraft, runInvestorDossier } = require('../agents');
+const { executeAgent, trackedExaSearch } = require('../agent-control');
 
 // Pick companies for the feed — avoid recently suggested, skip 'passed'
 async function pickFeedCandidates(n, skipIds = []) {
@@ -123,6 +124,10 @@ router.get('/find-email', async (req, res) => {
   if (!EXA_KEY) return res.json({ email: null, source: null });
 
   try {
+    const result = await executeAgent('email-finder', {
+      trigger: 'manual',
+      input: { name, firm: firm || '' },
+    }, async () => {
     const queries = [
       `"${name}" "${firm || ''}" email contact`,
       `"${name}" site:linkedin.com OR site:crunchbase.com email`,
@@ -131,20 +136,17 @@ router.get('/find-email', async (req, res) => {
     const skip = ['noreply','no-reply','support','info@','hello@','contact@','privacy@','press@','jobs@'];
 
     for (const query of queries) {
-      const resp = await fetch('https://api.exa.ai/search', {
-        method: 'POST',
-        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, num_results: 5, text: { maxCharacters: 500 } }),
-      });
-      const data = await resp.json();
+      const data = await trackedExaSearch({ query, num_results: 5, text: { maxCharacters: 500 } });
       for (const result of (data.results || [])) {
         const blob = `${result.text || ''} ${result.url}`;
         const emails = blob.match(emailRegex) || [];
         const found = emails.find(e => !skip.some(s => e.toLowerCase().includes(s)));
-        if (found) return res.json({ email: found, source: result.url });
+        if (found) return { email: found, source: result.url };
       }
     }
-    res.json({ email: null, source: null });
+    return { email: null, source: null };
+    });
+    res.json(result);
   } catch (err) {
     res.json({ email: null, source: null });
   }

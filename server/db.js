@@ -72,6 +72,119 @@ async function initSchema() {
       created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
     );
 
+    CREATE TABLE IF NOT EXISTS agent_registry (
+      id SERIAL PRIMARY KEY,
+      agent_key TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      purpose TEXT DEFAULT '',
+      provider TEXT DEFAULT 'native',
+      model TEXT DEFAULT '',
+      capabilities JSONB DEFAULT '[]',
+      schedule_json JSONB DEFAULT '{}',
+      input_schema JSONB DEFAULT '{}',
+      output_schema JSONB DEFAULT '{}',
+      dependencies JSONB DEFAULT '[]',
+      plan_constraints JSONB DEFAULT '{}',
+      status TEXT DEFAULT 'active',
+      config_json JSONB DEFAULT '{}',
+      current_version INTEGER DEFAULT 1,
+      owner_id TEXT DEFAULT 'local',
+      created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'),
+      updated_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
+
+    CREATE TABLE IF NOT EXISTS pricing_snapshots (
+      id SERIAL PRIMARY KEY,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      input_cost_per_million NUMERIC DEFAULT 0,
+      output_cost_per_million NUMERIC DEFAULT 0,
+      unit_cost_usd NUMERIC DEFAULT 0,
+      source_url TEXT DEFAULT '',
+      effective_at TEXT NOT NULL,
+      created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'),
+      UNIQUE(provider, model, effective_at)
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_signals (
+      id SERIAL PRIMARY KEY,
+      run_id INTEGER REFERENCES agent_runs(id) ON DELETE SET NULL,
+      agent_key TEXT,
+      signal_type TEXT NOT NULL,
+      entity_type TEXT DEFAULT '',
+      entity_id INTEGER,
+      company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      summary TEXT DEFAULT '',
+      confidence NUMERIC DEFAULT 0.5,
+      source_url TEXT DEFAULT '',
+      source_name TEXT DEFAULT '',
+      data_json JSONB DEFAULT '{}',
+      fingerprint TEXT UNIQUE,
+      status TEXT DEFAULT 'new',
+      actionable INTEGER DEFAULT 0,
+      accepted INTEGER DEFAULT 0,
+      duplicate_of_id INTEGER REFERENCES agent_signals(id) ON DELETE SET NULL,
+      observed_at TEXT,
+      owner_id TEXT DEFAULT 'local',
+      created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_versions (
+      id SERIAL PRIMARY KEY,
+      agent_key TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      config_json JSONB DEFAULT '{}',
+      change_summary TEXT DEFAULT '',
+      created_by TEXT DEFAULT 'system',
+      created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'),
+      UNIQUE(agent_key, version)
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_outcomes (
+      id SERIAL PRIMARY KEY,
+      run_id INTEGER REFERENCES agent_runs(id) ON DELETE SET NULL,
+      signal_id INTEGER REFERENCES agent_signals(id) ON DELETE SET NULL,
+      company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
+      outcome_type TEXT NOT NULL,
+      outcome_value NUMERIC DEFAULT 1,
+      notes TEXT DEFAULT '',
+      data_json JSONB DEFAULT '{}',
+      owner_id TEXT DEFAULT 'local',
+      created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
+
+    CREATE TABLE IF NOT EXISTS adaptation_proposals (
+      id SERIAL PRIMARY KEY,
+      agent_key TEXT NOT NULL,
+      proposal_type TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      current_version INTEGER,
+      proposed_config JSONB DEFAULT '{}',
+      diff_json JSONB DEFAULT '{}',
+      evidence_json JSONB DEFAULT '[]',
+      estimated_daily_cost_delta NUMERIC DEFAULT 0,
+      expected_impact TEXT DEFAULT '',
+      trial_days INTEGER DEFAULT 7,
+      success_metric TEXT DEFAULT '',
+      applied_version INTEGER,
+      owner_id TEXT DEFAULT 'local',
+      created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'),
+      decided_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS control_tower_settings (
+      owner_id TEXT PRIMARY KEY DEFAULT 'local',
+      daily_target_usd NUMERIC DEFAULT 2.00,
+      monthly_ceiling_usd NUMERIC DEFAULT 60.00,
+      dust_workspace_allowance INTEGER,
+      dust_trigger_allowance INTEGER,
+      dust_programmatic_credits_usd NUMERIC,
+      dust_credits_remaining_usd NUMERIC,
+      timezone TEXT DEFAULT 'America/Los_Angeles',
+      updated_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
+
     CREATE TABLE IF NOT EXISTS actions (
       id SERIAL PRIMARY KEY,
       company_id INTEGER REFERENCES companies(id),
@@ -197,6 +310,33 @@ async function initSchema() {
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS outreach_prefs JSONB DEFAULT '{}';
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS taste_profile TEXT;
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS taste_refined_at TEXT;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS agent_key TEXT;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS agent_version INTEGER DEFAULT 1;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS parent_run_id INTEGER REFERENCES agent_runs(id);
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS trigger_type TEXT DEFAULT 'manual';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'completed';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS started_at TEXT;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS completed_at TEXT;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS duration_ms INTEGER DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'native';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS model TEXT DEFAULT '';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS provider_usage JSONB DEFAULT '{}';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS input_tokens INTEGER DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS output_tokens INTEGER DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS provider_calls INTEGER DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS exact_cost_usd NUMERIC;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS estimated_cost_usd NUMERIC DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS cost_basis TEXT DEFAULT 'estimated';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS pricing_snapshot_id INTEGER REFERENCES pricing_snapshots(id);
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS plan_bucket TEXT DEFAULT 'api';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS plan_units NUMERIC DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS output_count INTEGER DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS duplicate_count INTEGER DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS actionable_count INTEGER DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS accepted_count INTEGER DEFAULT 0;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS error_text TEXT DEFAULT '';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS source_refs JSONB DEFAULT '[]';
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS owner_id TEXT DEFAULT 'local';
 
     CREATE TABLE IF NOT EXISTS preference_events (
       id SERIAL PRIMARY KEY,
@@ -206,6 +346,18 @@ async function initSchema() {
       choice TEXT,
       created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
     );
+
+    INSERT INTO control_tower_settings (owner_id)
+    VALUES ('local')
+    ON CONFLICT (owner_id) DO NOTHING;
+
+    INSERT INTO pricing_snapshots
+      (provider, model, input_cost_per_million, output_cost_per_million, unit_cost_usd, source_url, effective_at)
+    VALUES
+      ('anthropic', 'claude-sonnet-4-6', 3, 15, 0, 'https://docs.anthropic.com/en/docs/about-claude/pricing', '2026-02-17'),
+      ('exa', 'search', 0, 0, 0.005, 'configurable estimate: EXA_SEARCH_COST_USD', '2026-01-01'),
+      ('dust', 'programmatic', 0, 0, 0, 'https://docs.dust.tt/docs/programmatic-usage', '2026-01-01')
+    ON CONFLICT (provider, model, effective_at) DO NOTHING;
   `);
 
   console.log('[DB] Schema ready (PostgreSQL)');

@@ -1,8 +1,8 @@
 const MODEL = 'claude-sonnet-4-6';
+const { trackedAnthropicClient, trackedExaSearch, executeAgent, currentRun } = require('./agent-control');
 
 function getClient() {
-  const Anthropic = require('@anthropic-ai/sdk');
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return trackedAnthropicClient();
 }
 
 async function buildContactsBlock() {
@@ -25,12 +25,7 @@ async function searchFirmForPeople(firmName) {
   try {
     // Two passes: firm's own site (team page) + general web (LinkedIn profiles, articles)
     const query = `"${firmName}" venture capital team associate analyst scout principal "venture partner"`;
-    const resp = await fetch('https://api.exa.ai/search', {
-      method: 'POST',
-      headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, num_results: 5, text: { maxCharacters: 800 } }),
-    });
-    const data = await resp.json();
+    const data = await trackedExaSearch({ query, num_results: 5, text: { maxCharacters: 800 } });
     const results = data.results || [];
     return results.map(r => `[${r.title}](${r.url})\n${r.text || ''}`).join('\n---\n');
   } catch (_) {
@@ -92,12 +87,7 @@ async function verifyInvestorViaExa(name, firm) {
 
   try {
     const query = `"${name}" "${firm}" venture capital investor`;
-    const resp = await fetch('https://api.exa.ai/search', {
-      method: 'POST',
-      headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, num_results: 3, text: { maxCharacters: 400 } }),
-    });
-    const data = await resp.json();
+    const data = await trackedExaSearch({ query, num_results: 3, text: { maxCharacters: 400 } });
     const results = data.results || [];
     const nameLower = name.toLowerCase();
     const firmLower = firm.toLowerCase();
@@ -449,8 +439,12 @@ async function gatherInvestorDataForCompanies(companies) {
 // ─── QUEUE SUGGESTIONS: returns JSON cards ─────────────────────────────────
 async function runQueueSuggestions(companies) {
   const client = getClient();
-  const { query } = require('./db');
+  const { query, queryOne } = require('./db');
   const contacts = await query("SELECT * FROM contacts WHERE name != '' ORDER BY firm");
+  const agentConfigRow = await queryOne(`SELECT config_json,current_version FROM agent_registry WHERE agent_key='queue-suggestions'`);
+  const agentConfig = typeof agentConfigRow?.config_json === 'string'
+    ? JSON.parse(agentConfigRow.config_json || '{}')
+    : (agentConfigRow?.config_json || {});
 
   const { companyFirmMap, peopleByFirm } = await gatherInvestorDataForCompanies(companies);
 
@@ -470,9 +464,14 @@ async function runQueueSuggestions(companies) {
 
   const contactsLine = contacts.map(c => `${c.name} (${c.firm})`).join(', ') || 'none yet';
 
+  const adaptiveBlock = agentConfig.taste_profile
+    ? `\nADAPTIVE SEARCH & RANKING PROFILE (approved agent version ${agentConfigRow.current_version}):\n${agentConfig.taste_profile}\nUse this to prioritize timing, contact paths, and angles, but never invent missing company facts.\n`
+    : '';
+
   const prompt = `You are a VC networking strategist. For each company below, generate an outreach card as JSON.
 
 Use ONLY the people listed under "Accessible people found". Do not invent names. If a firm shows no people, leave that slot null.
+${adaptiveBlock}
 
 My contacts (warm intro potential): ${contactsLine}
 
@@ -634,13 +633,6 @@ ${JSON.stringify(candidates, null, 2)}`;
       if (!seen.has(id)) ordered.push(company);
     }
 
-    const { execute } = require('./db');
-    await execute(
-      `INSERT INTO agent_runs (company_id, agent_type, input_json, output_text)
-       VALUES ($1, $2, $3, $4)`,
-      [null, 'daily-candidate-ranking', JSON.stringify({ taste_profile: profile.taste, candidates }), JSON.stringify(rankings)]
-    );
-
     return ordered.slice(0, limit);
   } catch (error) {
     console.warn('[DailyRanking] Taste reranking failed; using baseline order:', error.message);
@@ -672,16 +664,11 @@ async function runOutreachDraft(company, investor, userProfile = null) {
   let recentActivity = '';
   if (EXA_KEY) {
     try {
-      const resp = await fetch('https://api.exa.ai/search', {
-        method: 'POST',
-        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `"${investor.name}" "${investor.firm}" investment portfolio recent`,
-          num_results: 3,
-          text: { maxCharacters: 500 },
-        }),
+      const data = await trackedExaSearch({
+        query: `"${investor.name}" "${investor.firm}" investment portfolio recent`,
+        num_results: 3,
+        text: { maxCharacters: 500 },
       });
-      const data = await resp.json();
       recentActivity = (data.results || []).slice(0, 3).map(r => `- ${r.title}: ${r.text || ''}`).join('\n');
     } catch (_) {}
   }
@@ -771,12 +758,7 @@ async function runAutonomousDraftGeneration(companies, userProfile = null) {
           `"${target.name}" site:linkedin.com email`,
         ];
         emailSearch: for (const q of searchQueries) {
-          const resp = await fetch('https://api.exa.ai/search', {
-            method: 'POST',
-            headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: q, num_results: 5, text: { maxCharacters: 500 } }),
-          });
-          const data = await resp.json();
+          const data = await trackedExaSearch({ query: q, num_results: 5, text: { maxCharacters: 500 } });
           for (const result of (data.results || [])) {
             const blob = `${result.text || ''} ${result.url}`;
             const emails = blob.match(emailRegex) || [];
@@ -820,12 +802,7 @@ async function runInvestorDossier(name, firm) {
   if (EXA_KEY) {
     try {
       const query = `"${name}" "${firm}" venture capital investments portfolio`;
-      const resp = await fetch('https://api.exa.ai/search', {
-        method: 'POST',
-        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, num_results: 5, text: { maxCharacters: 600 } }),
-      });
-      const data = await resp.json();
+      const data = await trackedExaSearch({ query, num_results: 5, text: { maxCharacters: 600 } });
       searchText = (data.results || [])
         .map(r => `[${r.title}](${r.url})\n${r.text || ''}`)
         .join('\n---\n');
@@ -936,12 +913,7 @@ async function searchLumaEventsForInvestor(investor) {
   const allResults = [];
   for (const query of queries) {
     try {
-      const resp = await fetch('https://api.exa.ai/search', {
-        method: 'POST',
-        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, num_results: 4, text: { maxCharacters: 300 } }),
-      });
-      const data = await resp.json();
+      const data = await trackedExaSearch({ query, num_results: 4, text: { maxCharacters: 300 } });
       (data.results || []).forEach(r => {
         if (r.url && r.url.includes('lu.ma')) allResults.push(r);
       });
@@ -962,12 +934,7 @@ async function searchSFVCEvents() {
   const results = [];
   await Promise.all(queries.map(async query => {
     try {
-      const resp = await fetch('https://api.exa.ai/search', {
-        method: 'POST',
-        headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, num_results: 5, text: { maxCharacters: 300 } }),
-      });
-      const data = await resp.json();
+      const data = await trackedExaSearch({ query, num_results: 5, text: { maxCharacters: 300 } });
       (data.results || []).forEach(r => {
         if (r.url && r.url.includes('lu.ma')) results.push(r);
       });
@@ -1055,4 +1022,66 @@ async function runEventDiscovery(trackedInvestors) {
   return newEvents;
 }
 
-module.exports = { runBrief, runInvestorMap, runExtractPortfolio, runDailyOutreachSuggestions, runWeeklyRecap, runQueueSuggestions, runOutreachDraft, runAutonomousDraftGeneration, runInvestorDossier, runEventDiscovery, runFirmDiscovery, searchFirmForPeople, extractAccessiblePeopleFromFirms, loadUserProfile, rankCompaniesByTaste };
+function metered(agentKey, fn, optionsForArgs = () => ({})) {
+  return async (...args) => {
+    const options = optionsForArgs(...args);
+    return executeAgent(agentKey, options, () => fn(...args));
+  };
+}
+
+module.exports = {
+  runBrief: metered('company-brief', runBrief, company => ({
+    companyId: company?.id,
+    input: { company },
+    trigger: 'manual',
+  })),
+  runInvestorMap: metered('investor-map', runInvestorMap, company => ({
+    companyId: company?.id,
+    input: { company },
+    trigger: 'manual',
+  })),
+  runExtractPortfolio: metered('portfolio-extraction', runExtractPortfolio, investor => ({
+    input: { investor },
+    trigger: 'manual',
+  })),
+  runDailyOutreachSuggestions: metered('queue-suggestions', runDailyOutreachSuggestions, companies => ({
+    input: { companies },
+    trigger: currentRun() ? 'agent-triggered' : 'scheduled',
+  })),
+  runWeeklyRecap: metered('weekly-recap', runWeeklyRecap, pipelineStats => ({
+    input: { pipelineStats },
+    trigger: 'scheduled',
+  })),
+  runQueueSuggestions: metered('queue-suggestions', runQueueSuggestions, companies => ({
+    input: { companies },
+    trigger: currentRun() ? 'agent-triggered' : 'manual',
+  })),
+  runOutreachDraft: metered('outreach-draft', runOutreachDraft, company => ({
+    companyId: company?.id,
+    input: { company },
+    trigger: currentRun() ? 'agent-triggered' : 'manual',
+  })),
+  runAutonomousDraftGeneration: metered('autonomous-drafts', runAutonomousDraftGeneration, companies => ({
+    input: { companies },
+    trigger: 'scheduled',
+  })),
+  runInvestorDossier: metered('investor-dossier', runInvestorDossier, (name, firm) => ({
+    input: { name, firm },
+    trigger: 'manual',
+  })),
+  runEventDiscovery: metered('event-discovery', runEventDiscovery, trackedInvestors => ({
+    input: { trackedInvestors },
+    trigger: 'manual',
+  })),
+  runFirmDiscovery: metered('firm-discovery', runFirmDiscovery, (firmName, pipelineCompanies) => ({
+    input: { firmName, pipelineCompanies },
+    trigger: 'manual',
+  })),
+  rankCompaniesByTaste: metered('daily-candidate-ranking', rankCompaniesByTaste, companies => ({
+    input: { companies },
+    trigger: 'scheduled',
+  })),
+  searchFirmForPeople,
+  extractAccessiblePeopleFromFirms,
+  loadUserProfile,
+};

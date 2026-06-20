@@ -103,6 +103,12 @@ router.get('/approve/:token', async (req, res) => {
 
     if (!draft.investor_email) {
       await execute('UPDATE drafts SET status = $1 WHERE id = $2', ['approved_manual', draft.id]);
+      const sourceSignal = draft.company_id ? await queryOne('SELECT id,run_id FROM agent_signals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1', [draft.company_id]) : null;
+      await execute(
+        `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
+         VALUES ($1,$2,$3,'draft_approved',$4,$5)`,
+        [sourceSignal?.run_id || null, sourceSignal?.id || null, draft.company_id, draft.investor_name || '', JSON.stringify({ draft_id: draft.id, delivery: 'manual' })]
+      );
       return res.send(noEmailPage(draft));
     }
 
@@ -117,6 +123,12 @@ router.get('/approve/:token', async (req, res) => {
 
     if (error) throw new Error(JSON.stringify(error));
     await execute('UPDATE drafts SET status = $1 WHERE id = $2', ['sent', draft.id]);
+    const sourceSignal = draft.company_id ? await queryOne('SELECT id,run_id FROM agent_signals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1', [draft.company_id]) : null;
+    await execute(
+      `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
+       VALUES ($1,$2,$3,'outreach_sent',$4,$5)`,
+      [sourceSignal?.run_id || null, sourceSignal?.id || null, draft.company_id, draft.investor_name || '', JSON.stringify({ draft_id: draft.id, delivery: 'email' })]
+    );
     return res.send(confirmPage(
       'Sent',
       `Your message to <strong>${draft.investor_name}</strong> (${draft.investor_email}) has been sent.`

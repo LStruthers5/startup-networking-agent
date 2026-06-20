@@ -17,20 +17,13 @@ async function runAgent(req, res, agentType, agentFn) {
     return res.status(502).json({ error: 'Agent error: ' + err.message });
   }
 
-  const input_json = JSON.stringify({ company, network_context });
-  const result = await execute(
-    `INSERT INTO agent_runs (company_id, agent_type, input_json, output_text)
-     VALUES ($1,$2,$3,$4) RETURNING id`,
-    [company_id, agentType, input_json, output]
-  );
-
   // Update last_touched
   await execute(
     'UPDATE companies SET last_touched = $1 WHERE id = $2',
     [nowText(), company_id]
   );
 
-  res.json({ run_id: result.lastInsertRowid, output });
+  res.json({ output });
 }
 
 router.post('/brief', (req, res) => runAgent(req, res, 'brief', runBrief));

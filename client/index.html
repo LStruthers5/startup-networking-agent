@@ -169,6 +169,32 @@
   .wb-section-label.radar { color: var(--danger); }
   .wb-section-label.upnext { color: var(--accent); }
   .wb-section-label.logged { color: var(--muted); }
+  .tower-grid { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(320px,.85fr); gap: 16px; margin-bottom: 18px; }
+  .tower-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 17px; box-shadow: 0 2px 8px rgba(13,30,48,.05); }
+  .tower-title { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted); }
+  .tower-metrics { display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px; }
+  .tower-metric { background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px; }
+  .tower-metric strong { display:block;font-size:21px;color:var(--text);line-height:1.1; }
+  .tower-metric span { display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:3px; }
+  .budget-bar { height:8px;background:var(--border);border-radius:10px;overflow:hidden;margin:7px 0 5px; }
+  .budget-fill { height:100%;background:var(--accent);border-radius:10px;transition:width .25s; }
+  .budget-fill.warn { background:var(--warn); }
+  .budget-fill.danger { background:var(--danger); }
+  .agent-econ-row,.river-row,.proposal-row { border-top:1px solid var(--border);padding:10px 0;font-size:12px; }
+  .agent-econ-row:first-child,.river-row:first-child,.proposal-row:first-child { border-top:none; }
+  .econ-line { display:flex;align-items:center;justify-content:space-between;gap:8px; }
+  .econ-sub { color:var(--muted);margin-top:3px;line-height:1.45; }
+  .scenario-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:8px; }
+  .scenario-card { border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg); }
+  .scenario-card.current { border-color:var(--accent);background:var(--accent-bg); }
+  .scenario-name { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--accent); }
+  .scenario-cost { font-size:18px;font-weight:700;margin:4px 0; }
+  .tower-tabs { display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap; }
+  .tower-tab { border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:16px;padding:4px 9px;font-size:11px;cursor:pointer; }
+  .tower-tab.active { color:var(--accent);border-color:var(--accent);background:var(--accent-bg);font-weight:700; }
+  .tower-pane { display:none;max-height:310px;overflow:auto; }
+  .tower-pane.active { display:block; }
+  @media (max-width: 860px) { .tower-grid { grid-template-columns:1fr; } }
 
   /* Runs dropdown */
   .runs-dropdown { position: absolute; right: 0; top: 40px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 400px; max-height: 420px; overflow-y: auto; z-index: 40; box-shadow: 0 8px 32px rgba(13,30,48,.15); display: none; }
@@ -373,7 +399,10 @@
 <!-- ===== ACTION QUEUE ===== -->
 <div class="view active" id="view-queue">
   <div class="wb-header">
-    <h2 style="margin:0">Action Queue</h2>
+    <div>
+      <h2 style="margin:0">Agent Control Tower</h2>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">Opportunities and agent economics, in one current.</div>
+    </div>
     <div style="display:flex;gap:8px;align-items:center;position:relative">
       <button class="btn-secondary btn-sm" id="runsDropdownBtn">Runs Log &#9662;</button>
       <button class="btn-secondary btn-sm" id="refreshQueueBtn">Refresh</button>
@@ -383,6 +412,33 @@
         <div id="runsDropdownList"><div style="padding:16px;color:var(--muted);text-align:center">Loading&hellip;</div></div>
       </div>
     </div>
+  </div>
+
+  <div class="tower-grid">
+    <section class="tower-panel">
+      <div class="tower-title"><span>Opportunity current</span><span id="towerSinceVisit" style="color:var(--accent)">Loading…</span></div>
+      <div class="tower-metrics">
+        <div class="tower-metric"><strong id="towerNewSignals">—</strong><span>New signals</span></div>
+        <div class="tower-metric"><strong id="towerActionable">—</strong><span>Actionable</span></div>
+        <div class="tower-metric"><strong id="towerStale">—</strong><span>Stale</span></div>
+        <div class="tower-metric"><strong id="towerFailures">—</strong><span>Failures · 7d</span></div>
+      </div>
+      <div class="tower-title" style="margin-top:14px"><span>Information river</span><button class="btn-secondary btn-sm" onclick="loadControlTower()">Refresh</button></div>
+      <div id="towerRiver"><div class="empty">Loading agent signals…</div></div>
+    </section>
+
+    <section class="tower-panel">
+      <div class="tower-title"><span>Agent operations</span><span id="towerTodayCost">—</span></div>
+      <div id="towerBudget"></div>
+      <div class="tower-tabs">
+        <button class="tower-tab active" data-tower-pane="agents">Agents</button>
+        <button class="tower-tab" data-tower-pane="scenarios">Scenarios</button>
+        <button class="tower-tab" data-tower-pane="proposals">Changes</button>
+      </div>
+      <div class="tower-pane active" id="tower-pane-agents"><div class="empty">Loading economics…</div></div>
+      <div class="tower-pane" id="tower-pane-scenarios"><div class="empty">Loading scenarios…</div></div>
+      <div class="tower-pane" id="tower-pane-proposals"><div class="empty">Loading proposals…</div></div>
+    </section>
   </div>
 
   <div class="wb-stats" id="wbStats">
@@ -1370,8 +1426,231 @@ async function saveDraftFromCard(cid) {
 }
 
 // ─── WORKBENCH LOAD ────────────────────────────────────────────────────────
+const moneyText = value => `$${Number(value || 0).toFixed(2)}`;
+
+document.querySelectorAll('.tower-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tower-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tower-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tower-pane-' + btn.dataset.towerPane).classList.add('active');
+  });
+});
+
+async function loadControlTower() {
+  try {
+    const lastVisit = localStorage.getItem('controlTowerLastVisit') || '';
+    const since = lastVisit ? `?since=${encodeURIComponent(lastVisit)}` : '';
+    const [summary, river, scenarios, proposals] = await Promise.all([
+      api('GET', '/control-tower/summary' + since),
+      api('GET', '/control-tower/river?limit=24'),
+      api('GET', '/control-tower/scenarios'),
+      api('GET', '/control-tower/proposals'),
+    ]);
+    localStorage.setItem('controlTowerLastVisit', new Date().toISOString().slice(0,19).replace('T',' '));
+
+    document.getElementById('towerNewSignals').textContent = summary.signals.new;
+    document.getElementById('towerActionable').textContent = summary.signals.actionable;
+    document.getElementById('towerStale').textContent = summary.signals.stale;
+    document.getElementById('towerFailures').textContent = summary.failures_7d;
+    document.getElementById('towerSinceVisit').textContent = `${summary.since_visit.runs} runs · ${moneyText(summary.since_visit.cost)} since last visit`;
+    document.getElementById('towerTodayCost').textContent = `${summary.today.runs} runs · ${moneyText(summary.today.cost)} today`;
+    renderTowerBudget(summary.budget, summary.dust);
+    renderAgentEconomics(summary.agents);
+    renderInformationRiver(river);
+    renderScenarios(scenarios);
+    renderAdaptationProposals(proposals);
+  } catch (error) {
+    ['towerRiver','tower-pane-agents','tower-pane-scenarios','tower-pane-proposals'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<div class="empty" style="color:var(--danger)">${error.message}</div>`;
+    });
+  }
+}
+
+function renderTowerBudget(budget, dust) {
+  const pct = Math.min(100, Math.round((budget.utilization || 0) * 100));
+  const cls = pct >= 90 ? 'danger' : pct >= 70 || budget.forecast_over_ceiling ? 'warn' : '';
+  const dustParts = [
+    dust.credits_remaining == null ? 'Dust credits not configured' : `Dust credits ${moneyText(dust.credits_remaining)} remaining`,
+    dust.workspace_allowance == null ? '' : `workspace allowance ${dust.workspace_allowance}`,
+    dust.trigger_allowance == null ? '' : `trigger allowance ${dust.trigger_allowance}`,
+  ].filter(Boolean);
+  const dustLine = dustParts.join(' · ');
+  document.getElementById('towerBudget').innerHTML = `
+    <div class="econ-line"><strong>${moneyText(budget.month_spend)} this month</strong><span>${pct}% of ${moneyText(budget.monthly_ceiling)}</span></div>
+    <div class="budget-bar"><div class="budget-fill ${cls}" style="width:${pct}%"></div></div>
+    <div class="econ-sub">Forecast ${moneyText(budget.monthly_forecast)} · daily target ${moneyText(budget.daily_target)} · ${dustLine}</div>
+    <div style="display:flex;gap:6px;margin:10px 0 14px">
+      <button class="btn-secondary btn-sm" onclick="editAgentBudget()">Edit guardrails</button>
+      ${budget.forecast_over_ceiling ? '<span style="color:var(--danger);font-size:11px;align-self:center">Forecast exceeds ceiling</span>' : ''}
+    </div>`;
+}
+
+async function editAgentBudget() {
+  const settings = await api('GET', '/control-tower/settings');
+  const daily = prompt('Daily agent operating target ($)', Number(settings.daily_target_usd || 0).toFixed(2));
+  if (daily === null) return;
+  const monthly = prompt('Hard monthly ceiling ($)', Number(settings.monthly_ceiling_usd || 0).toFixed(2));
+  if (monthly === null) return;
+  const dustCredits = prompt('Dust programmatic credits remaining ($, leave blank if not configured)', settings.dust_credits_remaining_usd == null ? '' : Number(settings.dust_credits_remaining_usd).toFixed(2));
+  if (dustCredits === null) return;
+  const dustWorkspace = prompt('Dust workspace message allowance (leave blank if not configured)', settings.dust_workspace_allowance == null ? '' : settings.dust_workspace_allowance);
+  if (dustWorkspace === null) return;
+  const dustTriggers = prompt('Dust trigger allowance (leave blank if not configured)', settings.dust_trigger_allowance == null ? '' : settings.dust_trigger_allowance);
+  if (dustTriggers === null) return;
+  const dailyValue = Number(daily), monthlyValue = Number(monthly);
+  if (!Number.isFinite(dailyValue) || !Number.isFinite(monthlyValue) || dailyValue < 0 || monthlyValue <= 0) {
+    flash('Enter valid positive budget values', false); return;
+  }
+  const optionalValues = [dustCredits, dustWorkspace, dustTriggers].filter(value => value.trim() !== '').map(Number);
+  if (optionalValues.some(value => !Number.isFinite(value) || value < 0)) {
+    flash('Dust limits must be non-negative numbers', false); return;
+  }
+  const payload = { daily_target_usd: dailyValue, monthly_ceiling_usd: monthlyValue };
+  if (dustCredits.trim() !== '') payload.dust_credits_remaining_usd = Number(dustCredits);
+  if (dustWorkspace.trim() !== '') payload.dust_workspace_allowance = Number(dustWorkspace);
+  if (dustTriggers.trim() !== '') payload.dust_trigger_allowance = Number(dustTriggers);
+  await api('PATCH', '/control-tower/settings', payload);
+  flash('Agent budget guardrails updated');
+  loadControlTower();
+}
+
+function renderAgentEconomics(agents) {
+  const el = document.getElementById('tower-pane-agents');
+  const controls = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+    <span class="econ-sub">Unified native + Dust roster</span>
+    <button class="btn-secondary btn-sm" onclick="syncDustAgents()">Sync Dust</button>
+  </div>`;
+  if (!agents.length) { el.innerHTML = controls + '<div class="empty">No registered agents yet.</div>'; return; }
+  el.innerHTML = controls + agents.slice(0,20).map(agent => `
+    <div class="agent-econ-row">
+      <div class="econ-line"><strong>${agent.name || agent.agent_key} <span style="font-size:9px;color:var(--muted);text-transform:uppercase">${agent.provider || 'native'} · v${agent.current_version||1}</span></strong><span>${moneyText(agent.cost)}</span></div>
+      <div class="econ-sub">${agent.runs} runs · ${Math.round(agent.success_rate*100)}% success · ${agent.actionable} actionable · ${agent.fresh_signals||0} fresh today · ${agent.duplicate_rate ? Math.round(agent.duplicate_rate*100)+'% duplicate' : 'no duplicates'}</div>
+      <div class="econ-sub">${agent.cost_per_actionable == null ? 'No cost/yield baseline yet' : moneyText(agent.cost_per_actionable)+' per actionable opportunity'}${agent.last_run ? ' · last '+agent.last_run : ''}</div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        ${agent.provider==='dust' ? `<button class="btn-secondary btn-sm" onclick="runDustAgent('${agent.agent_key}')">Run</button>` : ''}
+        <button class="btn-secondary btn-sm" onclick="toggleAgentStatus('${agent.agent_key}', '${agent.status==='active'?'paused':'active'}')">${agent.status==='active'?'Pause':'Resume'}</button>
+        ${Number(agent.current_version||1)>1 ? `<button class="btn-secondary btn-sm" onclick="rollbackAgent('${agent.agent_key}', ${Number(agent.current_version)-1})">Rollback</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+async function syncDustAgents() {
+  try {
+    const result = await api('POST', '/control-tower/dust/sync', {});
+    flash(`Synced ${result.imported.length} Dust agent${result.imported.length===1?'':'s'}`);
+    loadControlTower();
+  } catch (error) {
+    flash('Dust sync failed: ' + error.message, false);
+  }
+}
+
+async function toggleAgentStatus(agentKey, status) {
+  await api('PATCH', '/control-tower/agents/' + encodeURIComponent(agentKey), { status });
+  flash(`Agent ${status}`);
+  loadControlTower();
+}
+
+async function runDustAgent(agentKey) {
+  const message = prompt('What should this Dust agent investigate?');
+  if (!message || !message.trim()) return;
+  try {
+    flash('Dust agent running…');
+    await api('POST', `/control-tower/dust/${encodeURIComponent(agentKey)}/run`, { message: message.trim(), trigger: 'manual' });
+    flash('Dust result added to the information river');
+    loadControlTower();
+  } catch (error) {
+    flash('Dust run failed: ' + error.message, false);
+  }
+}
+
+async function rollbackAgent(agentKey, version) {
+  if (!confirm(`Roll ${agentKey} back to version ${version}?`)) return;
+  await api('POST', `/control-tower/agents/${encodeURIComponent(agentKey)}/rollback`, { version });
+  flash(`Rolled back to version ${version}`);
+  loadControlTower();
+}
+
+function renderInformationRiver(items) {
+  const el = document.getElementById('towerRiver');
+  if (!items.length) { el.innerHTML = '<div class="empty">The river is quiet. New agent runs will appear here.</div>'; return; }
+  el.innerHTML = items.slice(0,10).map(item => `
+    <div class="river-row">
+      <div class="econ-line">
+        <strong>${item.title}</strong>
+        <span style="color:${item.actionable?'var(--accent)':'var(--muted)'}">${item.signal_type}</span>
+      </div>
+      <div class="econ-sub">${item.agent_name || item.agent_key} → ${item.company_name || item.entity_type || 'research'} · ${Math.round(Number(item.confidence||0)*100)}% confidence</div>
+      <div class="econ-sub">${(item.summary||'').slice(0,180)}</div>
+      ${item.status==='new' ? `<div style="display:flex;gap:6px;margin-top:7px">
+        <button class="btn-secondary btn-sm" onclick="decideSignal(${item.id},true)">Useful</button>
+        <button class="btn-secondary btn-sm" onclick="decideSignal(${item.id},false)">Dismiss</button>
+      </div>` : ''}
+    </div>`).join('');
+}
+
+async function decideSignal(id, accepted) {
+  await api('PATCH', '/control-tower/signals/' + id, { accepted, status: accepted ? 'accepted' : 'dismissed' });
+  flash(accepted ? 'Signal marked useful' : 'Signal dismissed');
+  loadControlTower();
+}
+
+function renderScenarios(scenarios) {
+  const el = document.getElementById('tower-pane-scenarios');
+  el.innerHTML = `<div class="scenario-grid">${scenarios.map(s => `
+    <div class="scenario-card ${s.key==='current'?'current':''}">
+      <div class="scenario-name">${s.label}</div>
+      <div class="scenario-cost">${moneyText(s.projected_daily_cost)}<span style="font-size:10px;color:var(--muted)">/day</span></div>
+      <div class="econ-sub">${moneyText(s.projected_monthly_cost)}/mo · ~${Number(s.projected_actionable_per_week).toFixed(1)} opportunities/wk · ${s.projected_freshness_hours}h freshness</div>
+      ${s.key!=='current' ? `<button class="btn-secondary btn-sm" style="margin-top:8px" onclick="previewScenario('${s.key}')">Preview</button>` : ''}
+    </div>`).join('')}</div>`;
+}
+
+async function previewScenario(key) {
+  const scenarios = await api('GET', '/control-tower/scenarios');
+  const scenario = scenarios.find(s => s.key === key);
+  if (!scenario) return;
+  const scheduleLines = (scenario.changes || []).filter(c => c.current !== c.proposed).map(c => `• ${c.agent_key}: ${c.current} → ${c.proposed}`).join('\n');
+  const ok = confirm(`${scenario.label} plan\n\nProjected: ${moneyText(scenario.projected_daily_cost)}/day, ${moneyText(scenario.projected_monthly_cost)}/month, ~${Number(scenario.projected_actionable_per_week).toFixed(1)} actionable opportunities/week, ${scenario.projected_freshness_hours}h freshness.\n\nSchedule changes:\n${scheduleLines || 'No schedule changes'}\n\nApply this approved operating plan?`);
+  if (!ok) return;
+  await api('POST', `/control-tower/scenarios/${key}/apply`, { confirm: true });
+  flash(`${scenario.label} operating plan applied`);
+  loadControlTower();
+}
+
+function renderAdaptationProposals(proposals) {
+  const el = document.getElementById('tower-pane-proposals');
+  const pending = proposals.filter(p => p.status === 'pending');
+  if (!pending.length) { el.innerHTML = '<div class="empty">No adaptive changes awaiting approval.</div>'; return; }
+  el.innerHTML = pending.map(p => `
+    <div class="proposal-row">
+      <div class="econ-line"><strong>${p.agent_key}</strong><span>${moneyText(p.estimated_daily_cost_delta)}/day</span></div>
+      <div class="econ-sub">${p.expected_impact || p.proposal_type} · ${p.trial_days} day trial · success: ${p.success_metric}</div>
+      <details style="margin-top:6px"><summary style="cursor:pointer;color:var(--accent)">View version diff & evidence</summary><pre style="white-space:pre-wrap;font-size:11px;color:var(--muted)">${JSON.stringify({diff:p.diff_json,evidence:p.evidence_json},null,2)}</pre></details>
+      <div style="display:flex;gap:6px;margin-top:7px">
+        <button class="btn-secondary btn-sm" onclick="applyProposal(${p.id})">Review & apply</button>
+        <button class="btn-secondary btn-sm" onclick="rejectProposal(${p.id})">Reject</button>
+      </div>
+    </div>`).join('');
+}
+
+async function applyProposal(id) {
+  if (!confirm('Apply this versioned agent change? The previous version remains available for rollback.')) return;
+  await api('POST', `/control-tower/proposals/${id}/apply`, { confirm: true });
+  flash('Adaptive agent version applied');
+  loadControlTower();
+}
+
+async function rejectProposal(id) {
+  await api('POST', `/control-tower/proposals/${id}/reject`, {});
+  flash('Proposal rejected');
+  loadControlTower();
+}
+
 async function loadWorkbench() {
   wbLoaded = true;
+  loadControlTower();
   try {
     const stats = await api('GET', '/queue/stats');
     document.getElementById('statSent').textContent = stats.sentThisWeek;
@@ -1603,7 +1882,9 @@ async function loadRunsFull() {
       <div class="run-item" data-id="${r.id}">
         <div class="run-meta">
           <span class="run-type ${r.agent_type}">${r.agent_type}</span>
-          <strong>${r.company_name||'Unknown'}</strong>
+          <strong>${r.agent_name||r.company_name||r.agent_key||'Agent run'}</strong>
+          <span style="font-size:11px;color:${r.status==='failed'?'var(--danger)':'var(--muted)'}">${r.status||'completed'}</span>
+          <span style="font-size:11px;color:var(--muted)">${r.cost_basis==='unavailable'?'cost unavailable':moneyText(r.exact_cost_usd ?? r.estimated_cost_usd)} · ${r.provider_calls||0} calls</span>
           <span style="color:var(--muted);font-size:12px">${r.created_at}</span>
         </div>
         <div class="run-detail" id="rdf-${r.id}"></div>
@@ -1613,7 +1894,10 @@ async function loadRunsFull() {
         const detail = document.getElementById('rdf-' + item.dataset.id);
         if (detail.classList.toggle('open') && !detail.textContent) {
           const run = await api('GET', '/runs/' + item.dataset.id);
-          detail.innerHTML = formatOutput(run.output_text);
+          detail.innerHTML = `
+            <div style="color:var(--muted);margin-bottom:8px">${run.trigger_type||'manual'} · ${run.duration_ms||0}ms · ${run.input_tokens||0} input / ${run.output_tokens||0} output tokens · ${run.output_count||0} signals · ${run.duplicate_count||0} duplicates</div>
+            ${run.error_text ? `<div style="color:var(--danger);margin-bottom:8px">${run.error_text}</div>` : ''}
+            ${formatOutput(run.output_text || '')}`;
         }
       });
     });
@@ -2308,6 +2592,7 @@ const SEED_COMPANIES = [
 ];
 
 let tunerCompanies = [];   // real pipeline companies, loaded once
+let tunerSignals = [];     // fresh normalized findings from the agent information river
 let currentDuel = null;    // { category, left, right }
 let duelTotal = 0;         // server-side cumulative tap count
 const pick2 = arr => { const i = Math.floor(Math.random()*arr.length); let j = Math.floor(Math.random()*(arr.length-1)); if (j>=i) j++; return [arr[i], arr[j]]; };
@@ -2315,11 +2600,13 @@ const pick2 = arr => { const i = Math.floor(Math.random()*arr.length); let j = M
 function buildNextDuel() {
   // weighted category roll; fall back to style if a category can't fill
   const pool = (tunerCompanies.length >= 2 || SEED_COMPANIES.length >= 2)
-    ? ['style','style','company','company','approach']
+    ? ['style','company','company','approach'].concat(tunerSignals.length >= 2 ? ['signal','signal','signal'] : [])
     : ['style','style','approach'];
   let category = pool[Math.floor(Math.random()*pool.length)];
   let left, right;
-  if (category === 'company') {
+  if (category === 'signal') {
+    [left, right] = pick2(tunerSignals);
+  } else if (category === 'company') {
     const src = tunerCompanies.length >= 2 ? tunerCompanies : SEED_COMPANIES;
     const [a,b] = pick2(src);
     const fmt = c => ({ label: c.name, name: c.name, sample: `${c.sector || ''}${c.stage ? ' · ' + c.stage : ''}\n${c.description || ''}`.trim(), tags: [c.sector, c.stage].filter(Boolean) });
@@ -2336,7 +2623,12 @@ function buildNextDuel() {
 
 function renderDuel() {
   const d = currentDuel;
-  const catLabel = { style:'Which sounds more like you?', company:'Which would you rather reach out to?', approach:'Which move are you more likely to make?' }[d.category];
+  const catLabel = {
+    style:'Which sounds more like you?',
+    company:'Which would you rather reach out to?',
+    approach:'Which move are you more likely to make?',
+    signal:'Which agent finding deserves more attention?',
+  }[d.category];
   document.getElementById('duelCategory').textContent = catLabel;
   const card = (item, side) => `
     <div class="ab-option" onclick="chooseDuel('${side}')">
@@ -2416,12 +2708,16 @@ function showTaste(text, refinedAt) {
 }
 
 async function initTuner(p) {
-  // load real pipeline companies once for company duels
-  if (!tunerCompanies.length) {
-    try {
-      const cs = await api('GET', '/companies');
-      tunerCompanies = (Array.isArray(cs) ? cs : []).filter(c => c.name && (c.sector || c.description));
-    } catch(e) { tunerCompanies = []; }
+  // Mix stable pipeline context with fresh, provenance-preserving agent findings.
+  try {
+    const [cs, signals] = await Promise.all([
+      tunerCompanies.length ? Promise.resolve(tunerCompanies) : api('GET', '/companies'),
+      api('GET', '/profile/tuner-feed'),
+    ]);
+    tunerCompanies = (Array.isArray(cs) ? cs : []).filter(c => c.name && (c.sector || c.description));
+    tunerSignals = (Array.isArray(signals) ? signals : []).filter(s => s.label && s.sample);
+  } catch(e) {
+    tunerSignals = [];
   }
   duelTotal = 0; updateDuelCounter();
   showTaste(p && p.taste_profile, p && p.taste_refined_at);

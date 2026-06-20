@@ -6,7 +6,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "start": "pkill -f 'node server/index.js' 2>/dev/null; sleep 1; node server/index.js"
+    "start": "pkill -f 'node server/index.js' 2>/dev/null; sleep 1; node server/index.js",
+    "test": "node --test server/test/*.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",

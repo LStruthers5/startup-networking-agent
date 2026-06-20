@@ -53,6 +53,18 @@ router.patch('/:id', async (req, res) => {
   let followUp = null;
   if (req.body.completed === 1 || req.body.completed === true) {
     const action = await queryOne('SELECT * FROM actions WHERE id = $1', [req.params.id]);
+    const sourceSignal = action ? await queryOne(
+      `SELECT id,run_id FROM agent_signals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1`,
+      [action.company_id]
+    ) : null;
+    await execute(
+      `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
+       VALUES ($1,$2,$3,'action_completed',$4,$5)`,
+      [
+        sourceSignal?.run_id || null, sourceSignal?.id || null, action?.company_id || null,
+        action?.suggested_action || '', JSON.stringify({ action_id: action?.id, sequence_step: action?.sequence_step }),
+      ]
+    );
     if (action && action.sequence_step < 3) {
       const nextStep = action.sequence_step + 1;
       const daysOut = FOLLOW_UP_DAYS[action.sequence_step] || 7;

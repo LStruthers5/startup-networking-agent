@@ -2,6 +2,31 @@
 
 A local MVP for tracking realistic startup networking leads in wearables, sports tech, digital health, fitness, AI health, SMB software, and finance/operations software.
 
+## Agent Control Tower (Node Deployment)
+
+The Railway-facing Node application in `server/` and `client/` includes an always-on Agent Control Tower:
+
+- A unified registry for native and imported Dust agents.
+- A metered run ledger with trigger, status, duration, provider calls, token usage, exact/estimated cost, failures, and output yield.
+- Historical pricing snapshots. Claude Sonnet 4.6 defaults to the published $3 input / $15 output per million token pricing; Exa remains an explicitly labeled configurable estimate.
+- A normalized information river linking agent runs to companies, people, events, claims, drafts, and recommended actions.
+- Daily targets, hard monthly ceilings, spend forecasts, per-agent economics, and lean/current/aggressive scenario previews.
+- Agent-derived Outreach Tuner cards. Human choices credit or reject the originating signals.
+- Versioned adaptive-agent proposals with approval and rollback. Prompt, search, schedule, and workflow changes are never silently applied.
+- Optional Dust agent sync and blocking programmatic execution through the same registry and ledger.
+
+Run this deployment locally with:
+
+```bash
+cp .env.example .env
+npm install
+npm start
+```
+
+The Node app uses PostgreSQL via `DATABASE_URL` and serves the UI at `http://localhost:3000` by default. The existing Python/React prototype below remains a separate application stack.
+
+Optional Dust setup requires `DUST_API_KEY` and `DUST_WORKSPACE_ID`. Dust workspace allowances, trigger allowances, and programmatic credits are entered in the Control Tower settings because they are separate economic buckets. No agent sends outreach automatically; prepared drafts still require human approval.
+
 The app is designed for manual Crunchbase Pro CSV exports. It does not use Crunchbase APIs, scraping, email sending, LinkedIn automation, authentication, or paid integrations.
 
 ## What It Does

@@ -47,6 +47,7 @@ app.use('/api/queue', require('./routes/queue'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/drafts', require('./routes/drafts'));
 app.use('/api/profile', require('./routes/profile'));
+app.use('/api/control-tower', require('./routes/control-tower'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -77,6 +78,7 @@ const PORT = process.env.PORT || 3000;
 
 // Init DB then start server
 initSchema()
+  .then(() => require('./agent-control').ensureAgentRegistry())
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Networking Tower v2 → http://localhost:${PORT}`);

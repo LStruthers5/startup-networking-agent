@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { query, queryOne, execute } = require('../db');
+const { executeAgent, trackedAnthropicClient } = require('../agent-control');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -72,15 +73,17 @@ router.post('/parse-resume', upload.single('resume'), async (req, res) => {
 
     if (!resumeText.trim()) return res.status(400).json({ error: 'Could not extract text from file' });
 
-    const Anthropic = require('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
-      messages: [{
-        role: 'user',
-        content: `Extract structured data from this resume. Return ONLY valid JSON — no markdown fences, no explanation, nothing else.
+    const parsed = await executeAgent('resume-parser', {
+      trigger: 'manual',
+      input: { filename: req.file.originalname, text_length: resumeText.length },
+    }, async () => {
+      const client = trackedAnthropicClient();
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        messages: [{
+          role: 'user',
+          content: `Extract structured data from this resume. Return ONLY valid JSON — no markdown fences, no explanation, nothing else.
 
 {
   "full_name": "string",
@@ -110,16 +113,14 @@ router.post('/parse-resume', upload.single('resume'), async (req, res) => {
 
 Resume text:
 ${resumeText.slice(0, 8000)}`
-      }]
+        }]
+      });
+      try {
+        return JSON.parse(response.content[0].text.trim());
+      } catch (_) {
+        throw new Error('Claude returned unparseable resume JSON');
+      }
     });
-
-    let parsed;
-    try {
-      const raw = response.content[0].text.trim();
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      return res.status(500).json({ error: 'Claude returned unparseable JSON', raw: response.content[0].text });
-    }
 
     const existing = await queryOne('SELECT id FROM user_profile LIMIT 1');
     if (existing) {
@@ -160,10 +161,60 @@ router.post('/duel', async (req, res) => {
        VALUES ($1, $2, $3, $4)`,
       [category || 'mixed', JSON.stringify(left || {}), JSON.stringify(right || {}), choice]
     );
+    const selected = choice === 'left' ? [left] : choice === 'right' ? [right] : choice === 'both' ? [left, right] : [];
+    const rejected = choice === 'left' ? [right] : choice === 'right' ? [left] : choice === 'neither' ? [left, right] : [];
+    for (const item of selected) {
+      if (!item?.signal_id) continue;
+      const signal = await queryOne('SELECT run_id, accepted FROM agent_signals WHERE id=$1', [item.signal_id]);
+      await execute(`UPDATE agent_signals SET status='accepted',accepted=1 WHERE id=$1`, [item.signal_id]);
+      if (signal?.run_id && !signal.accepted) {
+        await execute('UPDATE agent_runs SET accepted_count=COALESCE(accepted_count,0)+1 WHERE id=$1', [signal.run_id]);
+        await execute(
+          `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
+           SELECT $1,$2,company_id,'tuner_selected','Selected in Outreach Tuner',$3
+           FROM agent_signals WHERE id=$2`,
+          [signal.run_id, item.signal_id, JSON.stringify({ category, choice })]
+        );
+      }
+    }
+    for (const item of rejected) {
+      if (item?.signal_id) await execute(`UPDATE agent_signals SET status='rejected' WHERE id=$1`, [item.signal_id]);
+    }
     const c = await queryOne('SELECT COUNT(*) AS n FROM preference_events');
     res.json({ ok: true, total: parseInt(c.n) });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/profile/tuner-feed — agent-derived cards awaiting human judgment
+router.get('/tuner-feed', async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT s.id, s.signal_type, s.title, s.summary, s.confidence, s.source_name,
+        s.company_id, c.name AS company_name, c.sector, c.stage
+      FROM agent_signals s
+      LEFT JOIN companies c ON c.id=s.company_id
+      WHERE s.status='new' AND s.duplicate_of_id IS NULL
+      ORDER BY s.actionable DESC, s.confidence DESC, s.created_at DESC
+      LIMIT 30
+    `);
+    res.json(rows.map(row => ({
+      id: row.id,
+      label: row.company_name || row.title,
+      name: row.company_name || row.title,
+      sample: [
+        [row.sector, row.stage].filter(Boolean).join(' · '),
+        row.summary,
+        row.source_name ? `From ${row.source_name}` : '',
+      ].filter(Boolean).join('\n'),
+      tags: [row.signal_type, row.sector, row.stage].filter(Boolean),
+      signal_id: row.id,
+      company_id: row.company_id,
+      confidence: Number(row.confidence || 0),
+    })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -186,14 +237,17 @@ router.post('/refine', async (req, res) => {
       return `[${e.category}] skipped "${lab(L)}" vs "${lab(R)}"`;
     });
 
-    const Anthropic = require('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 700,
-      messages: [{
-        role: 'user',
-        content: `A user is tuning their networking & outreach preferences by repeatedly choosing between two options ("this or that"). Their choice log is below (categories: style = how a message sounds, company = which leads excite them, approach = what outreach move they'd make).
+    const taste = await executeAgent('profile-refiner', {
+      trigger: 'manual',
+      input: { event_count: events.length, choices: lines },
+    }, async () => {
+      const client = trackedAnthropicClient();
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 700,
+        messages: [{
+          role: 'user',
+          content: `A user is tuning their networking & outreach preferences by repeatedly choosing between two options ("this or that"). Their choice log is below (categories: style = how a message sounds, company = which leads excite them, approach = what outreach move they'd make).
 
 Write a concise preference profile of 120–180 words that I can feed to a drafting/sourcing agent. Cover, in this order:
 1. Outreach VOICE & TONE they gravitate to.
@@ -205,16 +259,48 @@ Write in second person ("You prefer…"). Be specific and concrete. No preamble,
 
 CHOICE LOG (oldest first):
 ${lines.join('\n')}`
-      }]
+        }]
+      });
+      return response.content[0].text.trim();
     });
-
-    const taste = response.content[0].text.trim();
     const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const existing = await queryOne('SELECT id FROM user_profile LIMIT 1');
     if (existing) {
       await execute('UPDATE user_profile SET taste_profile=$1, taste_refined_at=$2 WHERE id=$3', [taste, ts, existing.id]);
     } else {
       await execute('INSERT INTO user_profile (taste_profile, taste_refined_at) VALUES ($1, $2)', [taste, ts]);
+    }
+    const adaptiveAgents = ['daily-candidate-ranking', 'queue-suggestions'];
+    for (const agentKey of adaptiveAgents) {
+      const agent = await queryOne('SELECT current_version,config_json FROM agent_registry WHERE agent_key=$1', [agentKey]);
+      const pending = await queryOne(
+        `SELECT id FROM adaptation_proposals WHERE agent_key=$1 AND status='pending' ORDER BY id DESC LIMIT 1`,
+        [agentKey]
+      );
+      if (!agent || pending) continue;
+      const currentConfig = typeof agent.config_json === 'string' ? JSON.parse(agent.config_json || '{}') : (agent.config_json || {});
+      const proposedConfig = {
+        ...currentConfig,
+        taste_profile: taste,
+        adaptation_mode: 'taste-guided',
+        evidence_event_count: events.length,
+        proposed_at: ts,
+      };
+      await execute(
+        `INSERT INTO adaptation_proposals
+         (agent_key,proposal_type,current_version,proposed_config,diff_json,evidence_json,
+          estimated_daily_cost_delta,expected_impact,trial_days,success_metric)
+         VALUES ($1,'taste-adaptation',$2,$3,$4,$5,$6,$7,7,$8)`,
+        [
+          agentKey, agent.current_version,
+          JSON.stringify(proposedConfig),
+          JSON.stringify({ taste_profile: { from: currentConfig.taste_profile || null, to: taste } }),
+          JSON.stringify([{ source: 'outreach-tuner', event_count: events.length, refined_at: ts }]),
+          agentKey === 'queue-suggestions' ? 0.08 : 0.03,
+          'Prioritize searches and recommendations that better match accepted Tuner signals.',
+          'accepted actionable opportunities',
+        ]
+      );
     }
     res.json({ taste_profile: taste, taste_refined_at: ts, count: events.length });
   } catch (e) {

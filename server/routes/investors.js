@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne, execute, nowText } = require('../db');
 const { runExtractPortfolio, runFirmDiscovery } = require('../agents');
+const { executeAgent, trackedExaSearch } = require('../agent-control');
 
 // ─── GET all individual investors ─────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -205,57 +206,47 @@ router.post('/:id/research', async (req, res) => {
   const EXA_KEY = process.env.EXA_API_KEY;
   if (!EXA_KEY) return res.status(400).json({ error: 'EXA_API_KEY not set' });
 
-  let exaData;
   try {
-    const q = `${investor.name} ${investor.firm || ''} portfolio companies investments`.trim();
-    const resp = await fetch('https://api.exa.ai/search', {
-      method: 'POST',
-      headers: { 'x-api-key': EXA_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: q, num_results: 5, text: { maxCharacters: 1500 } }),
+    const extracted = await executeAgent('investor-portfolio-research', {
+      trigger: 'manual',
+      input: { investor },
+    }, async () => {
+      const q = `${investor.name} ${investor.firm || ''} portfolio companies investments`.trim();
+      const exaData = await trackedExaSearch({ query: q, num_results: 5, text: { maxCharacters: 1500 } });
+      const searchText = (exaData.results || [])
+        .map(r => `[${r.title}]\n${r.url}\n${r.text || ''}`)
+        .join('\n\n---\n\n')
+        .slice(0, 5000);
+      if (!searchText.trim()) throw new Error('Exa returned no results');
+      return runExtractPortfolio(investor, searchText);
     });
-    exaData = await resp.json();
-    if (!resp.ok) throw new Error(exaData.message || resp.statusText);
-  } catch (err) {
-    return res.status(502).json({ error: 'Exa search failed: ' + err.message });
-  }
 
-  const searchText = (exaData.results || [])
-    .map(r => `[${r.title}]\n${r.url}\n${r.text || ''}`)
-    .join('\n\n---\n\n')
-    .slice(0, 5000);
+    if (extracted === 'NONE' || !extracted) {
+      return res.json({ portfolio_companies: '', matches: [], message: 'No portfolio companies found' });
+    }
 
-  if (!searchText.trim()) return res.status(502).json({ error: 'Exa returned no results' });
+    await execute(
+      'UPDATE investors SET portfolio_companies = $1, last_touched = $2 WHERE id = $3',
+      [extracted, nowText(), investor.id]
+    );
 
-  let extracted;
-  try {
-    extracted = await runExtractPortfolio(investor, searchText);
-  } catch (err) {
-    return res.status(502).json({ error: 'Extraction failed: ' + err.message });
-  }
-
-  if (extracted === 'NONE' || !extracted) {
-    return res.json({ portfolio_companies: '', matches: [], message: 'No portfolio companies found' });
-  }
-
-  await execute(
-    'UPDATE investors SET portfolio_companies = $1, last_touched = $2 WHERE id = $3',
-    [extracted, nowText(), investor.id]
-  );
-
-  const allCompanies = await query('SELECT id, name, sector, status FROM companies');
-  const portfolioLines = extracted.split('\n').map(s => s.trim()).filter(Boolean);
-  const matches = [];
-  for (const line of portfolioLines) {
-    const lower = line.toLowerCase();
-    for (const c of allCompanies) {
-      const cLower = c.name.toLowerCase();
-      if ((lower.includes(cLower) || cLower.includes(lower)) && !matches.find(m => m.id === c.id)) {
-        matches.push(c);
+    const allCompanies = await query('SELECT id, name, sector, status FROM companies');
+    const portfolioLines = extracted.split('\n').map(s => s.trim()).filter(Boolean);
+    const matches = [];
+    for (const line of portfolioLines) {
+      const lower = line.toLowerCase();
+      for (const c of allCompanies) {
+        const cLower = c.name.toLowerCase();
+        if ((lower.includes(cLower) || cLower.includes(lower)) && !matches.find(m => m.id === c.id)) {
+          matches.push(c);
+        }
       }
     }
-  }
 
-  res.json({ portfolio_companies: extracted, matches });
+    res.json({ portfolio_companies: extracted, matches });
+  } catch (err) {
+    res.status(502).json({ error: 'Portfolio research failed: ' + err.message });
+  }
 });
 
 module.exports = router;
