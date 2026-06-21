@@ -131,6 +131,26 @@ async function initSchema() {
       created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
     );
 
+    CREATE TABLE IF NOT EXISTS company_intelligence (
+      company_id INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+      clean_description TEXT DEFAULT '',
+      business_model TEXT DEFAULT '',
+      products JSONB DEFAULT '[]',
+      customers JSONB DEFAULT '[]',
+      leadership JSONB DEFAULT '[]',
+      hiring_summary TEXT DEFAULT '',
+      preference_fit TEXT DEFAULT '',
+      why_now TEXT DEFAULT '',
+      open_questions JSONB DEFAULT '[]',
+      sources JSONB DEFAULT '[]',
+      warnings JSONB DEFAULT '[]',
+      confidence NUMERIC DEFAULT 0,
+      data_source TEXT DEFAULT '',
+      last_synced_at TEXT,
+      profile_json JSONB DEFAULT '{}',
+      updated_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
+
     CREATE TABLE IF NOT EXISTS agent_versions (
       id SERIAL PRIMARY KEY,
       agent_key TEXT NOT NULL,

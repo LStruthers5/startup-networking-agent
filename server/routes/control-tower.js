@@ -2,8 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne, execute, nowText } = require('../db');
 const { executeAgent } = require('../agent-control');
+const { extractDustPayload, extractDustText, dustPayloadToSignals } = require('../dust-response');
 const {
   runCompanySignalMonitor,
+  runCompanyProfileCurator,
+  runCompanyDiscovery,
   runEvidenceAuditor,
   runOpportunityInvestigator,
   runRelationshipPathfinder,
@@ -47,7 +50,11 @@ router.get('/summary', async (req, res) => {
           COUNT(*) FILTER (WHERE actionable=1 AND status='new') AS actionable,
           COUNT(*) FILTER (WHERE accepted=1) AS accepted,
           COUNT(*) FILTER (WHERE status='new' AND created_at < to_char(CURRENT_DATE - INTERVAL '7 days','YYYY-MM-DD')) AS stale
-        FROM agent_signals`),
+        FROM agent_signals
+        WHERE agent_key!='evidence-auditor'
+          AND LENGTH(TRIM(COALESCE(summary,'')))>=35
+          AND COALESCE(summary,'')!='[object Object]'
+          AND status NOT IN ('duplicate','rejected')`),
       queryOne(`SELECT COUNT(*) AS n FROM agent_runs WHERE status='failed' AND created_at >= to_char(CURRENT_DATE - INTERVAL '7 days','YYYY-MM-DD')`),
       query(`
         SELECT reg.agent_key, reg.name, reg.purpose, reg.provider, reg.status, reg.current_version,
@@ -158,6 +165,8 @@ router.patch('/agents/:agentKey', async (req, res) => {
 router.post('/agents/:agentKey/run', async (req, res) => {
   const runners = {
     'company-signal-monitor': () => runCompanySignalMonitor(Number(req.body.limit || 6)),
+    'company-profile-curator': () => runCompanyProfileCurator(Number(req.body.limit || 4)),
+    'company-discovery': () => runCompanyDiscovery(Number(req.body.limit || 6)),
     'evidence-auditor': () => runEvidenceAuditor(Number(req.body.limit || 30)),
     'opportunity-investigator': () => runOpportunityInvestigator(Number(req.body.company_id)),
     'relationship-pathfinder': () => runRelationshipPathfinder(Number(req.body.limit || 8)),
@@ -187,7 +196,11 @@ router.get('/river', async (req, res) => {
     LEFT JOIN agent_runs r ON r.id=s.run_id
     LEFT JOIN agent_registry reg ON reg.agent_key=s.agent_key
     LEFT JOIN companies c ON c.id=s.company_id
-    ORDER BY s.created_at DESC LIMIT $1`, [limit]);
+    WHERE s.agent_key!='evidence-auditor'
+      AND LENGTH(TRIM(COALESCE(s.summary,''))) >= 35
+      AND COALESCE(s.summary,'') != '[object Object]'
+      AND s.status NOT IN ('duplicate','rejected')
+    ORDER BY s.actionable DESC,s.created_at DESC LIMIT $1`, [limit]);
   res.json(rows);
 });
 
@@ -204,6 +217,36 @@ router.patch('/signals/:id', async (req, res) => {
        VALUES ($1,$2,$3,'signal_accepted','Accepted from information river')`,
       [signal.run_id, signal.id, signal.company_id]
     );
+  }
+  if (accepted && signal.signal_type === 'company_candidate') {
+    const data = json(signal.data_json, {});
+    const candidate = data.data || data;
+    const existing = await queryOne(
+      `SELECT id FROM companies
+       WHERE LOWER(name)=LOWER($1)
+          OR ($2!='' AND LOWER(COALESCE(website,''))=LOWER($2))
+       LIMIT 1`,
+      [candidate.name || signal.title.replace(/^New company candidate:\s*/i, ''), candidate.website || '']
+    );
+    if (!existing) {
+      const result = await execute(
+        `INSERT INTO companies
+         (name,sector,stage,description,website,location,source,status,score)
+         VALUES ($1,$2,$3,$4,$5,$6,'agent-discovery','new',3) RETURNING id`,
+        [
+          candidate.name || signal.title.replace(/^New company candidate:\s*/i, ''),
+          candidate.sector || '',
+          candidate.stage || '',
+          candidate.description || signal.summary || '',
+          candidate.website || '',
+          candidate.location || '',
+        ]
+      );
+      await execute(
+        `UPDATE agent_signals SET company_id=$1,entity_type='company',entity_id=$1 WHERE id=$2`,
+        [result.lastInsertRowid, signal.id]
+      );
+    }
   }
   res.json({ ok: true });
 });
@@ -230,9 +273,11 @@ function buildScenarios(agents, summary) {
       follow_up_limit: 20, learning_days: 7, yield_multiplier: 1.65,
     },
   };
-  const runRate = (agentKey, profile) => {
+  const runRate = (agentKey, profile, scenarioKey) => {
     if (['event-discovery', 'company-signal-monitor'].includes(agentKey)) return 24 / profile.monitor_hours;
     if (agentKey === 'evidence-auditor') return 24 / profile.audit_hours;
+    if (agentKey === 'company-profile-curator') return scenarioKey === 'lean' ? 0.5 : scenarioKey === 'aggressive' ? 2 : 1;
+    if (agentKey === 'company-discovery') return scenarioKey === 'lean' ? 0.5 : scenarioKey === 'aggressive' ? 2 : 1;
     if (agentKey === 'opportunity-investigator') return profile.dust_daily_limit;
     if (['daily-candidate-ranking', 'autonomous-drafts', 'relationship-pathfinder', 'follow-up-strategist'].includes(agentKey)) return 1;
     if (['outcome-learning', 'agent-portfolio-manager', 'weekly-recap'].includes(agentKey)) return 1 / profile.learning_days;
@@ -243,6 +288,14 @@ function buildScenarios(agents, summary) {
     const next = { ...current, scenario: key };
     if (['event-discovery', 'company-signal-monitor'].includes(agent.agent_key)) next.interval_hours = profile.monitor_hours;
     if (agent.agent_key === 'evidence-auditor') next.interval_hours = profile.audit_hours;
+    if (agent.agent_key === 'company-profile-curator') {
+      next.interval_hours = key === 'lean' ? 48 : key === 'aggressive' ? 12 : 24;
+      next.batch_limit = key === 'lean' ? 2 : key === 'aggressive' ? 8 : 4;
+    }
+    if (agent.agent_key === 'company-discovery') {
+      next.interval_hours = key === 'lean' ? 12 : key === 'aggressive' ? 1 : 3;
+      next.batch_limit = key === 'lean' ? 4 : key === 'aggressive' ? 8 : 6;
+    }
     if (['daily-candidate-ranking', 'autonomous-drafts'].includes(agent.agent_key)) next.candidate_limit = profile.candidate_limit;
     if (agent.agent_key === 'opportunity-investigator') {
       next.daily_limit = profile.dust_daily_limit;
@@ -256,6 +309,8 @@ function buildScenarios(agents, summary) {
   };
   const describe = (agentKey, schedule) => {
     if (['event-discovery', 'company-signal-monitor', 'evidence-auditor'].includes(agentKey)) return `every ${schedule.interval_hours || 6} hours`;
+    if (agentKey === 'company-profile-curator') return `${schedule.batch_limit || 4} profiles every ${schedule.interval_hours || 24} hours`;
+    if (agentKey === 'company-discovery') return `up to ${schedule.batch_limit || 6} new candidates every ${schedule.interval_hours || 3} hours`;
     if (['daily-candidate-ranking', 'autonomous-drafts'].includes(agentKey)) return `${schedule.candidate_limit || 2} companies each morning`;
     if (agentKey === 'opportunity-investigator') return `up to ${schedule.daily_limit || 3} Dust investigations/day · ${schedule.cooldown_days || 7}d cooldown`;
     if (agentKey === 'relationship-pathfinder') return `${schedule.batch_limit || 8} relationship paths/day`;
@@ -268,7 +323,7 @@ function buildScenarios(agents, summary) {
     const configuredDaily = scheduled.reduce((sum, agent) => {
       const constraints = json(agent.plan_constraints, {});
       const unitCost = money(constraints.estimated_cost_per_run_usd || 0.05);
-      return sum + unitCost * runRate(agent.agent_key, profile);
+      return sum + unitCost * runRate(agent.agent_key, profile, key);
     }, 0);
     const observedDaily = scheduled.reduce((sum, agent) => sum + money(agent.cost_30d) / 30, 0);
     const baselineDaily = key === 'current' && observedDaily > 0 ? observedDaily : configuredDaily;
@@ -552,7 +607,14 @@ router.post('/dust/:agentKey/run', async (req, res) => {
           blocking: true,
         }),
       });
-      return response;
+      const payload = extractDustPayload(response);
+      if (payload) {
+        return dustPayloadToSignals(payload, {
+          id: req.body.company_id || null,
+          name: req.body.company_name || agent.name || 'Dust investigation',
+        });
+      }
+      return extractDustText(response) || 'Dust completed the run without a readable text response.';
     });
     res.json({ output });
   } catch (error) {

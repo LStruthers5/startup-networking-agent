@@ -1027,6 +1027,11 @@ function scoreDots(score) {
 
 function fmtDate(dt) { if (!dt) return '<span style="color:var(--muted)">&mdash;</span>'; return dt.slice(0,10); }
 function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+function html(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function listText(value) {
+  const items = Array.isArray(value) ? value : [];
+  return items.map(item => typeof item === 'string' ? item : (item.name || item.title || item.role || JSON.stringify(item))).filter(Boolean);
+}
 function relBadge(status) {
   const labels = { met:'Met', warm:'Warm', cold:'Cold', outreach_sent:'Outreach Sent' };
   return `<span class="rel-badge rel-${status}">${labels[status]||status}</span>`;
@@ -1074,14 +1079,18 @@ function renderCompanies(rows) {
     });
   });
   tbody.querySelectorAll('.data-row').forEach(row => {
-    row.addEventListener('click', e => {
+    row.addEventListener('click', async e => {
       if (e.target.tagName === 'SELECT' || e.target.tagName === 'A') return;
       const id = parseInt(row.dataset.id);
       if (selectedCompanyId === id) { closeCompanyDetail(); return; }
       selectedCompanyId = id;
       tbody.querySelectorAll('.data-row').forEach(r => r.classList.toggle('selected', parseInt(r.dataset.id) === id));
-      const c = allCompanies.find(x => x.id === id);
-      if (c) showCompanyDetail(c);
+      try {
+        const c = await api('GET', '/companies/' + id);
+        showCompanyDetail(c);
+      } catch (error) {
+        flash('Could not load company intelligence: ' + error.message, false);
+      }
     });
   });
 }
@@ -1102,7 +1111,7 @@ function showCompanyDetail(c) {
           <button class="btn-ghost btn-sm" onclick="closeCompanyDetail()">&times;</button>
         </div>
       </div>
-      ${c.description?`<div style="margin-top:12px;font-size:14px;color:var(--muted);line-height:1.7">${c.description}</div>`:''}
+      ${(c.intelligence_description||c.description)?`<div style="margin-top:12px;font-size:14px;color:var(--muted);line-height:1.7">${html(c.intelligence_description||c.description)}</div>`:''}
       <div class="detail-grid">
         ${field('Website', c.website ? `<a href="${c.website}" target="_blank" style="color:var(--accent)">${c.website.replace(/https?:\/\//,'')}</a>` : '&mdash;')}
         ${field('Location', c.location)}
@@ -1114,6 +1123,23 @@ function showCompanyDetail(c) {
         ${field('Added', c.date_added)}
         ${field('Last Touched', c.last_touched)}
       </div>
+      ${c.business_model ? `<div style="margin-top:16px"><div class="firm-section-title">How it works</div><div style="font-size:14px;color:var(--muted);line-height:1.6">${html(c.business_model)}</div></div>` : ''}
+      ${listText(c.products).length ? `<div style="margin-top:14px"><div class="firm-section-title">Products</div><div style="font-size:14px;color:var(--muted);line-height:1.7">${listText(c.products).map(html).join(' · ')}</div></div>` : ''}
+      ${listText(c.leadership).length ? `<div style="margin-top:14px"><div class="firm-section-title">Relevant people</div><div style="font-size:14px;color:var(--muted);line-height:1.7">${listText(c.leadership).map(html).join(' · ')}</div></div>` : ''}
+      ${c.hiring_summary ? `<div style="margin-top:14px"><div class="firm-section-title">Hiring signal</div><div style="font-size:14px;color:var(--muted);line-height:1.6">${html(c.hiring_summary)}</div></div>` : ''}
+      ${c.preference_fit || c.why_now ? `<div style="margin-top:14px;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+        <div class="firm-section-title">Why it belongs in your river</div>
+        ${c.preference_fit ? `<div style="font-size:14px;color:var(--text);line-height:1.6">${html(c.preference_fit)}</div>` : ''}
+        ${c.why_now ? `<div style="font-size:13px;color:var(--accent);line-height:1.6;margin-top:5px">${html(c.why_now)}</div>` : ''}
+      </div>` : ''}
+      ${Array.isArray(c.recent_signals) && c.recent_signals.length ? `<div style="margin-top:16px"><div class="firm-section-title">Meaningful changes</div>
+        ${c.recent_signals.slice(0,5).map(signal => `<div style="padding:9px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:700">${html(signal.title)}</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.5">${html(signal.summary)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">${Math.round(Number(signal.confidence||0)*100)}% confidence${signal.source_url ? ` · <a href="${html(signal.source_url)}" target="_blank" style="color:var(--accent)">source ↗</a>` : ''}</div>
+        </div>`).join('')}
+      </div>` : ''}
+      ${c.intelligence_refreshed_at ? `<div style="margin-top:12px;font-size:11px;color:var(--muted)">Intelligence refreshed ${html(c.intelligence_refreshed_at)} UTC · ${Math.round(Number(c.intelligence_confidence||0)*100)}% profile confidence</div>` : ''}
       ${c.investor_firms?`<div style="margin-top:14px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">Investor Firms (from CSV)</div><div style="font-size:14px;color:var(--text)">${c.investor_firms}</div></div>`:''}
       ${c.notes?`<div style="margin-top:12px"><label>Notes</label><div style="font-size:14px;color:var(--muted);margin-top:4px">${c.notes}</div></div>`:''}
     </div>`;
@@ -1614,6 +1640,8 @@ function renderAgentEconomics(agents) {
 function openAgentActions(agentKey, provider, status, version) {
   const runnableNative = [
     'company-signal-monitor',
+    'company-profile-curator',
+    'company-discovery',
     'evidence-auditor',
     'relationship-pathfinder',
     'follow-up-strategist',
@@ -1700,14 +1728,16 @@ async function rollbackAgent(agentKey, version) {
 function renderInformationRiver(items) {
   const el = document.getElementById('towerRiver');
   if (!items.length) { el.innerHTML = '<div class="empty">The river is quiet. New agent runs will appear here.</div>'; return; }
+  const readable = value => typeof value === 'string' ? value : JSON.stringify(value || '');
   el.innerHTML = items.slice(0,10).map(item => `
     <div class="river-row">
       <div class="econ-line">
-        <strong>${item.title}</strong>
-        <span style="color:${item.actionable?'var(--accent)':'var(--muted)'}">${item.signal_type}</span>
+        <strong>${html(item.title)}</strong>
+        <span style="color:${item.actionable?'var(--accent)':'var(--muted)'}">${html(item.signal_type)}</span>
       </div>
-      <div class="econ-sub">${item.agent_name || item.agent_key} → ${item.company_name || item.entity_type || 'research'} · ${Math.round(Number(item.confidence||0)*100)}% confidence</div>
-      <div class="econ-sub">${(item.summary||'').slice(0,180)}</div>
+      <div class="econ-sub">${html(item.agent_name || item.agent_key)} → ${html(item.company_name || item.entity_type || 'research')} · ${Math.round(Number(item.confidence||0)*100)}% confidence</div>
+      <div class="econ-sub">${html(readable(item.summary).slice(0,260))}</div>
+      ${item.source_url ? `<a href="${html(item.source_url)}" target="_blank" style="display:inline-block;margin-top:5px;font-size:11px;color:var(--accent)">View source ↗</a>` : ''}
       ${item.status==='new' ? `<div style="display:flex;gap:6px;margin-top:7px">
         <button class="btn-secondary btn-sm" onclick="decideSignal(${item.id},true)">Useful</button>
         <button class="btn-secondary btn-sm" onclick="decideSignal(${item.id},false)">Dismiss</button>

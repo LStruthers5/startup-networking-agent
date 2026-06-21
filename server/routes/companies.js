@@ -54,7 +54,12 @@ function mapCrunchbaseRow(row) {
 
 router.get('/', async (req, res) => {
   const rows = await query(
-    'SELECT * FROM companies ORDER BY last_touched DESC NULLS LAST, date_added DESC'
+    `SELECT c.*,ci.clean_description AS intelligence_description,
+      ci.preference_fit,ci.why_now,ci.confidence AS intelligence_confidence,
+      ci.last_synced_at AS intelligence_refreshed_at
+     FROM companies c
+     LEFT JOIN company_intelligence ci ON ci.company_id=c.id
+     ORDER BY c.last_touched DESC NULLS LAST,c.date_added DESC`
   );
   res.json(rows);
 });
@@ -143,8 +148,25 @@ router.patch('/:id', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const row = await queryOne('SELECT * FROM companies WHERE id = $1', [req.params.id]);
+  const row = await queryOne(
+    `SELECT c.*,ci.clean_description AS intelligence_description,ci.business_model,
+      ci.products,ci.customers,ci.leadership,ci.hiring_summary,ci.preference_fit,ci.why_now,
+      ci.open_questions,ci.sources AS intelligence_sources,ci.warnings AS intelligence_warnings,
+      ci.confidence AS intelligence_confidence,ci.last_synced_at AS intelligence_refreshed_at
+     FROM companies c LEFT JOIN company_intelligence ci ON ci.company_id=c.id
+     WHERE c.id=$1`,
+    [req.params.id]
+  );
   if (!row) return res.status(404).json({ error: 'Not found' });
+  row.recent_signals = await query(
+    `SELECT signal_type,title,summary,confidence,source_url,observed_at
+     FROM agent_signals
+     WHERE company_id=$1 AND agent_key!='evidence-auditor'
+       AND status NOT IN ('duplicate','rejected')
+       AND LENGTH(TRIM(COALESCE(summary,'')))>=35
+     ORDER BY created_at DESC LIMIT 8`,
+    [req.params.id]
+  );
   res.json(row);
 });
 

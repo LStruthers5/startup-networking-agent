@@ -4,6 +4,11 @@ function nowText() {
 
 function normalizeSignals(agentKey, output, input, companyId) {
   const signals = [];
+  const text = value => {
+    if (value == null) return '';
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value); } catch (_) { return String(value); }
+  };
   const add = (type, title, summary, extra = {}) => {
     if (!title) return;
     signals.push({
@@ -11,8 +16,8 @@ function normalizeSignals(agentKey, output, input, companyId) {
       entity_type: extra.entityType || (companyId ? 'company' : ''),
       entity_id: extra.entityId || companyId || null,
       company_id: extra.companyId || companyId || null,
-      title: String(title).slice(0, 240),
-      summary: String(summary || '').slice(0, 2000),
+      title: text(title).slice(0, 240),
+      summary: text(summary).slice(0, 2000),
       confidence: extra.confidence ?? 0.65,
       source_url: extra.sourceUrl || '',
       source_name: extra.sourceName || agentKey,
@@ -28,6 +33,8 @@ function normalizeSignals(agentKey, output, input, companyId) {
       const type = item.signal_type || (item.event_url ? 'event' : item.company_id || item.company_name ? 'company' : item.investor || item.firm ? 'person' : 'claim');
       add(type, title, item.timing || item.description || item.summary || JSON.stringify(item), {
         companyId: item.company_id || companyId,
+        entityType: item.entity_type,
+        entityId: item.entity_id,
         sourceUrl: item.event_url || item.source_url || item.url || '',
         confidence: item.confidence,
         actionable: item.actionable === undefined

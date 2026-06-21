@@ -5,6 +5,7 @@ const {
   trackedExaSearch,
   recordProviderUsage,
 } = require('./agent-control');
+const { extractDustPayload, dustPayloadToSignals } = require('./dust-response');
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -24,6 +25,59 @@ async function askJson(prompt, maxTokens = 1400) {
     messages: [{ role: 'user', content: prompt }],
   });
   return parseJson(response.content?.[0]?.text, null);
+}
+
+async function saveCompanyIntelligence(company, profile, source = 'company-profile-curator') {
+  const sources = Array.isArray(profile.sources) ? profile.sources : [];
+  const warnings = Array.isArray(profile.warnings) ? profile.warnings : [];
+  const confidence = Math.max(0, Math.min(1, Number(profile.confidence || 0)));
+  const ts = nowText();
+  await execute(
+    `INSERT INTO company_intelligence
+     (company_id,clean_description,business_model,products,customers,leadership,hiring_summary,
+      preference_fit,why_now,open_questions,sources,warnings,confidence,data_source,last_synced_at,
+      profile_json,updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$15)
+     ON CONFLICT (company_id) DO UPDATE SET
+      clean_description=EXCLUDED.clean_description,business_model=EXCLUDED.business_model,
+      products=EXCLUDED.products,customers=EXCLUDED.customers,leadership=EXCLUDED.leadership,
+      hiring_summary=EXCLUDED.hiring_summary,preference_fit=EXCLUDED.preference_fit,
+      why_now=EXCLUDED.why_now,open_questions=EXCLUDED.open_questions,sources=EXCLUDED.sources,
+      warnings=EXCLUDED.warnings,confidence=EXCLUDED.confidence,data_source=EXCLUDED.data_source,
+      last_synced_at=EXCLUDED.last_synced_at,profile_json=EXCLUDED.profile_json,updated_at=EXCLUDED.updated_at`,
+    [
+      company.id,
+      profile.clean_description || profile.summary || '',
+      profile.business_model || '',
+      JSON.stringify(profile.products || []),
+      JSON.stringify(profile.customers || []),
+      JSON.stringify(profile.leadership || []),
+      profile.hiring_summary || '',
+      profile.preference_fit || '',
+      profile.why_now || '',
+      JSON.stringify(profile.open_questions || profile.information_gaps || []),
+      JSON.stringify(sources),
+      JSON.stringify(warnings),
+      confidence,
+      source,
+      ts,
+      JSON.stringify(profile),
+    ]
+  );
+  const updates = {
+    description: profile.clean_description || profile.summary || '',
+    sector: profile.sector || '',
+    stage: profile.stage || '',
+    website: profile.website || '',
+    founded_year: profile.founded_year || '',
+    last_funding: profile.last_funding || '',
+    funding_amount: profile.funding_amount || '',
+    location: profile.location || '',
+  };
+  for (const [field, value] of Object.entries(updates)) {
+    if (!value) continue;
+    await execute(`UPDATE companies SET ${field}=$1 WHERE id=$2`, [String(value).slice(0, field === 'description' ? 3000 : 500), company.id]);
+  }
 }
 
 function companySignal(item, company) {
@@ -98,6 +152,7 @@ async function runEvidenceAuditor(limit = 30) {
   return executeAgent('evidence-auditor', {
     trigger: 'scheduled',
     input: { signal_ids: signals.map(s => s.id) },
+    normalize: false,
   }, async () => {
     const audits = [];
     const byCompany = new Map();
@@ -200,7 +255,152 @@ async function runOpportunityInvestigator(companyId) {
         blocking: true,
       }),
     });
-    return response;
+    const payload = extractDustPayload(response);
+    if (!payload) {
+      throw new Error('Dust completed the conversation but no structured investigation JSON was found.');
+    }
+    await saveCompanyIntelligence(company, {
+      clean_description: payload.company?.summary || company.description || '',
+      business_model: payload.company?.business_model || '',
+      sector: payload.company?.sector || company.sector || '',
+      stage: payload.company?.stage || company.stage || '',
+      website: payload.company?.website || company.website || '',
+      location: payload.company?.location || company.location || '',
+      leadership: payload.people || [],
+      preference_fit: payload.preference_alignment?.explanation || '',
+      why_now: (payload.networking_context?.timely_reasons || []).join(' '),
+      open_questions: payload.information_gaps || [],
+      sources: payload.sources || [],
+      warnings: [
+        ...(payload.networking_context?.warnings || []),
+        ...(payload.contradictions || []).map(item => item.claim || 'Conflicting evidence'),
+      ],
+      confidence: payload.investigation?.confidence || 0,
+      investigation: payload.investigation || {},
+      recommended_next_step: payload.recommended_next_step || {},
+    }, 'dust-opportunity-investigator');
+    return dustPayloadToSignals(payload, company);
+  });
+}
+
+async function runCompanyProfileCurator(limit = 4) {
+  const companies = await query(
+    `SELECT c.*,ci.last_synced_at,ci.profile_json
+     FROM companies c LEFT JOIN company_intelligence ci ON ci.company_id=c.id
+     WHERE c.status NOT IN ('passed','archived')
+     ORDER BY ci.last_synced_at ASC NULLS FIRST,c.score DESC NULLS LAST
+     LIMIT $1`,
+    [limit]
+  );
+  if (!companies.length) return [];
+  const userProfile = await queryOne('SELECT taste_profile FROM user_profile ORDER BY id LIMIT 1');
+  return executeAgent('company-profile-curator', {
+    trigger: 'scheduled',
+    input: { company_ids: companies.map(company => company.id) },
+  }, async () => {
+    const changes = [];
+    for (const company of companies) {
+      const search = await trackedExaSearch({
+        query: `"${company.name}" ${company.website || ''} company products customers leadership funding hiring`,
+        num_results: 7,
+        text: { maxCharacters: 1200 },
+      });
+      const evidence = (search.results || []).map(item => ({
+        title: item.title, url: item.url, publishedDate: item.publishedDate, text: item.text,
+      }));
+      if (!evidence.length) continue;
+      const cleaned = await askJson(`Create a clean, durable company intelligence profile using only the evidence.
+Resolve messy or conflicting descriptions conservatively. Never invent missing fields.
+Return only JSON:
+{
+  "clean_description":"","business_model":"","sector":"","stage":"","website":"","founded_year":"",
+  "last_funding":"","funding_amount":"","location":"","products":[],"customers":[],"leadership":[],
+  "hiring_summary":"","preference_fit":"","why_now":"","open_questions":[],"sources":[{"url":"","title":""}],
+  "warnings":[],"confidence":0.0,
+  "meaningful_changes":[{"title":"","summary":"","signal_type":"funding|hiring|product|leadership|partnership|profile_change","source_url":"","confidence":0.0}]
+}
+
+CURRENT RECORD:
+${JSON.stringify(company)}
+
+USER TASTE PROFILE:
+${userProfile?.taste_profile || 'Not yet refined'}
+
+EVIDENCE:
+${JSON.stringify(evidence)}`, 2200);
+      if (!cleaned) continue;
+      await saveCompanyIntelligence(company, cleaned);
+      for (const change of cleaned.meaningful_changes || []) {
+        if (!change.summary || change.summary.length < 35) continue;
+        changes.push({
+          company_id: company.id,
+          company_name: company.name,
+          title: change.title || `${company.name} profile updated`,
+          summary: change.summary,
+          signal_type: change.signal_type || 'profile_change',
+          source_url: change.source_url || cleaned.sources?.[0]?.url || '',
+          confidence: Number(change.confidence || cleaned.confidence || 0.65),
+          actionable: /funding|hiring|launch|leadership|partnership|expansion/i.test(change.summary),
+        });
+      }
+    }
+    return changes;
+  });
+}
+
+async function runCompanyDiscovery(limit = 8) {
+  const [profile, existing] = await Promise.all([
+    queryOne('SELECT taste_profile,target_roles,skills FROM user_profile ORDER BY id LIMIT 1'),
+    query('SELECT name,website FROM companies'),
+  ]);
+  if (!profile?.taste_profile) return [];
+  return executeAgent('company-discovery', {
+    trigger: 'scheduled',
+    input: { existing_count: existing.length, taste_profile: profile.taste_profile },
+  }, async () => {
+    const themes = await askJson(`Turn this networking taste profile into 3 concise company-search queries.
+Focus on sectors, stages, missions, operating characteristics, and current momentum—not outreach tone.
+Return only JSON: {"queries":["","",""]}\n\nPROFILE:\n${profile.taste_profile}`, 500);
+    const evidence = [];
+    for (const q of themes?.queries || []) {
+      const search = await trackedExaSearch({
+        query: `${q} startup company funding hiring product`,
+        num_results: 6,
+        text: { maxCharacters: 900 },
+        startPublishedDate: new Date(Date.now() - 180 * 86400000).toISOString(),
+      });
+      evidence.push(...(search.results || []).map(item => ({
+        title: item.title, url: item.url, publishedDate: item.publishedDate, text: item.text,
+      })));
+    }
+    const candidates = await askJson(`Find up to ${limit} real companies that match the user's profile.
+Exclude every company in EXISTING. Require a real company website or strong source URL.
+Return only JSON:
+[{"name":"","website":"","sector":"","stage":"","description":"","location":"","why_fit":"","why_now":"","source_url":"","confidence":0.0}]
+
+USER PROFILE:
+${profile.taste_profile}
+
+EXISTING:
+${JSON.stringify(existing)}
+
+EVIDENCE:
+${JSON.stringify(evidence)}`, 1800);
+    const existingNames = new Set(existing.map(item => String(item.name).toLowerCase()));
+    return (Array.isArray(candidates) ? candidates : [])
+      .filter(item => item.name && item.source_url && !existingNames.has(String(item.name).toLowerCase()))
+      .slice(0, limit)
+      .map(item => ({
+        title: `New company candidate: ${item.name}`,
+        company_name: item.name,
+        summary: `${item.description || ''}${item.why_fit ? ` Fit: ${item.why_fit}` : ''}${item.why_now ? ` Why now: ${item.why_now}` : ''}`.trim(),
+        signal_type: 'company_candidate',
+        entity_type: 'company_candidate',
+        source_url: item.source_url,
+        confidence: Number(item.confidence || 0.65),
+        actionable: true,
+        data: item,
+      }));
   });
 }
 
@@ -414,18 +614,26 @@ async function agentIsDue(agentKey, intervalHours) {
 }
 
 async function runIntelligenceCycle() {
-  const [monitorAgent, auditAgent, investigatorAgent] = await Promise.all([
+  const [monitorAgent, auditAgent, investigatorAgent, curatorAgent, discoveryAgent] = await Promise.all([
     queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='company-signal-monitor'`),
     queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='evidence-auditor'`),
     queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='opportunity-investigator'`),
+    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='company-profile-curator'`),
+    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='company-discovery'`),
   ]);
   const monitorSchedule = typeof monitorAgent?.schedule_json === 'string' ? JSON.parse(monitorAgent.schedule_json || '{}') : (monitorAgent?.schedule_json || {});
   const auditSchedule = typeof auditAgent?.schedule_json === 'string' ? JSON.parse(auditAgent.schedule_json || '{}') : (auditAgent?.schedule_json || {});
   const investigatorSchedule = typeof investigatorAgent?.schedule_json === 'string' ? JSON.parse(investigatorAgent.schedule_json || '{}') : (investigatorAgent?.schedule_json || {});
+  const curatorSchedule = typeof curatorAgent?.schedule_json === 'string' ? JSON.parse(curatorAgent.schedule_json || '{}') : (curatorAgent?.schedule_json || {});
+  const discoverySchedule = typeof discoveryAgent?.schedule_json === 'string' ? JSON.parse(discoveryAgent.schedule_json || '{}') : (discoveryAgent?.schedule_json || {});
   const monitorDue = await agentIsDue('company-signal-monitor', Number(monitorSchedule.interval_hours || 6));
   const auditDue = await agentIsDue('evidence-auditor', Number(auditSchedule.interval_hours || 6));
+  const curatorDue = await agentIsDue('company-profile-curator', Number(curatorSchedule.interval_hours || 24));
+  const discoveryDue = await agentIsDue('company-discovery', Number(discoverySchedule.interval_hours || 3));
   const monitored = monitorDue ? await runCompanySignalMonitor(Number(monitorSchedule.batch_limit || 6)) : [];
   const audited = auditDue ? await runEvidenceAuditor(Number(auditSchedule.batch_limit || 30)) : [];
+  const curated = curatorDue ? await runCompanyProfileCurator(Number(curatorSchedule.batch_limit || 4)) : [];
+  const discovered = discoveryDue ? await runCompanyDiscovery(Number(discoverySchedule.batch_limit || 6)) : [];
   const dailyLimit = Math.max(0, Number(investigatorSchedule.daily_limit || 3));
   const cooldownDays = Math.max(1, Number(investigatorSchedule.cooldown_days || 7));
   const minSignals = Math.max(1, Number(investigatorSchedule.min_signal_count || 2));
@@ -461,15 +669,21 @@ async function runIntelligenceCycle() {
   return {
     monitored: monitored.length,
     audited: audited.length,
+    curated: curated.length,
+    discovered: discovered.length,
     investigated: dust.length,
     monitor_due: monitorDue,
     audit_due: auditDue,
+    curator_due: curatorDue,
+    discovery_due: discoveryDue,
     dust_remaining_today: Math.max(0, remainingInvestigations - dust.length),
   };
 }
 
 module.exports = {
   runCompanySignalMonitor,
+  runCompanyProfileCurator,
+  runCompanyDiscovery,
   runEvidenceAuditor,
   runOpportunityInvestigator,
   runRelationshipPathfinder,

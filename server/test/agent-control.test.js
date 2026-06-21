@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeSignals } = require('../signal-normalizer');
+const { extractDustPayload, extractDustText, dustPayloadToSignals } = require('../dust-response');
 
 test('normalizes opportunity cards into actionable company signals', () => {
   const signals = normalizeSignals('queue-suggestions', [{
@@ -57,4 +58,45 @@ test('preserves structured signal metadata from intelligence agents', () => {
   assert.equal(signals[0].source_url, 'https://acme.example/news');
   assert.equal(signals[0].actionable, 1);
   assert.equal(signals[0].observed_at, '2026-06-20');
+});
+
+test('extracts structured investigation JSON from a nested Dust conversation', () => {
+  const response = {
+    conversation: {
+      messages: [{
+        type: 'agent_message',
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            company: { name: 'Acme', summary: 'A focused medical-device company.' },
+            investigation: { status: 'promote', confidence: 0.88, overall_assessment: 'Strong fit with timely momentum.' },
+            verified_signals: [{
+              signal_type: 'product',
+              title: 'Acme launched a new device',
+              summary: 'The launch expands its clinical product line.',
+              source_url: 'https://acme.example/launch',
+              confidence: 0.9,
+              new_information: true,
+            }],
+            recommended_next_step: { action: 'prepare_outreach_for_approval' },
+          }),
+        }],
+      }],
+    },
+  };
+  const payload = extractDustPayload(response);
+  const signals = dustPayloadToSignals(payload, { id: 3, name: 'Acme' });
+  assert.equal(payload.investigation.status, 'promote');
+  assert.equal(signals[0].summary, 'Strong fit with timely momentum.');
+  assert.equal(signals[1].source_url, 'https://acme.example/launch');
+  assert.match(extractDustText(response), /verified_signals/);
+});
+
+test('stringifies object summaries instead of rendering object Object', () => {
+  const signals = normalizeSignals('example', {
+    title: 'Structured result',
+    summary: { status: 'promote', reason: 'Strong fit' },
+  }, {}, null);
+  assert.match(signals[0].summary, /Strong fit/);
+  assert.doesNotMatch(signals[0].summary, /object Object/);
 });
