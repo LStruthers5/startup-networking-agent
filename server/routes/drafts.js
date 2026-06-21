@@ -63,27 +63,49 @@ function copyDraft() {
 // GET /api/drafts — list drafts by status
 router.get('/', async (req, res) => {
   const status = req.query.status || 'pending';
+  const limit = Math.min(50, parseInt(req.query.limit) || 20);
   const rows = await query(
     `SELECT d.*, c.name as company_name
      FROM drafts d
      LEFT JOIN companies c ON c.id = d.company_id
      WHERE d.status = $1
-     ORDER BY d.created_at DESC`,
-    [status]
+     ORDER BY d.created_at DESC
+     LIMIT $2`,
+    [status, limit]
   );
   res.json(rows);
 });
 
+// PATCH /api/drafts/:id — update status
+router.patch('/:id', async (req, res) => {
+  const { status } = req.body;
+  const allowed = ['pending','skipped','approved_manual','sent'];
+  if (!status || !allowed.includes(status)) return res.status(400).json({ error: 'invalid status' });
+  const draft = await queryOne('SELECT id, company_id, investor_name FROM drafts WHERE id=$1', [req.params.id]);
+  if (!draft) return res.status(404).json({ error: 'Draft not found' });
+  await execute('UPDATE drafts SET status=$1 WHERE id=$2', [status, req.params.id]);
+  if (status === 'skipped') {
+    const sourceSignal = draft.company_id ? await queryOne('SELECT id,run_id FROM agent_signals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1', [draft.company_id]) : null;
+    await execute(
+      `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
+       VALUES ($1,$2,$3,'draft_skipped',$4,$5)`,
+      [sourceSignal?.run_id||null, sourceSignal?.id||null, draft.company_id, draft.investor_name||'', JSON.stringify({ draft_id: draft.id })]
+    ).catch(() => {});
+  }
+  res.json({ ok: true });
+});
+
 // POST /api/drafts — save a draft from the UI
 router.post('/', async (req, res) => {
-  const { company_id, investor_name, investor_email, subject, body } = req.body;
+  const { company_id, investor_name, investor_email, subject, body, channel, linkedin_url } = req.body;
   if (!body || !subject) return res.status(400).json({ error: 'subject and body required' });
 
   const token = crypto.randomBytes(32).toString('hex');
   const result = await execute(
-    `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, approve_token)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-    [company_id || null, investor_name || '', investor_email || null, subject, body, token]
+    `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, approve_token, channel, linkedin_url)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+    [company_id || null, investor_name || '', investor_email || null, subject, body, token,
+     channel || 'inmail', linkedin_url || '']
   );
   res.json({ id: result.lastInsertRowid, approve_token: token });
 });

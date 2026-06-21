@@ -642,7 +642,7 @@ ${JSON.stringify(candidates, null, 2)}`;
 
 // userProfile: pass an explicit profile object, or null to load the saved profile from the DB
 // (falling back to sensible defaults if no profile has been set up yet).
-async function runOutreachDraft(company, investor, userProfile = null) {
+async function runOutreachDraft(company, investor, userProfile = null, channel = 'inmail') {
   const client = getClient();
   const EXA_KEY = process.env.EXA_API_KEY;
 
@@ -658,6 +658,7 @@ async function runOutreachDraft(company, investor, userProfile = null) {
     preferredTone: '',
     emailSignature: 'Luke Struthers',
     taste: '',
+    linkedinUrl: '',
   };
 
   // Search for recent public activity from this investor
@@ -686,33 +687,61 @@ async function runOutreachDraft(company, investor, userProfile = null) {
     ? `VOICE & PREFERENCES — learned from ${profile.name}'s own "this or that" choices. Follow this closely; it defines the tone and the kind of ask ${profile.name} is comfortable making:\n${profile.taste}\n`
     : (profile.preferredTone ? `Preferred tone: ${profile.preferredTone}\n` : '');
 
+  const isInmail = channel === 'inmail';
+  const channelInstructions = isInmail
+    ? `FORMAT — LinkedIn InMail:
+- Subject line: max 200 characters, specific and human (not salesy)
+- Body: 80–120 words MAX. InMail is read on mobile; keep it tight.
+- No email conventions (no "Best," sign-off needed — LinkedIn shows your name automatically)
+- Casual but purposeful. Sound like a person, not a PR blast.
+- End with a clear, low-pressure question or ask on its own line.
+Output format:
+SUBJECT: <subject line>
+---
+<body>`
+    : `FORMAT — Email:
+- 120–150 words MAX
+- Close with: ${profile.emailSignature}
+Output ONLY the message text.`;
+
   const prompt = `You are writing a cold outreach message on behalf of ${profile.name}${profile.fullName && profile.fullName !== profile.name ? ` (${profile.fullName})` : ''}.
 
 ABOUT ${(profile.name || '').toUpperCase()}:
 ${aboutLines || '- An ambitious early-career professional breaking into the startup ecosystem.'}
 
 ${voiceBlock}
-Write ONE ready-to-send message (150 words MAX). It must:
-1. Open with a specific, genuine hook — reference their firm's investment in ${company.name} or a recent move from the activity below
+${channelInstructions}
+
+Rules:
+1. Open with a specific, genuine hook — reference their firm's investment in ${company.name} or something from the activity below
 2. Establish who ${profile.name} is in 1 sentence, grounded ONLY in the real background above (never invent credentials)
-3. Make an ask that matches ${profile.name}'s comfort level and voice described above — don't push a harder ask than their preferences suggest
-4. Sound human, not corporate. No "I hope this message finds you well."
-5. Close with: ${profile.emailSignature}
+3. Make an ask that matches ${profile.name}'s comfort level from the voice preferences above
+4. Sound human. No "I hope this message finds you well." No buzzwords.
 
-Target: ${investor.name} | ${investor.firm} | ${investor.role || 'Investor'}
-Company context: ${company.name} — ${company.sector} startup — "${company.description || 'no description'}"
+Target: ${investor.name} | ${investor.firm} | ${investor.role || 'Investor'}${investor.investor_type ? ` | ${investor.investor_type}` : ''}
+Company context: ${company.name} — ${company.sector || ''} startup — "${company.description || 'no description'}"
 
-${recentActivity ? `Recent activity found:\n${recentActivity}` : '(no recent activity found — write based on firm/company context)'}
-
-Output ONLY the message text, nothing else.`;
+${recentActivity ? `Recent activity found:\n${recentActivity}` : '(no recent activity found — write based on firm/company context)'}`;
 
   const msg = await client.messages.create({
     model: MODEL,
-    max_tokens: 350,
+    max_tokens: 400,
     messages: [{ role: 'user', content: prompt }],
   });
 
-  return msg.content[0].text.trim();
+  const text = msg.content[0].text.trim();
+
+  if (isInmail) {
+    const subjectMatch = text.match(/^SUBJECT:\s*(.+)/m);
+    const bodyMatch = text.match(/---\n([\s\S]+)/);
+    return {
+      subject: subjectMatch ? subjectMatch[1].trim() : `Reaching out — ${company.name}`,
+      body: bodyMatch ? bodyMatch[1].trim() : text,
+      channel: 'inmail',
+    };
+  }
+
+  return { subject: `Introduction — ${company.name} / ${investor.firm}`, body: text, channel: 'email' };
 }
 
 // ─── AUTONOMOUS DRAFT GENERATION ───────────────────────────────────────────
@@ -769,24 +798,25 @@ async function runAutonomousDraftGeneration(companies, userProfile = null) {
       } catch (_) {}
     }
 
-    // Generate personalized draft
-    let body = '';
+    // Generate personalized draft (InMail by default)
+    let draft = null;
     try {
-      body = await runOutreachDraft(company, target, userProfile);
+      draft = await runOutreachDraft(company, target, userProfile, 'inmail');
     } catch (err) {
       console.error(`[AutoDraft] Draft failed for ${target.name}: ${err.message}`);
       continue;
     }
 
     const token = crypto.randomBytes(32).toString('hex');
+    const linkedinUrl = target.linkedin_url || '';
     await execute(
-      `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, approve_token)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+      `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, approve_token, channel, linkedin_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [company.id, target.name, email || null,
-       `Introduction — ${company.name} / ${target.firm}`, body, token]
+       draft.subject, draft.body, token, draft.channel || 'inmail', linkedinUrl]
     );
 
-    savedDrafts.push({ company: company.name, investor: target.name, hasEmail: !!email });
+    savedDrafts.push({ company: company.name, investor: target.name, hasEmail: !!email, channel: draft.channel });
     console.log(`[AutoDraft] ${target.name} @ ${target.firm} — email: ${email || 'not found'}`);
   }
 

@@ -124,19 +124,22 @@ router.get('/coverage', async (req, res) => {
 // ─── POST create investor ──────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
   const { name, firm, role, tier, stage_focus, sector_focus, how_i_know_them,
-          relationship_status, notes, source, confirmed, source_company_id } = req.body;
+          relationship_status, notes, source, confirmed, source_company_id,
+          investor_type, linkedin_url } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const result = await execute(
     `INSERT INTO investors
        (name, firm, role, tier, stage_focus, sector_focus, how_i_know_them,
-        relationship_status, notes, source, confirmed, source_company_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+        relationship_status, notes, source, confirmed, source_company_id,
+        investor_type, linkedin_url)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
     [
       name, firm||'', role||'', tier||5,
       stage_focus||'', sector_focus||'', how_i_know_them||'',
       relationship_status||'cold', notes||'',
       source||'manual', confirmed===undefined ? 1 : confirmed,
       source_company_id||null,
+      investor_type||'VC', linkedin_url||'',
     ]
   );
   res.json({ id: result.lastInsertRowid });
@@ -148,6 +151,7 @@ router.patch('/:id', async (req, res) => {
     'name','firm','role','tier','stage_focus','sector_focus','portfolio_companies',
     'how_i_know_them','relationship_status','last_touched','notes',
     'track_events','source','confirmed','source_company_id',
+    'investor_type','linkedin_url',
   ];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'No valid fields' });

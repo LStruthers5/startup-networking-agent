@@ -479,6 +479,15 @@
     </section>
   </div>
 
+  <!-- InMail Queue -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 style="margin:0">Your InMails</h3>
+      <button class="btn-ghost btn-sm" onclick="loadDraftQueue()">Refresh ↻</button>
+    </div>
+    <div id="draftQueuePanel"><div class="empty">Loading drafts…</div></div>
+  </div>
+
   <!-- Outreach Tuner — front-page preference current -->
   <div class="card" style="margin-bottom:20px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -657,12 +666,25 @@
     </div>
     <div class="row" style="margin-bottom:10px">
       <div><label>Role</label><input type="text" id="iRole" placeholder="General Partner, Scout&hellip;"></div>
+      <div><label>Type</label>
+        <select id="iType">
+          <option value="VC">VC</option>
+          <option value="Angel">Angel</option>
+          <option value="Growth/PE">Growth / PE</option>
+          <option value="Strategic">Strategic</option>
+          <option value="Corporate">Corporate VC</option>
+          <option value="Accelerator">Accelerator</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
       <div><label>Relationship</label>
         <select id="iRelStatus">
           <option value="cold">Cold</option><option value="met">Met</option>
           <option value="warm">Warm</option><option value="outreach_sent">Outreach Sent</option>
         </select>
       </div>
+      <div><label>LinkedIn URL</label><input type="text" id="iLinkedin" placeholder="https://linkedin.com/in/…"></div>
     </div>
     <div class="row" style="margin-bottom:10px">
       <div><label>Stage Focus</label><input type="text" id="iStage" placeholder="Pre-seed, Seed&hellip;"></div>
@@ -1605,6 +1627,64 @@ document.querySelectorAll('.tower-tab').forEach(btn => {
   });
 });
 
+async function loadDraftQueue() {
+  const el = document.getElementById('draftQueuePanel');
+  if (!el) return;
+  try {
+    const drafts = await api('GET', '/drafts?status=pending&limit=10');
+    if (!drafts.length) {
+      el.innerHTML = '<div class="empty">No pending InMails — generate one from a company card or run the autonomous draft agent.</div>';
+      return;
+    }
+    el.innerHTML = drafts.map(d => {
+      const isInmail = (d.channel || 'inmail') === 'inmail';
+      const badge = isInmail
+        ? `<span style="background:#0a66c2;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">InMail</span>`
+        : `<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">Email</span>`;
+      const copyId = `draft-copy-${d.id}`;
+      const linkedinBtn = d.linkedin_url
+        ? `<a href="${d.linkedin_url}" target="_blank" class="btn-secondary btn-sm" style="text-decoration:none">Open Profile</a>`
+        : '';
+      return `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:var(--surface)">
+        <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px">
+          ${d.investor_name || 'Unknown'}${d.company_name ? ` — re: ${d.company_name}` : ''}${badge}
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${d.subject}</div>
+        <div style="font-size:13px;line-height:1.65;border-left:3px solid var(--accent);padding-left:10px;margin-bottom:12px;white-space:pre-wrap;color:var(--text)">${d.body}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-primary btn-sm" id="${copyId}" onclick="copyDraft(${d.id},'${encodeURIComponent(d.subject + '\\n\\n' + d.body)}')">Copy for LinkedIn</button>
+          ${linkedinBtn}
+          <button class="btn-secondary btn-sm" onclick="skipDraftInUI(${d.id}, this)">Skip</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    el.innerHTML = `<div class="empty" style="color:var(--danger)">${err.message}</div>`;
+  }
+}
+
+function copyDraft(id, encoded) {
+  const text = decodeURIComponent(encoded);
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById(`draft-copy-${id}`);
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy for LinkedIn'; }, 2000); }
+    flash('Draft copied — paste it into LinkedIn InMail');
+  });
+}
+
+async function skipDraftInUI(id, btn) {
+  btn.disabled = true; btn.textContent = 'Skipping…';
+  try {
+    await api('PATCH', `/drafts/${id}`, { status: 'skipped' });
+    btn.closest('div[style*="border:1px"]').remove();
+    flash('Draft skipped');
+  } catch (err) {
+    btn.disabled = false; btn.textContent = 'Skip';
+    flash('Skip failed: ' + err.message, false);
+  }
+}
+
 async function loadControlTower() {
   try {
     const lastVisit = localStorage.getItem('controlTowerLastVisit') || '';
@@ -1615,6 +1695,7 @@ async function loadControlTower() {
       api('GET', '/control-tower/scenarios'),
       api('GET', '/control-tower/proposals'),
     ]);
+    loadDraftQueue();
     localStorage.setItem('controlTowerLastVisit', new Date().toISOString().slice(0,19).replace('T',' '));
 
     document.getElementById('towerNewSignals').textContent = summary.signals.new;
@@ -2332,12 +2413,13 @@ function renderFirmInvRow(inv) {
         ${tierBadge(inv.tier)}
         <span class="src-tag ${srcClass}">${inv.confirmed===0?'Agent ?':(inv.source||'manual')}</span>
       </div>
-      <div class="firm-inv-meta">${[inv.role, inv.firm].filter(Boolean).join(' &middot; ')}</div>
+      <div class="firm-inv-meta">${[inv.role, inv.firm].filter(Boolean).join(' &middot; ')}${inv.investor_type && inv.investor_type !== 'VC' ? ` &middot; <span style="color:var(--accent);font-weight:600">${inv.investor_type}</span>` : ''}</div>
       ${inv.stage_focus||inv.sector_focus ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${[inv.stage_focus,inv.sector_focus].filter(Boolean).join(' &middot; ')}</div>` : ''}
       ${inv.how_i_know_them?`<div style="font-size:12px;color:var(--rose);margin-top:3px;font-style:italic">Via: ${inv.how_i_know_them}</div>`:''}
     </div>
     <div class="firm-inv-actions">
       ${inv.confirmed===0 ? `<button class="btn-primary btn-sm confirm-inv-btn" data-id="${safeId}">Confirm</button>` : ''}
+      ${inv.linkedin_url ? `<a href="${inv.linkedin_url}" target="_blank" class="btn-secondary btn-sm" style="text-decoration:none">LinkedIn</a>` : ''}
       <select class="rel-select quick-rel-sel" data-id="${safeId}">
         ${['cold','met','warm','outreach_sent'].map(s=>`<option value="${s}"${inv.relationship_status===s?' selected':''}>${s.replace('_',' ')}</option>`).join('')}
       </select>
@@ -2551,7 +2633,9 @@ function openInvestorForm(inv) {
   document.getElementById('iName').value = inv?.name||'';
   document.getElementById('iFirm').value = inv?.firm||'';
   document.getElementById('iRole').value = inv?.role||'';
+  document.getElementById('iType').value = inv?.investor_type||'VC';
   document.getElementById('iRelStatus').value = inv?.relationship_status||'cold';
+  document.getElementById('iLinkedin').value = inv?.linkedin_url||'';
   document.getElementById('iStage').value = inv?.stage_focus||'';
   document.getElementById('iSector').value = inv?.sector_focus||'';
   document.getElementById('iHow').value = inv?.how_i_know_them||'';
@@ -2574,7 +2658,9 @@ document.getElementById('saveInvestorBtn').addEventListener('click', async () =>
   const payload = {
     name, firm: document.getElementById('iFirm').value.trim(),
     role: document.getElementById('iRole').value.trim(),
+    investor_type: document.getElementById('iType').value,
     relationship_status: document.getElementById('iRelStatus').value,
+    linkedin_url: document.getElementById('iLinkedin').value.trim(),
     stage_focus: document.getElementById('iStage').value.trim(),
     sector_focus: document.getElementById('iSector').value.trim(),
     how_i_know_them: document.getElementById('iHow').value.trim(),
