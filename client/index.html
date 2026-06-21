@@ -110,6 +110,10 @@
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; padding: 10px 11px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  th.sortable.active { color: var(--accent); }
+  .sort-arrow { display: inline-block; margin-left: 4px; font-size: 10px; min-width: 9px; }
   td { padding: 10px 11px; border-bottom: 1px solid rgba(191,216,232,.5); vertical-align: top; font-size: 15px; }
   tr.data-row { cursor: pointer; }
   tr.data-row:hover td { background: rgba(207,250,254,.18); }
@@ -575,7 +579,14 @@
   <div class="table-wrap">
     <table id="companyTable">
       <thead>
-        <tr><th>Name</th><th>Sector</th><th>Stage</th><th>Status</th><th>Score</th><th>Last Touched</th></tr>
+        <tr>
+          <th class="sortable" data-company-sort="name">Name <span class="sort-arrow"></span></th>
+          <th class="sortable" data-company-sort="sector">Sector <span class="sort-arrow"></span></th>
+          <th class="sortable" data-company-sort="stage">Stage <span class="sort-arrow"></span></th>
+          <th class="sortable" data-company-sort="status">Status <span class="sort-arrow"></span></th>
+          <th class="sortable" data-company-sort="score">Score <span class="sort-arrow"></span></th>
+          <th class="sortable" data-company-sort="last_touched">Last Touched <span class="sort-arrow"></span></th>
+        </tr>
       </thead>
       <tbody id="companyBody"></tbody>
     </table>
@@ -1047,14 +1058,56 @@ function fmtMoney(val) {
 // ─── COMPANIES ─────────────────────────────────────────────────────────────
 let allCompanies = [];
 let selectedCompanyId = null;
+let companySort = { key: 'score', direction: 'desc' };
 
 async function loadCompanies() {
   allCompanies = await api('GET', '/companies');
-  renderCompanies(allCompanies);
+  renderCompanyView();
 }
 
-function renderCompanies(rows) {
-  document.getElementById('companyCount').textContent = `Companies (${rows.length})`;
+function compareCompanyValues(a, b, key) {
+  const left = a[key];
+  const right = b[key];
+  if (key === 'score') return Number(left) - Number(right);
+  if (key === 'last_touched') return new Date(left).getTime() - new Date(right).getTime();
+  return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function sortedCompanies(rows) {
+  return [...rows].sort((a, b) => {
+    const leftMissing = a[companySort.key] === null || a[companySort.key] === undefined || a[companySort.key] === '';
+    const rightMissing = b[companySort.key] === null || b[companySort.key] === undefined || b[companySort.key] === '';
+    if (leftMissing && rightMissing) return 0;
+    if (leftMissing) return 1;
+    if (rightMissing) return -1;
+    const result = compareCompanyValues(a, b, companySort.key);
+    return companySort.direction === 'asc' ? result : -result;
+  });
+}
+
+function renderCompanyView() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const filtered = allCompanies.filter(company =>
+    !q ||
+    company.name.toLowerCase().includes(q) ||
+    (company.sector || '').toLowerCase().includes(q) ||
+    (company.stage || '').toLowerCase().includes(q) ||
+    (company.status || '').toLowerCase().includes(q)
+  );
+  renderCompanies(sortedCompanies(filtered), filtered.length);
+  document.querySelectorAll('#companyTable th.sortable').forEach(header => {
+    const active = header.dataset.companySort === companySort.key;
+    header.classList.toggle('active', active);
+    header.querySelector('.sort-arrow').textContent = active
+      ? (companySort.direction === 'asc' ? '▲' : '▼')
+      : '';
+  });
+}
+
+function renderCompanies(rows, filteredCount = rows.length) {
+  document.getElementById('companyCount').textContent = filteredCount === allCompanies.length
+    ? `Companies (${allCompanies.length})`
+    : `Companies (${filteredCount} of ${allCompanies.length})`;
   const tbody = document.getElementById('companyBody');
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty">No companies yet. Import a CSV to get started.</td></tr>';
@@ -1076,6 +1129,9 @@ function renderCompanies(rows) {
     sel.addEventListener('change', async e => {
       e.stopPropagation();
       await api('PATCH', '/companies/' + sel.dataset.id, { status: sel.value });
+      const company = allCompanies.find(item => Number(item.id) === Number(sel.dataset.id));
+      if (company) company.status = sel.value;
+      renderCompanyView();
     });
   });
   tbody.querySelectorAll('.data-row').forEach(row => {
@@ -1156,8 +1212,22 @@ function closeCompanyDetail() {
 }
 
 document.getElementById('searchInput').addEventListener('input', function() {
-  const q = this.value.toLowerCase();
-  renderCompanies(allCompanies.filter(c => c.name.toLowerCase().includes(q) || (c.sector||'').toLowerCase().includes(q)));
+  renderCompanyView();
+});
+
+document.querySelectorAll('#companyTable th.sortable').forEach(header => {
+  header.addEventListener('click', () => {
+    const key = header.dataset.companySort;
+    if (companySort.key === key) {
+      companySort.direction = companySort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      companySort = {
+        key,
+        direction: ['score', 'last_touched'].includes(key) ? 'desc' : 'asc',
+      };
+    }
+    renderCompanyView();
+  });
 });
 
 function openAgentForCompany(id, name, type) {
