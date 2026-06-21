@@ -405,10 +405,11 @@ ${JSON.stringify(evidence)}`, 1800);
 }
 
 async function runRelationshipPathfinder(limit = 8) {
-  const [companies, contacts, investors] = await Promise.all([
+  const [companies, contacts, investors, profile] = await Promise.all([
     query(`SELECT * FROM companies WHERE status NOT IN ('passed','archived') ORDER BY score DESC NULLS LAST LIMIT $1`, [limit]),
     query('SELECT * FROM contacts ORDER BY firm,name'),
     query(`SELECT * FROM investors WHERE confirmed=1 ORDER BY relationship_status DESC,last_touched DESC NULLS LAST LIMIT 100`),
+    queryOne('SELECT taste_profile,outreach_prefs FROM user_profile ORDER BY id LIMIT 1'),
   ]);
   if (!companies.length) return [];
   return executeAgent('relationship-pathfinder', {
@@ -418,6 +419,10 @@ async function runRelationshipPathfinder(limit = 8) {
     const result = await askJson(`Map the strongest realistic relationship path for each company.
 Use only supplied records. Never invent a connection. Return only JSON:
 [{"company_id":1,"title":"Path into Company","summary":"","path_type":"direct|warm|contextual|cold","confidence":0.0,"recommended_action":""}]
+
+USER PREFERENCES:
+${profile?.taste_profile || 'Not yet refined'}
+${JSON.stringify(profile?.outreach_prefs || {})}
 
 COMPANIES:
 ${JSON.stringify(companies)}
@@ -430,14 +435,14 @@ ${JSON.stringify(investors)}`, 1800);
 }
 
 async function runFollowUpStrategist(limit = 12) {
-  const actions = await query(
+  const [actions, profile] = await Promise.all([query(
     `SELECT a.*,c.name AS company_name,c.sector,c.stage,c.score
      FROM actions a JOIN companies c ON c.id=a.company_id
      WHERE a.completed=0 AND a.outreach_type!='agent-recommendation'
        AND (a.due_date IS NULL OR a.due_date <= $1)
-     ORDER BY a.due_date ASC NULLS LAST LIMIT $2`,
+    ORDER BY a.due_date ASC NULLS LAST LIMIT $2`,
     [daysFromNow(3), limit]
-  );
+  ), queryOne('SELECT taste_profile,outreach_prefs FROM user_profile ORDER BY id LIMIT 1')]);
   if (!actions.length) return [];
   return executeAgent('follow-up-strategist', {
     trigger: 'scheduled',
@@ -446,6 +451,10 @@ async function runFollowUpStrategist(limit = 12) {
     const result = await askJson(`Recommend the next human-reviewed move for each action.
 Never send outreach. Return only JSON:
 [{"company_id":1,"action_id":1,"title":"Next step for Company","summary":"","recommended_action":"wait|follow_up_with_new_signal|change_channel|ask_for_intro|close_loop|stop","due_date":"YYYY-MM-DD","confidence":0.0}]
+
+USER PREFERENCES:
+${profile?.taste_profile || 'Not yet refined'}
+${JSON.stringify(profile?.outreach_prefs || {})}
 
 ACTIONS:
 ${JSON.stringify(actions)}`, 1500);
@@ -471,31 +480,148 @@ ${JSON.stringify(actions)}`, 1500);
   });
 }
 
-async function curateTunerFeed(limit = 20) {
-  const candidates = await query(
-    `SELECT s.id,s.signal_type,s.title,s.summary,s.confidence,s.source_name,s.company_id,
-      c.name AS company_name,c.sector,c.stage,c.score
-     FROM agent_signals s
-     LEFT JOIN companies c ON c.id=s.company_id
-     WHERE s.status='new' AND s.duplicate_of_id IS NULL
-     ORDER BY
-       CASE WHEN s.confidence BETWEEN 0.4 AND 0.8 THEN 0 ELSE 1 END,
-       CASE WHEN c.score BETWEEN 2 AND 4 THEN 0 ELSE 1 END,
-       s.actionable DESC,s.created_at DESC
-     LIMIT $1`,
-    [limit]
-  );
-  return candidates.map(row => ({
-    id: row.id,
-    label: row.company_name || row.title,
-    name: row.company_name || row.title,
-    sample: [[row.sector, row.stage].filter(Boolean).join(' · '), row.summary, row.source_name ? `From ${row.source_name}` : ''].filter(Boolean).join('\n'),
-    tags: [row.signal_type, row.sector, row.stage].filter(Boolean),
-    signal_id: row.id,
-    company_id: row.company_id,
-    confidence: Number(row.confidence || 0),
-    curation_reason: 'High decision value: useful preference uncertainty.',
+async function curateTunerFeed(limit = 24) {
+  const [companies, investors, events, signals, paths, history] = await Promise.all([
+    query(`SELECT id,name,sector,stage,description,score FROM companies
+      WHERE status NOT IN ('passed','archived') ORDER BY score DESC NULLS LAST,date_added DESC LIMIT 24`),
+    query(`SELECT id,name,firm,role,stage_focus,sector_focus,relationship_status
+      FROM investors WHERE confirmed=1 ORDER BY last_touched DESC NULLS LAST,tier ASC LIMIT 24`),
+    query(`SELECT id,title,event_date,location,description,host_name
+      FROM events WHERE dismissed=0 ORDER BY event_date ASC NULLS LAST LIMIT 20`),
+    query(`SELECT s.id,s.signal_type,s.title,s.summary,s.confidence,s.source_name,s.company_id,
+        c.name AS company_name,c.sector,c.stage
+      FROM agent_signals s LEFT JOIN companies c ON c.id=s.company_id
+      WHERE s.status='new' AND s.duplicate_of_id IS NULL AND s.agent_key!='evidence-auditor'
+        AND LENGTH(TRIM(COALESCE(s.summary,'')))>=35
+      ORDER BY s.actionable DESC,s.created_at DESC LIMIT 30`),
+    query(`SELECT s.id,s.title,s.summary,s.confidence,s.company_id,c.name AS company_name
+      FROM agent_signals s LEFT JOIN companies c ON c.id=s.company_id
+      WHERE s.agent_key='relationship-pathfinder' AND s.status='new'
+      ORDER BY s.created_at DESC LIMIT 16`),
+    query(`SELECT category,left_json,right_json FROM preference_events ORDER BY id DESC LIMIT 300`),
+  ]);
+
+  const normalize = value => String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const signature = (category, left, right) => {
+    const labels = [normalize(left.label || left.name), normalize(right.label || right.name)].sort();
+    return `${category}|${labels.join('|')}`;
+  };
+  const seen = new Set(history.map(row => {
+    const left = parseJson(row.left_json, {});
+    const right = parseJson(row.right_json, {});
+    return signature(row.category, left, right);
   }));
+  const duels = [];
+  const addPair = (category, prompt, left, right, priority = 1) => {
+    if (!left?.label || !right?.label || left.label === right.label) return;
+    const key = signature(category, left, right);
+    if (seen.has(key) || duels.some(duel => duel.pair_key === key)) return;
+    duels.push({ category, prompt, left, right, priority, pair_key: key });
+  };
+  const pairCombinations = (category, prompt, items, priority = 1, maxPairs = 8) => {
+    let added = 0;
+    for (let left = 0; left < items.length && added < maxPairs; left++) {
+      for (let right = left + 1; right < items.length && added < maxPairs; right++) {
+        const before = duels.length;
+        addPair(category, prompt, items[left], items[right], priority);
+        if (duels.length > before) added++;
+      }
+    }
+  };
+
+  const tone = [
+    { label: 'Warm and observant', sample: 'Sound human and specific; notice something real before making an ask.', tags: ['tone:warm', 'tone:personal'] },
+    { label: 'Crisp and analytical', sample: 'Lead with the useful pattern or reason for reaching out; keep sentiment restrained.', tags: ['tone:direct', 'tone:analytical'] },
+    { label: 'Curious and exploratory', sample: 'Make the message feel like an invitation to compare notes, not a transaction.', tags: ['tone:curious', 'tone:peer'] },
+    { label: 'Polished and credible', sample: 'Favor precise language, professional framing, and a clear reason the conversation matters.', tags: ['tone:polished', 'tone:formal'] },
+    { label: 'Energetic and ambitious', sample: 'Show conviction and momentum without sounding promotional.', tags: ['tone:energetic', 'tone:bold'] },
+    { label: 'Understated and concise', sample: 'Use minimal context, no flattery, and a low-pressure close.', tags: ['tone:concise', 'tone:understated'] },
+  ];
+  const asks = [
+    { label: 'Compare notes', sample: 'Open a peer conversation around a shared market or operating question.', tags: ['ask:peer-conversation'] },
+    { label: 'Request a short call', sample: 'Make a clear 15–20 minute ask when the fit is strong.', tags: ['ask:meeting'] },
+    { label: 'Ask about the work', sample: 'Learn how the team approaches a problem before discussing opportunities.', tags: ['ask:learning'] },
+    { label: 'Ask about openings', sample: 'Be transparent that career opportunities are part of the reason for connecting.', tags: ['ask:jobs'] },
+    { label: 'Offer something useful', sample: 'Share an introduction, insight, source, or relevant pattern before asking for time.', tags: ['ask:value-first'] },
+    { label: 'Stay on their radar', sample: 'Use a light-touch note without forcing an immediate meeting.', tags: ['ask:low-pressure'] },
+  ];
+  const channels = [
+    { label: 'Email first', sample: 'Use email for a thoughtful, contextual message that can be revisited.', tags: ['channel:email'] },
+    { label: 'LinkedIn first', sample: 'Use a shorter social touch when context is thin or the person is active there.', tags: ['channel:linkedin'] },
+    { label: 'Warm introduction', sample: 'Wait for a credible mutual path instead of contacting cold.', tags: ['channel:warm-intro'] },
+    { label: 'Event encounter', sample: 'Prefer meeting around a relevant conference, meetup, or hosted gathering.', tags: ['channel:event'] },
+  ];
+  const research = [
+    { label: 'Strong company fit', sample: 'Spend research budget on companies that closely match your interests, even with no obvious contact path.', tags: ['research:fit'] },
+    { label: 'Strong access path', sample: 'Prioritize companies where an investor, colleague, or event creates a credible route in.', tags: ['research:access'] },
+    { label: 'Fresh momentum', sample: 'Favor recent funding, hiring, launches, or leadership movement.', tags: ['research:timing'] },
+    { label: 'Deep mission alignment', sample: 'Favor enduring mission and product alignment over short-term news.', tags: ['research:mission'] },
+    { label: 'Emerging unknowns', sample: 'Explore less obvious companies where early research could create an edge.', tags: ['research:exploration'] },
+    { label: 'Established signal quality', sample: 'Concentrate on better-known companies with stronger public evidence.', tags: ['research:certainty'] },
+  ];
+  pairCombinations('tone', 'Which overall voice should your agents sound more like?', tone, 3);
+  pairCombinations('ask', 'Which outcome should outreach optimize for?', asks, 3);
+  pairCombinations('channel', 'Which contact path should agents prefer when both are available?', channels, 2);
+  pairCombinations('research_priority', 'Where should the system spend the next unit of research budget?', research, 4);
+
+  pairCombinations('company', 'Which company should rise in your opportunity ranking?', companies.map(company => ({
+    label: company.name,
+    name: company.name,
+    company_id: company.id,
+    sample: [[company.sector, company.stage].filter(Boolean).join(' · '), company.description].filter(Boolean).join('\n'),
+    tags: [`sector:${company.sector || 'unknown'}`, `stage:${company.stage || 'unknown'}`],
+  })), 5, 12);
+  pairCombinations('investor', 'Which investor would be more valuable to build a relationship with?', investors.map(investor => ({
+    label: investor.name || investor.firm,
+    name: investor.name || investor.firm,
+    investor_id: investor.id,
+    sample: [[investor.role, investor.firm].filter(Boolean).join(' · '), [investor.sector_focus, investor.stage_focus].filter(Boolean).join(' / '), `Relationship: ${investor.relationship_status || 'unknown'}`].filter(Boolean).join('\n'),
+    tags: [`investor-role:${investor.role || 'unknown'}`, `relationship:${investor.relationship_status || 'unknown'}`],
+  })), 5, 10);
+  pairCombinations('event', 'Which event deserves more of your attention?', events.map(event => ({
+    label: event.title,
+    name: event.title,
+    event_id: event.id,
+    sample: [[event.event_date, event.location].filter(Boolean).join(' · '), event.host_name ? `Hosted by ${event.host_name}` : '', event.description].filter(Boolean).join('\n'),
+    tags: ['event', event.location ? `location:${event.location}` : ''],
+  })), 4, 8);
+  pairCombinations('signal', 'Which new piece of information should influence the system more?', signals.map(signal => ({
+    label: signal.company_name || signal.title,
+    name: signal.company_name || signal.title,
+    signal_id: signal.id,
+    company_id: signal.company_id,
+    sample: [[signal.sector, signal.stage].filter(Boolean).join(' · '), signal.summary, signal.source_name ? `From ${signal.source_name}` : ''].filter(Boolean).join('\n'),
+    tags: [`signal:${signal.signal_type}`, `confidence:${Math.round(Number(signal.confidence || 0) * 100)}`],
+  })), 5, 10);
+  pairCombinations('relationship', 'Which relationship path feels more worth developing?', paths.map(path => ({
+    label: path.company_name || path.title,
+    name: path.company_name || path.title,
+    signal_id: path.id,
+    company_id: path.company_id,
+    sample: path.summary,
+    tags: ['relationship-path'],
+  })), 4, 8);
+
+  const groups = new Map();
+  for (const duel of duels.sort((a, b) => b.priority - a.priority)) {
+    const group = groups.get(duel.category) || [];
+    group.push(duel);
+    groups.set(duel.category, group);
+  }
+  const selected = [];
+  const categoryOrder = ['company', 'investor', 'signal', 'event', 'research_priority', 'relationship', 'tone', 'ask', 'channel'];
+  while (selected.length < limit) {
+    let added = false;
+    for (const category of categoryOrder) {
+      const duel = groups.get(category)?.shift();
+      if (!duel) continue;
+      selected.push(duel);
+      added = true;
+      if (selected.length >= limit) break;
+    }
+    if (!added) break;
+  }
+  return selected;
 }
 
 async function createProposal(agentKey, proposalType, proposedConfig, evidence, impact, costDelta = 0) {

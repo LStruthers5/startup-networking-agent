@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
 router.put('/', async (req, res) => {
   try {
     const { full_name, email, elevator_pitch, linkedin_url, portfolio_url, target_roles, preferred_tone, email_signature, skills, experiences, education, outreach_prefs } = req.body;
-    const existing = await queryOne('SELECT id FROM user_profile LIMIT 1');
+    const existing = await queryOne('SELECT id,outreach_prefs FROM user_profile LIMIT 1');
     if (existing) {
       await execute(
         `UPDATE user_profile SET full_name=$1, email=$2, elevator_pitch=$3, linkedin_url=$4, portfolio_url=$5,
@@ -32,7 +32,7 @@ router.put('/', async (req, res) => {
         [full_name, email, elevator_pitch, linkedin_url, portfolio_url, target_roles, preferred_tone,
          email_signature, skills,
          JSON.stringify(experiences || []), JSON.stringify(education || []),
-         JSON.stringify(outreach_prefs || {}),
+         JSON.stringify(outreach_prefs === undefined ? (existing.outreach_prefs || {}) : outreach_prefs),
          existing.id]
       );
     } else {
@@ -182,6 +182,15 @@ router.post('/duel', async (req, res) => {
     for (const item of rejected) {
       if (item?.signal_id) await execute(`UPDATE agent_signals SET status='rejected' WHERE id=$1`, [item.signal_id]);
     }
+    await execute(
+      `INSERT INTO agent_outcomes (company_id,outcome_type,notes,data_json)
+       VALUES ($1,'tuner_preference',$2,$3)`,
+      [
+        selected.find(item => item?.company_id)?.company_id || null,
+        `${category || 'mixed'}: ${choice}`,
+        JSON.stringify({ category, choice, selected, rejected }),
+      ]
+    );
     const companyScores = [];
     if (category === 'company') {
       const scoreChanges = new Map();
@@ -203,7 +212,18 @@ router.post('/duel', async (req, res) => {
       }
     }
     const c = await queryOne('SELECT COUNT(*) AS n FROM preference_events');
-    res.json({ ok: true, total: parseInt(c.n), company_scores: companyScores });
+    const profile = await queryOne('SELECT taste_refined_at FROM user_profile ORDER BY id LIMIT 1');
+    const unrefined = await queryOne(
+      `SELECT COUNT(*) AS n FROM preference_events
+       WHERE $1::text IS NULL OR created_at > $1`,
+      [profile?.taste_refined_at || null]
+    );
+    res.json({
+      ok: true,
+      total: parseInt(c.n),
+      company_scores: companyScores,
+      refine_recommended: Number(unrefined?.n || 0) >= 12,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -237,40 +257,84 @@ router.post('/refine', async (req, res) => {
       return `[${e.category}] skipped "${lab(L)}" vs "${lab(R)}"`;
     });
 
-    const taste = await executeAgent('profile-refiner', {
+    const refined = await executeAgent('profile-refiner', {
       trigger: 'manual',
       input: { event_count: events.length, choices: lines },
     }, async () => {
       const client = trackedAnthropicClient();
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 700,
+        max_tokens: 1400,
         messages: [{
           role: 'user',
-          content: `A user is tuning their networking & outreach preferences by repeatedly choosing between two options ("this or that"). Their choice log is below (categories: style = how a message sounds, company = which leads excite them, approach = what outreach move they'd make).
+          content: `A user is continuously tuning an automated networking intelligence system through quick preference comparisons.
+The log may contain preferences about companies, investors, events, relationship paths, research allocation, signal quality, outreach tone, asks, channels, and timing.
 
-Write a concise preference profile of 120–180 words that I can feed to a drafting/sourcing agent. Cover, in this order:
-1. Outreach VOICE & TONE they gravitate to.
-2. The kinds of COMPANIES / people that excite them (sectors, stage, vibe).
-3. Outreach MOVES they're comfortable with vs. ones they avoid.
-4. Any clear patterns worth noting.
+Distill the evidence into an agent-ready preference model. Do not overstate a pattern supported by only one choice. Repeated choices should carry more weight. Preserve uncertainty and contradictions.
 
-Write in second person ("You prefer…"). Be specific and concrete. No preamble, no headers, just the profile prose.
+Return ONLY valid JSON:
+{
+  "summary": "A concise 160–240 word second-person profile suitable for all sourcing, ranking, research, event, investor, relationship, and outreach agents.",
+  "company_preferences": {
+    "sectors": [], "stages": [], "missions": [], "operating_traits": [],
+    "positive_signals": [], "negative_signals": []
+  },
+  "investor_preferences": {
+    "roles": [], "firm_traits": [], "sector_focus": [], "stage_focus": [],
+    "relationship_preferences": []
+  },
+  "event_preferences": {
+    "formats": [], "topics": [], "locations": [], "hosts": [], "avoid": []
+  },
+  "research_preferences": {
+    "priority_factors": [], "exploration_level": "low|balanced|high",
+    "evidence_threshold": "low|balanced|high", "timing_preferences": []
+  },
+  "outreach_preferences": {
+    "tone": [], "channels": [], "asks": [], "moves": [], "avoid": []
+  },
+  "confidence": {
+    "overall": 0.0,
+    "well_established": [],
+    "still_uncertain": [],
+    "contradictions": []
+  }
+}
 
 CHOICE LOG (oldest first):
 ${lines.join('\n')}`
         }]
       });
-      return response.content[0].text.trim();
+      const raw = response.content[0].text.trim();
+      const jsonText = raw.match(/\{[\s\S]*\}/)?.[0] || '{}';
+      return JSON.parse(jsonText);
     });
+    const taste = refined.summary || '';
+    if (!taste) throw new Error('The preference refiner returned no usable summary.');
     const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const existing = await queryOne('SELECT id FROM user_profile LIMIT 1');
     if (existing) {
-      await execute('UPDATE user_profile SET taste_profile=$1, taste_refined_at=$2 WHERE id=$3', [taste, ts, existing.id]);
+      await execute(
+        'UPDATE user_profile SET taste_profile=$1,outreach_prefs=$2,taste_refined_at=$3 WHERE id=$4',
+        [taste, JSON.stringify(refined), ts, existing.id]
+      );
     } else {
-      await execute('INSERT INTO user_profile (taste_profile, taste_refined_at) VALUES ($1, $2)', [taste, ts]);
+      await execute(
+        'INSERT INTO user_profile (taste_profile,outreach_prefs,taste_refined_at) VALUES ($1,$2,$3)',
+        [taste, JSON.stringify(refined), ts]
+      );
     }
-    const adaptiveAgents = ['daily-candidate-ranking', 'queue-suggestions'];
+    const adaptiveAgents = [
+      'daily-candidate-ranking',
+      'queue-suggestions',
+      'company-discovery',
+      'company-profile-curator',
+      'opportunity-investigator',
+      'relationship-pathfinder',
+      'event-discovery',
+      'follow-up-strategist',
+      'outreach-draft',
+    ];
     for (const agentKey of adaptiveAgents) {
       const agent = await queryOne('SELECT current_version,config_json FROM agent_registry WHERE agent_key=$1', [agentKey]);
       const pending = await queryOne(
@@ -282,6 +346,7 @@ ${lines.join('\n')}`
       const proposedConfig = {
         ...currentConfig,
         taste_profile: taste,
+        preference_model: refined,
         adaptation_mode: 'taste-guided',
         evidence_event_count: events.length,
         proposed_at: ts,
@@ -294,7 +359,10 @@ ${lines.join('\n')}`
         [
           agentKey, agent.current_version,
           JSON.stringify(proposedConfig),
-          JSON.stringify({ taste_profile: { from: currentConfig.taste_profile || null, to: taste } }),
+          JSON.stringify({
+            taste_profile: { from: currentConfig.taste_profile || null, to: taste },
+            preference_dimensions: Object.keys(refined).filter(key => key !== 'summary'),
+          }),
           JSON.stringify([{ source: 'outreach-tuner', event_count: events.length, refined_at: ts }]),
           agentKey === 'queue-suggestions' ? 0.08 : 0.03,
           'Prioritize searches and recommendations that better match accepted Tuner signals.',
@@ -302,7 +370,7 @@ ${lines.join('\n')}`
         ]
       );
     }
-    res.json({ taste_profile: taste, taste_refined_at: ts, count: events.length });
+    res.json({ taste_profile: taste, preference_model: refined, taste_refined_at: ts, count: events.length });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

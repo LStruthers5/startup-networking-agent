@@ -481,7 +481,7 @@
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Outreach Tuner</div>
       <span id="duelCounter" style="font-size:12px;color:var(--muted)">0 taps</span>
     </div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Shape the current. Each choice teaches the system which companies, signals, voices, and moves deserve more attention.</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Shape the whole system. Fast choices tune company sourcing, investors, events, research depth, relationship paths, timing, tone, channels, and asks.</div>
 
     <div id="duelCategory" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin-bottom:10px">&nbsp;</div>
     <div id="duelArea" class="ab-row" style="margin-bottom:12px"></div>
@@ -2712,79 +2712,50 @@ function renderEducation(edu) {
     </div>`).join('');
 }
 
-// ── Outreach Tuner — "this or that" preference engine ──
-// Each duel item carries tags so Claude can learn preferences over attributes, not just specific items.
-const STYLE_CARDS = [
-  { label:'Warm opener',     sample:'"Hi Jane — been following Acme\'s journey, and your essay on X really stuck with me."', tags:['warm','personal'] },
-  { label:'Direct opener',   sample:'"Hi Jane — reaching out about Acme. Quick context on why I think there\'s a fit."', tags:['direct','efficient'] },
-  { label:'Casual opener',   sample:'"Loved what you shipped last week — would be great to swap notes sometime."', tags:['casual','friendly'] },
-  { label:'Polished opener', sample:'"I admire the work your team has done and would welcome the chance to connect."', tags:['formal','polished'] },
-  { label:'Story-led',       sample:'"Two years ago I started mapping the climate-VC landscape for fun — it led me here."', tags:['story','narrative'] },
-  { label:'Ask-led',         sample:'"I\'ll keep this short: I\'d love 15 minutes to learn how you source deals."', tags:['ask','concise'] },
-  { label:'Insight-led',     sample:'"Noticed three seed funds just moved into grid storage — curious if Acme sees the same shift."', tags:['insight','trends'] },
-  { label:'Compliment-led',  sample:'"Your thread on founder mental health was the best thing I read this month."', tags:['flattery','warm'] },
-];
-const APPROACH_CARDS = [
-  { label:'Cold email a stranger',        sample:'Reach out directly to someone you\'ve never met.', tags:['cold','bold'] },
-  { label:'Ask for a warm intro',         sample:'Route through a mutual connection first.', tags:['warm-intro','cautious'] },
-  { label:'Follow up after silence',      sample:'Send a second nudge when there\'s no reply.', tags:['persistent'] },
-  { label:'Slide into a LinkedIn DM',     sample:'Open the conversation on LinkedIn, not email.', tags:['linkedin','casual'] },
-  { label:'Ask for 15 min of their time', sample:'Request a short coffee or call.', tags:['meeting','direct-ask'] },
-  { label:'Ask about an opening',         sample:'Directly ask whether they\'re hiring.', tags:['job-ask','bold'] },
-  { label:'Offer value first',            sample:'Share something useful before asking for anything.', tags:['give-first','generous'] },
-  { label:'Lead with a shared connection',sample:'Mention the person or place you have in common.', tags:['shared','relational'] },
-];
-// Cold-start company pool; real pipeline companies are mixed in when available.
-const SEED_COMPANIES = [
-  { name:'Verdant Grid',   sector:'Climate / energy storage', stage:'Seed',     description:'Grid-scale batteries from recycled EV cells. Mission-driven, ex-Tesla founders.' },
-  { name:'Ledgerly',       sector:'Fintech / payments',       stage:'Series A', description:'B2B payment rails for SMBs. Fast-growing, profit-focused, aggressive sales culture.' },
-  { name:'Mycelia Bio',    sector:'Biotech / materials',      stage:'Seed',     description:'Mushroom-based packaging replacing plastics. Science-heavy, sustainability-first.' },
-  { name:'Northstar Labs', sector:'AI / developer tools',     stage:'Series A', description:'Coding copilots for legacy codebases. Technical founders, strong open-source roots.' },
-  { name:'Hearth',         sector:'Consumer / community',     stage:'Pre-seed', description:'App for organizing neighborhood mutual-aid groups. Social-impact, grassroots.' },
-  { name:'Cohort',         sector:'Edtech / careers',         stage:'Seed',     description:'Cohort-based upskilling for career switchers. Education-focused, outcomes-driven.' },
-  { name:'Atlas Freight',  sector:'Logistics / supply chain', stage:'Series B', description:'Freight-matching marketplace. Operationally intense, low-margin, scaling fast.' },
-  { name:'Lumen Health',   sector:'Healthtech',               stage:'Seed',     description:'At-home diagnostics for chronic conditions. Patient-first, regulated, clinical team.' },
-];
-
-let tunerCompanies = [];   // real pipeline companies, loaded once
-let tunerSignals = [];     // fresh normalized findings from the agent information river
+// ── Tuner — server-curated preference learning across the whole system ──
+let tunerDuels = [];       // server-curated, history-aware comparisons across the whole system
+let tunerLoading = false;
 let currentDuel = null;    // { category, left, right }
 let duelTotal = 0;         // server-side cumulative tap count
-const pick2 = arr => { const i = Math.floor(Math.random()*arr.length); let j = Math.floor(Math.random()*(arr.length-1)); if (j>=i) j++; return [arr[i], arr[j]]; };
 
-function buildNextDuel() {
-  // weighted category roll; fall back to style if a category can't fill
-  const pool = (tunerCompanies.length >= 2 || SEED_COMPANIES.length >= 2)
-    ? ['style','company','company','approach'].concat(tunerSignals.length >= 2 ? ['signal','signal','signal'] : [])
-    : ['style','style','approach'];
-  let category = pool[Math.floor(Math.random()*pool.length)];
-  let left, right;
-  if (category === 'signal') {
-    [left, right] = pick2(tunerSignals);
-  } else if (category === 'company') {
-    const src = tunerCompanies.length >= 2 ? tunerCompanies : SEED_COMPANIES;
-    const [a,b] = pick2(src);
-    const fmt = c => ({ label: c.name, name: c.name, company_id: c.id || null, sample: `${c.sector || ''}${c.stage ? ' · ' + c.stage : ''}\n${c.description || ''}`.trim(), tags: [c.sector, c.stage].filter(Boolean) });
-    left = fmt(a); right = fmt(b);
-  } else if (category === 'approach') {
-    const [a,b] = pick2(APPROACH_CARDS); left = a; right = b;
-  } else {
-    category = 'style';
-    const [a,b] = pick2(STYLE_CARDS); left = a; right = b;
+async function refillTuner() {
+  if (tunerLoading) return;
+  tunerLoading = true;
+  try {
+    const fresh = await api('GET', '/profile/tuner-feed');
+    tunerDuels = Array.isArray(fresh) ? fresh : [];
+  } catch (_) {
+    tunerDuels = [];
+  } finally {
+    tunerLoading = false;
   }
-  currentDuel = { category, left, right };
+}
+
+async function buildNextDuel() {
+  if (!tunerDuels.length) await refillTuner();
+  currentDuel = tunerDuels.shift() || null;
+  if (!currentDuel) {
+    document.getElementById('duelCategory').textContent = 'Preferences are caught up';
+    document.getElementById('duelArea').innerHTML = '<div class="empty" style="grid-column:1/-1">The system needs more company, investor, event, or signal context before asking another useful question.</div>';
+    return;
+  }
   renderDuel();
 }
 
 function renderDuel() {
   const d = currentDuel;
   const catLabel = {
-    style:'Which sounds more like you?',
-    company:'Which would you rather reach out to?',
-    approach:'Which move are you more likely to make?',
-    signal:'Which agent finding deserves more attention?',
-  }[d.category];
-  document.getElementById('duelCategory').textContent = catLabel;
+    tone:'Voice & tone',
+    company:'Company preference',
+    investor:'Investor preference',
+    event:'Event preference',
+    relationship:'Relationship strategy',
+    research_priority:'Research allocation',
+    ask:'Outreach objective',
+    channel:'Channel preference',
+    signal:'Signal preference',
+  }[d.category] || d.category;
+  document.getElementById('duelCategory').textContent = d.prompt || catLabel;
   const card = (item, side) => `
     <div class="ab-option" onclick="chooseDuel('${side}')">
       <div class="ab-tag">${item.label}</div>
@@ -2815,10 +2786,9 @@ async function chooseDuel(choice) {
       allCompanies = allCompanies.map(company => scoreMap.has(Number(company.id))
         ? { ...company, score: scoreMap.get(Number(company.id)) }
         : company);
-      tunerCompanies = tunerCompanies.map(company => scoreMap.has(Number(company.id))
-        ? { ...company, score: scoreMap.get(Number(company.id)) }
-        : company);
     }
+    if (tunerDuels.length < 4) refillTuner();
+    if (r && r.refine_recommended) setTimeout(() => refineTaste(true), 250);
   } catch(e) {
     duelTotal = Math.max(0, duelTotal - 1);
     updateDuelCounter();
@@ -2830,9 +2800,10 @@ function updateDuelCounter() {
   document.getElementById('duelCounter').textContent = `${duelTotal} tap${duelTotal===1?'':'s'}`;
 }
 
-async function refineTaste() {
+async function refineTaste(automatic = false) {
   const btn = document.getElementById('duelRefine');
   const meta = document.getElementById('tasteMeta');
+  if (btn.disabled) return;
   const originalMeta = meta.textContent;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Distilling…';
@@ -2848,7 +2819,7 @@ async function refineTaste() {
     const r = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(r.error || response.statusText || 'Refine request failed');
     showTaste(r.taste_profile, r.taste_refined_at);
-    flash('Taste profile refined');
+    flash(automatic ? 'Preferences evolved from your latest choices' : 'Taste profile refined');
   } catch(e) {
     const message = e.name === 'AbortError'
       ? 'Profile refinement timed out. Your picks are safe—please try again.'
@@ -2872,20 +2843,11 @@ function showTaste(text, refinedAt) {
 }
 
 async function initTuner(p) {
-  // Mix stable pipeline context with fresh, provenance-preserving agent findings.
-  try {
-    const [cs, signals] = await Promise.all([
-      tunerCompanies.length ? Promise.resolve(tunerCompanies) : api('GET', '/companies'),
-      api('GET', '/profile/tuner-feed'),
-    ]);
-    tunerCompanies = (Array.isArray(cs) ? cs : []).filter(c => c.name && (c.sector || c.description));
-    tunerSignals = (Array.isArray(signals) ? signals : []).filter(s => s.label && s.sample);
-  } catch(e) {
-    tunerSignals = [];
-  }
+  tunerDuels = [];
+  await refillTuner();
   duelTotal = Number(p && p.preference_count || 0); updateDuelCounter();
   showTaste(p && p.taste_profile, p && p.taste_refined_at);
-  buildNextDuel();
+  await buildNextDuel();
 }
 
 function populateProfileForm(p) {
