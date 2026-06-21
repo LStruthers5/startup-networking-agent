@@ -1580,7 +1580,7 @@ function renderAgentEconomics(agents) {
   const el = document.getElementById('tower-pane-agents');
   const controls = `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px">
     <span class="econ-sub">Built agents and integrated Dust agents</span>
-    <button class="btn-ghost btn-sm" onclick="syncDustAgents()">Sync Dust +</button>
+    <button class="btn-ghost btn-sm" onclick="addDustAgent()">Add Dust +</button>
   </div>`;
   if (!agents.length) { el.innerHTML = controls + '<div class="empty">No built agents are available yet.</div>'; return; }
   el.innerHTML = controls + `
@@ -1613,13 +1613,20 @@ function openAgentActions(agentKey, provider, status, version) {
   flash('Choose one of: ' + actions.join(', '), false);
 }
 
-async function syncDustAgents() {
+async function addDustAgent() {
+  const configurationId = prompt('Paste the Dust agent configuration ID from Manage Agents');
+  if (!configurationId || !configurationId.trim()) return;
+  const name = prompt('Name for this agent in Networking River', 'Dust Agent');
+  if (name === null) return;
   try {
-    const result = await api('POST', '/control-tower/dust/sync', {});
-    flash(`Synced ${result.imported.length} Dust agent${result.imported.length===1?'':'s'}`);
+    const result = await api('POST', '/control-tower/dust/register', {
+      configuration_id: configurationId.trim(),
+      name: name.trim() || 'Dust Agent',
+    });
+    flash(`${result.name} added`);
     loadControlTower();
   } catch (error) {
-    flash('Dust sync failed: ' + error.message, false);
+    flash('Dust agent could not be added: ' + error.message, false);
   }
 }
 

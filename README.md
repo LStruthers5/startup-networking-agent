@@ -13,7 +13,7 @@ The Railway-facing Node application in `server/` and `client/` includes an alway
 - Daily targets, hard monthly ceilings, spend forecasts, per-agent economics, and lean/current/aggressive scenario previews.
 - Agent-derived Outreach Tuner cards. Human choices credit or reject the originating signals.
 - Versioned adaptive-agent proposals with approval and rollback. Prompt, search, schedule, and workflow changes are never silently applied.
-- Optional Dust agent sync and blocking programmatic execution through the same registry and ledger.
+- Optional Dust agent registration by configuration ID and blocking programmatic execution through the same registry and ledger. Dust requires OAuth to list agents, so API-key integrations add Company/Shared agents explicitly.
 
 Run this deployment locally with:
 

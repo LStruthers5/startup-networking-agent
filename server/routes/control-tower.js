@@ -407,6 +407,37 @@ router.post('/dust/sync', async (req, res) => {
   }
 });
 
+// API keys can invoke a known Dust agent, but Dust requires OAuth to list agents.
+// This endpoint lets API-key users register a Company/Shared agent by configuration ID.
+router.post('/dust/register', async (req, res) => {
+  const { configuration_id, name, description } = req.body;
+  const id = String(configuration_id || '').trim();
+  if (!id) return res.status(400).json({ error: 'Dust agent configuration ID required' });
+  const key = `dust:${id}`;
+  try {
+    await execute(
+      `INSERT INTO agent_registry
+       (agent_key,name,purpose,provider,model,capabilities,schedule_json,plan_constraints,display_in_roster,config_json)
+       VALUES ($1,$2,$3,'dust','',$4,'{}',$5,1,$6)
+       ON CONFLICT (agent_key) DO UPDATE SET
+        name=EXCLUDED.name,purpose=EXCLUDED.purpose,display_in_roster=1,
+        config_json=EXCLUDED.config_json,updated_at=$7`,
+      [
+        key,
+        String(name || '').trim() || `Dust Agent ${id}`,
+        String(description || '').trim() || 'Dust Company/Shared agent registered by configuration ID.',
+        JSON.stringify(['dust-agent', 'programmatic']),
+        JSON.stringify({ billing_bucket: 'dust_programmatic', workspace_allowance_separate: true }),
+        JSON.stringify({ dust_agent_id: id, registration: 'manual-api-key' }),
+        nowText(),
+      ]
+    );
+    res.json({ agent_key: key, name: String(name || '').trim() || `Dust Agent ${id}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/dust/:agentKey/run', async (req, res) => {
   const agentKey = decodeURIComponent(req.params.agentKey);
   const agent = await queryOne('SELECT * FROM agent_registry WHERE agent_key=$1 AND provider=\'dust\'', [agentKey]);
