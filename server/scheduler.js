@@ -1,6 +1,13 @@
 const cron = require('node-cron');
 const { query, queryOne, today, daysFromNow } = require('./db');
 const { runAutonomousDraftGeneration, runWeeklyRecap, rankCompaniesByTaste, runEventDiscovery } = require('./agents');
+const {
+  runIntelligenceCycle,
+  runRelationshipPathfinder,
+  runFollowUpStrategist,
+  runOutcomeLearning,
+  runAgentPortfolioManager,
+} = require('./intelligence-agents');
 const { sendMorningBriefing, sendWeeklyRecap: sendWeeklyEmail } = require('./email');
 
 // Pick 2 companies that haven't been suggested recently
@@ -144,6 +151,20 @@ async function runWeeklyJob() {
   console.log('[Scheduler] Weekly recap sent.');
 }
 
+async function runDailyIntelligenceJob() {
+  const paths = await runRelationshipPathfinder();
+  const followUps = await runFollowUpStrategist();
+  console.log(`[Scheduler] Daily intelligence produced ${paths.length} relationship paths and ${followUps.length} follow-up recommendations`);
+  return { relationship_paths: paths.length, follow_up_recommendations: followUps.length };
+}
+
+async function runWeeklyLearningJob() {
+  const outcomes = await runOutcomeLearning();
+  const portfolio = await runAgentPortfolioManager();
+  console.log(`[Scheduler] Weekly learning produced ${outcomes.length} outcome reviews and ${portfolio.length} portfolio recommendations`);
+  return { outcomes: outcomes.length, portfolio: portfolio.length };
+}
+
 function startScheduler() {
   if (process.env.RESEND_API_KEY) {
     // Daily 8am PT: pick companies → source contacts → write drafts → send approval email.
@@ -154,8 +175,18 @@ function startScheduler() {
   }
   // Broad monitoring continues throughout the day; findings enter the river for human review.
   cron.schedule('*/15 * * * *', () => runSignalMonitorJob().catch(e => console.error('[Scheduler] Monitor error:', e.message)), { timezone: 'America/Los_Angeles' });
+  cron.schedule('35 */6 * * *', () => runIntelligenceCycle().catch(e => console.error('[Scheduler] Intelligence cycle error:', e.message)), { timezone: 'America/Los_Angeles' });
+  cron.schedule('40 7 * * *', () => runDailyIntelligenceJob().catch(e => console.error('[Scheduler] Daily intelligence error:', e.message)), { timezone: 'America/Los_Angeles' });
+  cron.schedule('40 6 * * 1', () => runWeeklyLearningJob().catch(e => console.error('[Scheduler] Weekly learning error:', e.message)), { timezone: 'America/Los_Angeles' });
 
-  console.log('[Scheduler] Started — daily 8am, weekly Monday 7am (PT)');
+  console.log('[Scheduler] Started — monitoring, intelligence, daily planning, and weekly learning (PT)');
 }
 
-module.exports = { startScheduler, runDailyJob, runWeeklyJob, runSignalMonitorJob };
+module.exports = {
+  startScheduler,
+  runDailyJob,
+  runWeeklyJob,
+  runSignalMonitorJob,
+  runDailyIntelligenceJob,
+  runWeeklyLearningJob,
+};

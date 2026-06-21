@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne, execute, nowText } = require('../db');
 const { executeAgent } = require('../agent-control');
+const {
+  runCompanySignalMonitor,
+  runEvidenceAuditor,
+  runOpportunityInvestigator,
+  runRelationshipPathfinder,
+  runFollowUpStrategist,
+  runOutcomeLearning,
+  runAgentPortfolioManager,
+  runIntelligenceCycle,
+} = require('../intelligence-agents');
 
 const money = value => Number(value || 0);
 const json = (value, fallback) => {
@@ -143,6 +153,29 @@ router.patch('/agents/:agentKey', async (req, res) => {
   values.push(nowText(), req.params.agentKey);
   await execute(`UPDATE agent_registry SET ${sets}, updated_at=$${fields.length + 1} WHERE agent_key=$${fields.length + 2}`, values);
   res.json({ ok: true });
+});
+
+router.post('/agents/:agentKey/run', async (req, res) => {
+  const runners = {
+    'company-signal-monitor': () => runCompanySignalMonitor(Number(req.body.limit || 6)),
+    'evidence-auditor': () => runEvidenceAuditor(Number(req.body.limit || 30)),
+    'opportunity-investigator': () => runOpportunityInvestigator(Number(req.body.company_id)),
+    'relationship-pathfinder': () => runRelationshipPathfinder(Number(req.body.limit || 8)),
+    'follow-up-strategist': () => runFollowUpStrategist(Number(req.body.limit || 12)),
+    'outcome-learning': () => runOutcomeLearning(),
+    'agent-portfolio-manager': () => runAgentPortfolioManager(),
+    'intelligence-cycle': () => runIntelligenceCycle(),
+  };
+  const runner = runners[req.params.agentKey];
+  if (!runner) return res.status(404).json({ error: 'Runnable intelligence agent not found' });
+  if (req.params.agentKey === 'opportunity-investigator' && !req.body.company_id) {
+    return res.status(400).json({ error: 'company_id required' });
+  }
+  try {
+    res.json({ output: await runner() });
+  } catch (error) {
+    res.status(error.code === 'BUDGET_CEILING' ? 402 : 500).json({ error: error.message });
+  }
 });
 
 router.get('/river', async (req, res) => {
@@ -330,10 +363,18 @@ router.post('/proposals/:id/apply', async (req, res) => {
      VALUES ($1,$2,$3,$4,'user-approved')`,
     [proposal.agent_key, nextVersion, JSON.stringify(json(proposal.proposed_config, {})), `Applied proposal ${proposal.id}`]
   );
-  await execute(
-    'UPDATE agent_registry SET config_json=$1,current_version=$2,updated_at=$3 WHERE agent_key=$4',
-    [JSON.stringify(json(proposal.proposed_config, {})), nextVersion, nowText(), proposal.agent_key]
-  );
+  const proposed = json(proposal.proposed_config, {});
+  if (proposal.proposal_type === 'portfolio-allocation' && proposed.schedule_json) {
+    await execute(
+      'UPDATE agent_registry SET schedule_json=$1,current_version=$2,updated_at=$3 WHERE agent_key=$4',
+      [JSON.stringify(proposed.schedule_json), nextVersion, nowText(), proposal.agent_key]
+    );
+  } else {
+    await execute(
+      'UPDATE agent_registry SET config_json=$1,current_version=$2,updated_at=$3 WHERE agent_key=$4',
+      [JSON.stringify(proposed), nextVersion, nowText(), proposal.agent_key]
+    );
+  }
   await execute(
     `UPDATE adaptation_proposals SET status='applied',applied_version=$1,decided_at=$2 WHERE id=$3`,
     [nextVersion, nowText(), proposal.id]
@@ -352,10 +393,25 @@ router.post('/agents/:agentKey/rollback', async (req, res) => {
     [req.params.agentKey, req.body.version]
   );
   if (!target) return res.status(404).json({ error: 'Version not found' });
-  await execute(
-    'UPDATE agent_registry SET config_json=$1,current_version=$2,updated_at=$3 WHERE agent_key=$4',
-    [JSON.stringify(json(target.config_json, {})), target.version, nowText(), req.params.agentKey]
-  );
+  const targetConfig = json(target.config_json, {});
+  const targetSchedule = targetConfig.schedule_json || targetConfig.schedule;
+  if (targetSchedule) {
+    await execute(
+      'UPDATE agent_registry SET config_json=$1,schedule_json=$2,current_version=$3,updated_at=$4 WHERE agent_key=$5',
+      [
+        JSON.stringify(targetConfig.config_json || targetConfig),
+        JSON.stringify(targetSchedule),
+        target.version,
+        nowText(),
+        req.params.agentKey,
+      ]
+    );
+  } else {
+    await execute(
+      'UPDATE agent_registry SET config_json=$1,current_version=$2,updated_at=$3 WHERE agent_key=$4',
+      [JSON.stringify(targetConfig), target.version, nowText(), req.params.agentKey]
+    );
+  }
   res.json({ ok: true, version: target.version });
 });
 

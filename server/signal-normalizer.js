@@ -25,12 +25,15 @@ function normalizeSignals(agentKey, output, input, companyId) {
   if (Array.isArray(output)) {
     for (const item of output.slice(0, 50)) {
       const title = item.company_name || item.name || item.title || item.company || item.investor;
-      const type = item.event_url ? 'event' : item.company_id || item.company_name ? 'company' : item.investor || item.firm ? 'person' : 'claim';
+      const type = item.signal_type || (item.event_url ? 'event' : item.company_id || item.company_name ? 'company' : item.investor || item.firm ? 'person' : 'claim');
       add(type, title, item.timing || item.description || item.summary || JSON.stringify(item), {
         companyId: item.company_id || companyId,
-        sourceUrl: item.event_url || item.url || '',
+        sourceUrl: item.event_url || item.source_url || item.url || '',
         confidence: item.confidence,
-        actionable: Boolean(item.timing || item.warm || item.cold || item.investor),
+        actionable: item.actionable === undefined
+          ? Boolean(item.timing || item.warm || item.cold || item.investor || item.recommended_action)
+          : Boolean(item.actionable),
+        observedAt: item.observed_at,
         data: item,
       });
     }

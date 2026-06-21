@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const { query, queryOne, execute } = require('../db');
 const { executeAgent, trackedAnthropicClient } = require('../agent-control');
+const { curateTunerFeed } = require('../intelligence-agents');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -10,7 +11,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 router.get('/', async (req, res) => {
   try {
     const profile = await queryOne('SELECT * FROM user_profile ORDER BY id LIMIT 1');
-    res.json(profile || {});
+    const count = await queryOne('SELECT COUNT(*) AS n FROM preference_events');
+    res.json({ ...(profile || {}), preference_count: parseInt(count?.n || 0) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -180,8 +182,28 @@ router.post('/duel', async (req, res) => {
     for (const item of rejected) {
       if (item?.signal_id) await execute(`UPDATE agent_signals SET status='rejected' WHERE id=$1`, [item.signal_id]);
     }
+    const companyScores = [];
+    if (category === 'company') {
+      const scoreChanges = new Map();
+      for (const item of selected) {
+        if (item?.company_id) scoreChanges.set(Number(item.company_id), 1);
+      }
+      for (const item of rejected) {
+        if (item?.company_id) scoreChanges.set(Number(item.company_id), -1);
+      }
+      for (const [companyId, delta] of scoreChanges) {
+        const row = await queryOne(
+          `UPDATE companies
+           SET score=GREATEST(1, LEAST(5, COALESCE(score,3) + $1))
+           WHERE id=$2
+           RETURNING id,score`,
+          [delta, companyId]
+        );
+        if (row) companyScores.push(row);
+      }
+    }
     const c = await queryOne('SELECT COUNT(*) AS n FROM preference_events');
-    res.json({ ok: true, total: parseInt(c.n) });
+    res.json({ ok: true, total: parseInt(c.n), company_scores: companyScores });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -190,29 +212,7 @@ router.post('/duel', async (req, res) => {
 // GET /api/profile/tuner-feed — agent-derived cards awaiting human judgment
 router.get('/tuner-feed', async (req, res) => {
   try {
-    const rows = await query(`
-      SELECT s.id, s.signal_type, s.title, s.summary, s.confidence, s.source_name,
-        s.company_id, c.name AS company_name, c.sector, c.stage
-      FROM agent_signals s
-      LEFT JOIN companies c ON c.id=s.company_id
-      WHERE s.status='new' AND s.duplicate_of_id IS NULL
-      ORDER BY s.actionable DESC, s.confidence DESC, s.created_at DESC
-      LIMIT 30
-    `);
-    res.json(rows.map(row => ({
-      id: row.id,
-      label: row.company_name || row.title,
-      name: row.company_name || row.title,
-      sample: [
-        [row.sector, row.stage].filter(Boolean).join(' · '),
-        row.summary,
-        row.source_name ? `From ${row.source_name}` : '',
-      ].filter(Boolean).join('\n'),
-      tags: [row.signal_type, row.sector, row.stage].filter(Boolean),
-      signal_id: row.id,
-      company_id: row.company_id,
-      confidence: Number(row.confidence || 0),
-    })));
+    res.json(await curateTunerFeed(30));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

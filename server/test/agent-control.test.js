@@ -39,3 +39,22 @@ test('turns narrative agent output into a recommendation signal', () => {
   assert.equal(signals[0].signal_type, 'recommendation');
   assert.equal(signals[0].actionable, 1);
 });
+
+test('preserves structured signal metadata from intelligence agents', () => {
+  const signals = normalizeSignals('company-signal-monitor', [{
+    company_id: 9,
+    title: 'Acme launches a new product',
+    summary: 'A verified launch creates a timely conversation angle.',
+    signal_type: 'product',
+    source_url: 'https://acme.example/news',
+    observed_at: '2026-06-20',
+    confidence: 0.91,
+    actionable: true,
+  }], {}, null);
+
+  assert.equal(signals[0].signal_type, 'product');
+  assert.equal(signals[0].company_id, 9);
+  assert.equal(signals[0].source_url, 'https://acme.example/news');
+  assert.equal(signals[0].actionable, 1);
+  assert.equal(signals[0].observed_at, '2026-06-20');
+});

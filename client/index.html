@@ -420,7 +420,8 @@
 
 <nav>
   <h1>Networking River</h1>
-  <button class="active" data-view="queue">Action Queue</button>
+  <button class="active" data-view="control-tower">Control Tower</button>
+  <button data-view="active-management">Active Management</button>
   <button data-view="companies">Companies</button>
   <button data-view="investors">Investors</button>
   <button data-view="contacts">Contacts</button>
@@ -430,12 +431,11 @@
 
 <main>
 
-<!-- ===== ACTION QUEUE ===== -->
-<div class="view active" id="view-queue">
+<!-- ===== CONTROL TOWER ===== -->
+<div class="view active" id="view-control-tower">
   <div class="wb-header tower-intro">
     <div>
-      <h2 style="margin:0">Agent Control Tower</h2>
-      <p>Live signals, operating cost, and the agents you actually use—kept in one readable current.</p>
+      <h2 style="margin:0">Control Tower</h2>
     </div>
     <div style="display:flex;gap:8px;align-items:center;position:relative">
       <button class="btn-secondary btn-sm" id="runsDropdownBtn">Runs Log &#9662;</button>
@@ -473,6 +473,42 @@
       <div class="tower-pane" id="tower-pane-scenarios"><div class="empty">Loading scenarios…</div></div>
       <div class="tower-pane" id="tower-pane-proposals"><div class="empty">Loading proposals…</div></div>
     </section>
+  </div>
+
+  <!-- Outreach Tuner — front-page preference current -->
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Outreach Tuner</div>
+      <span id="duelCounter" style="font-size:12px;color:var(--muted)">0 taps</span>
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Shape the current. Each choice teaches the system which companies, signals, voices, and moves deserve more attention.</div>
+
+    <div id="duelCategory" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin-bottom:10px">&nbsp;</div>
+    <div id="duelArea" class="ab-row" style="margin-bottom:12px"></div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" id="duelBoth" onclick="chooseDuel('both')">Both</button>
+      <button class="btn-secondary btn-sm" id="duelNeither" onclick="chooseDuel('neither')">Neither</button>
+      <button class="btn-secondary btn-sm" id="duelSkip" onclick="chooseDuel('skip')">Skip</button>
+      <span style="flex:1"></span>
+      <button class="btn-secondary btn-sm" id="duelRefine" onclick="refineTaste()">Refine my profile</button>
+    </div>
+
+    <div class="pref-block" style="margin-top:16px;margin-bottom:0">
+      <div class="pref-label">Your taste profile</div>
+      <div class="pref-hint" id="tasteMeta">Make ~10 picks, then hit “Refine my profile” to distill them with Claude.</div>
+      <div class="pref-summary" id="tasteProfile" style="display:none;white-space:pre-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ACTIVE MANAGEMENT ===== -->
+<div class="view" id="view-active-management">
+  <div class="wb-header">
+    <div>
+      <h2 style="margin:0">Active Management</h2>
+      <p>Follow-ups, next actions, and completed work that need your attention.</p>
+    </div>
   </div>
 
   <div class="wb-stats" id="wbStats">
@@ -529,7 +565,10 @@
   <div id="companyDetailPanel" style="display:none"></div>
 
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h2 id="companyCount">Companies</h2>
+    <div>
+      <h2 id="companyCount">Companies</h2>
+      <div style="font-size:12px;color:var(--muted)">Scores learn from your company choices in the Tuner.</div>
+    </div>
     <input type="text" id="searchInput" placeholder="Filter by name, sector&hellip;" style="width:220px">
   </div>
 
@@ -876,32 +915,6 @@
     <input class="inp" id="pSkillsInput" type="text" placeholder="Comma-separated skills (edit or add here)">
   </div>
 
-  <!-- Outreach Tuner — "this or that" preference engine -->
-  <div class="card" style="margin-bottom:20px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Outreach Tuner</div>
-      <span id="duelCounter" style="font-size:12px;color:var(--muted)">0 taps</span>
-    </div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Which would you rather? Keep tapping — every pick teaches the agent your taste in voice, leads, and outreach moves.</div>
-
-    <div id="duelCategory" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin-bottom:10px">&nbsp;</div>
-    <div id="duelArea" class="ab-row" style="margin-bottom:12px"></div>
-
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn-secondary btn-sm" id="duelBoth" onclick="chooseDuel('both')">Both</button>
-      <button class="btn-secondary btn-sm" id="duelNeither" onclick="chooseDuel('neither')">Neither</button>
-      <button class="btn-secondary btn-sm" id="duelSkip" onclick="chooseDuel('skip')">Skip</button>
-      <span style="flex:1"></span>
-      <button class="btn-secondary btn-sm" id="duelRefine" onclick="refineTaste()">Refine my profile</button>
-    </div>
-
-    <div class="pref-block" style="margin-top:16px;margin-bottom:0">
-      <div class="pref-label">Your taste profile</div>
-      <div class="pref-hint" id="tasteMeta">Make ~10 picks, then hit “Refine my profile” to distill them with Claude.</div>
-      <div class="pref-summary" id="tasteProfile" style="display:none;white-space:pre-wrap"></div>
-    </div>
-  </div>
-
   <!-- Experience -->
   <div class="card" style="margin-bottom:20px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -932,7 +945,7 @@
 
 <script>
 // ─── NAV ───────────────────────────────────────────────────────────────────
-let wbLoaded = false; // persist queue across tab switches
+let wbLoaded = false; // persist active-management queue across tab switches
 
 document.querySelectorAll('nav button[data-view]').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -941,7 +954,8 @@ document.querySelectorAll('nav button[data-view]').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('view-' + btn.dataset.view).classList.add('active');
     const v = btn.dataset.view;
-    if (v === 'queue') { if (!wbLoaded) loadWorkbench(); }
+    if (v === 'control-tower') loadControlTowerPage();
+    if (v === 'active-management') { if (!wbLoaded) loadWorkbench(); }
     if (v === 'companies') loadCompanies();
     if (v === 'contacts') loadContacts();
     if (v === 'investors') loadInvestorView();
@@ -1008,7 +1022,7 @@ function sectorBadge(sector = '') {
 
 function scoreDots(score) {
   if (!score) return '<span style="color:var(--muted)">&mdash;</span>';
-  return '<span class="score-dots">' + [1,2,3,4,5].map(i => `<span class="${i<=score?'filled':''}"></span>`).join('') + '</span>';
+  return '<span class="score-dots" title="Tuner-informed company score">' + [1,2,3,4,5].map(i => `<span class="${i<=score?'filled':''}"></span>`).join('') + '</span>';
 }
 
 function fmtDate(dt) { if (!dt) return '<span style="color:var(--muted)">&mdash;</span>'; return dt.slice(0,10); }
@@ -1598,8 +1612,17 @@ function renderAgentEconomics(agents) {
 }
 
 function openAgentActions(agentKey, provider, status, version) {
+  const runnableNative = [
+    'company-signal-monitor',
+    'evidence-auditor',
+    'relationship-pathfinder',
+    'follow-up-strategist',
+    'outcome-learning',
+    'agent-portfolio-manager',
+    'opportunity-investigator',
+  ];
   const actions = [
-    provider === 'dust' ? 'run' : null,
+    provider === 'dust' || runnableNative.includes(agentKey) ? 'run' : null,
     status === 'active' ? 'pause' : 'resume',
     version > 1 ? 'rollback' : null,
   ].filter(Boolean);
@@ -1607,10 +1630,28 @@ function openAgentActions(agentKey, provider, status, version) {
   if (!choice) return;
   const normalized = choice.trim().toLowerCase();
   if (normalized === 'run' && provider === 'dust') return runDustAgent(agentKey);
+  if (normalized === 'run' && runnableNative.includes(agentKey)) return runIntelligenceAgent(agentKey);
   if (normalized === 'pause') return toggleAgentStatus(agentKey, 'paused');
   if (normalized === 'resume') return toggleAgentStatus(agentKey, 'active');
   if (normalized === 'rollback' && version > 1) return rollbackAgent(agentKey, version - 1);
   flash('Choose one of: ' + actions.join(', '), false);
+}
+
+async function runIntelligenceAgent(agentKey) {
+  const payload = {};
+  if (agentKey === 'opportunity-investigator') {
+    const companyId = prompt('Company ID to investigate');
+    if (!companyId || !Number(companyId)) return;
+    payload.company_id = Number(companyId);
+  }
+  try {
+    flash(`${agentKey.replace(/-/g, ' ')} running…`);
+    await api('POST', `/control-tower/agents/${encodeURIComponent(agentKey)}/run`, payload);
+    flash('Agent result added to the information river');
+    loadControlTower();
+  } catch (error) {
+    flash('Agent run failed: ' + error.message, false);
+  }
 }
 
 async function addDustAgent() {
@@ -1734,7 +1775,6 @@ async function rejectProposal(id) {
 
 async function loadWorkbench() {
   wbLoaded = true;
-  loadControlTower();
   try {
     const stats = await api('GET', '/queue/stats');
     document.getElementById('statSent').textContent = stats.sentThisWeek;
@@ -1825,7 +1865,7 @@ document.getElementById('loggedToggle').addEventListener('click', () => {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 });
 document.getElementById('loadMoreBtn').addEventListener('click', () => loadUpNext(false));
-document.getElementById('refreshQueueBtn').addEventListener('click', () => { wbLoaded = false; loadWorkbench(); });
+document.getElementById('refreshQueueBtn').addEventListener('click', loadControlTowerPage);
 
 // ─── RUNS DROPDOWN ─────────────────────────────────────────────────────────
 const runsDropdown = document.getElementById('runsDropdown');
@@ -2693,7 +2733,7 @@ function buildNextDuel() {
   } else if (category === 'company') {
     const src = tunerCompanies.length >= 2 ? tunerCompanies : SEED_COMPANIES;
     const [a,b] = pick2(src);
-    const fmt = c => ({ label: c.name, name: c.name, sample: `${c.sector || ''}${c.stage ? ' · ' + c.stage : ''}\n${c.description || ''}`.trim(), tags: [c.sector, c.stage].filter(Boolean) });
+    const fmt = c => ({ label: c.name, name: c.name, company_id: c.id || null, sample: `${c.sector || ''}${c.stage ? ' · ' + c.stage : ''}\n${c.description || ''}`.trim(), tags: [c.sector, c.stage].filter(Boolean) });
     left = fmt(a); right = fmt(b);
   } else if (category === 'approach') {
     const [a,b] = pick2(APPROACH_CARDS); left = a; right = b;
@@ -2739,6 +2779,15 @@ async function chooseDuel(choice) {
     const r = await api('POST', '/profile/duel', payload);
     // Ignore stale responses from rapid taps, but accept a higher authoritative total.
     if (r && typeof r.total === 'number') { duelTotal = Math.max(duelTotal, r.total); updateDuelCounter(); }
+    if (duel.category === 'company' && r && Array.isArray(r.company_scores)) {
+      const scoreMap = new Map(r.company_scores.map(item => [Number(item.id), item.score]));
+      allCompanies = allCompanies.map(company => scoreMap.has(Number(company.id))
+        ? { ...company, score: scoreMap.get(Number(company.id)) }
+        : company);
+      tunerCompanies = tunerCompanies.map(company => scoreMap.has(Number(company.id))
+        ? { ...company, score: scoreMap.get(Number(company.id)) }
+        : company);
+    }
   } catch(e) {
     duelTotal = Math.max(0, duelTotal - 1);
     updateDuelCounter();
@@ -2803,7 +2852,7 @@ async function initTuner(p) {
   } catch(e) {
     tunerSignals = [];
   }
-  duelTotal = 0; updateDuelCounter();
+  duelTotal = Number(p && p.preference_count || 0); updateDuelCounter();
   showTaste(p && p.taste_profile, p && p.taste_refined_at);
   buildNextDuel();
 }
@@ -2833,6 +2882,17 @@ async function loadProfile() {
     populateProfileForm(p);
   } catch(e) {
     populateProfileForm({}); // brand-new / unreachable: still render empty deck
+  }
+}
+
+async function loadControlTowerPage() {
+  loadControlTower();
+  try {
+    const profile = await api('GET', '/profile');
+    profileData = profile;
+    await initTuner(profile);
+  } catch (_) {
+    await initTuner({});
   }
 }
 
@@ -2935,7 +2995,7 @@ async function uploadResume(file) {
 }
 
 // ─── INIT ──────────────────────────────────────────────────────────────────
-loadWorkbench();
+loadControlTowerPage();
 </script>
 
 <!-- ===== RIVER BANNER ANIMATION (from Claude Design handoff: Pixel Art River) ===== -->

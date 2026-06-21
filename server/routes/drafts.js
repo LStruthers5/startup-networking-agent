@@ -140,15 +140,29 @@ router.get('/approve/:token', async (req, res) => {
 
 // GET /api/drafts/skip/:token — one-click skip (no session auth — token is the key)
 router.get('/skip/:token', async (req, res) => {
-  const draft = await queryOne('SELECT id, investor_name FROM drafts WHERE approve_token = $1', [req.params.token]);
+  const draft = await queryOne('SELECT id, investor_name, company_id FROM drafts WHERE approve_token = $1', [req.params.token]);
   if (!draft) return res.send(confirmPage('Not Found', 'Draft not found.'));
   await execute('UPDATE drafts SET status = $1 WHERE id = $2', ['skipped', draft.id]);
+  const sourceSignal = draft.company_id ? await queryOne('SELECT id,run_id FROM agent_signals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1', [draft.company_id]) : null;
+  await execute(
+    `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
+     VALUES ($1,$2,$3,'draft_skipped',$4,$5)`,
+    [sourceSignal?.run_id || null, sourceSignal?.id || null, draft.company_id, draft.investor_name || '', JSON.stringify({ draft_id: draft.id })]
+  );
   return res.send(confirmPage('Skipped', `Draft for <strong>${draft.investor_name}</strong> has been skipped.`));
 });
 
 // POST /api/drafts/:id/skip — UI skip (requires session auth)
 router.post('/:id/skip', async (req, res) => {
+  const draft = await queryOne('SELECT * FROM drafts WHERE id=$1', [req.params.id]);
+  if (!draft) return res.status(404).json({ error: 'Draft not found' });
   await execute('UPDATE drafts SET status = $1 WHERE id = $2', ['skipped', req.params.id]);
+  const sourceSignal = draft.company_id ? await queryOne('SELECT id,run_id FROM agent_signals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1', [draft.company_id]) : null;
+  await execute(
+    `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
+     VALUES ($1,$2,$3,'draft_skipped',$4,$5)`,
+    [sourceSignal?.run_id || null, sourceSignal?.id || null, draft.company_id, draft.investor_name || '', JSON.stringify({ draft_id: draft.id })]
+  );
   res.json({ ok: true });
 });
 

@@ -14,6 +14,7 @@ The Railway-facing Node application in `server/` and `client/` includes an alway
 - Agent-derived Outreach Tuner cards. Human choices credit or reject the originating signals.
 - Versioned adaptive-agent proposals with approval and rollback. Prompt, search, schedule, and workflow changes are never silently applied.
 - Optional Dust agent registration by configuration ID and blocking programmatic execution through the same registry and ledger. Dust requires OAuth to list agents, so API-key integrations add Company/Shared agents explicitly.
+- An automated intelligence loop: company monitoring → evidence auditing → bounded Dust investigation → relationship paths → follow-up strategy → outcome learning → reviewable agent-budget proposals.
 
 Run this deployment locally with:
 
