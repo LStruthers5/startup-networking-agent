@@ -1728,7 +1728,8 @@ function renderScenarios(scenarios) {
       <div class="scenario-name">${s.label}</div>
       <div class="scenario-cost">${moneyText(s.projected_daily_cost)}<span style="font-size:10px;color:var(--muted)">/day</span></div>
       <div class="econ-sub">${moneyText(s.projected_monthly_cost)}/mo · ~${Number(s.projected_actionable_per_week).toFixed(1)} opportunities/wk · ${s.projected_freshness_hours}h freshness</div>
-      ${s.key!=='current' ? `<button class="btn-secondary btn-sm" style="margin-top:8px" onclick="previewScenario('${s.key}')">Preview</button>` : ''}
+      <div class="econ-sub">${s.coverage || ''} · up to ${s.projected_dust_runs_per_day || 0} Dust investigations/day</div>
+      <button class="btn-secondary btn-sm" style="margin-top:8px" onclick="previewScenario('${s.key}')">${s.key==='current'?'Restore current':'Preview'}</button>
     </div>`).join('')}</div>`;
 }
 
@@ -1737,7 +1738,7 @@ async function previewScenario(key) {
   const scenario = scenarios.find(s => s.key === key);
   if (!scenario) return;
   const scheduleLines = (scenario.changes || []).filter(c => c.current !== c.proposed).map(c => `• ${c.agent_key}: ${c.current} → ${c.proposed}`).join('\n');
-  const ok = confirm(`${scenario.label} plan\n\nProjected: ${moneyText(scenario.projected_daily_cost)}/day, ${moneyText(scenario.projected_monthly_cost)}/month, ~${Number(scenario.projected_actionable_per_week).toFixed(1)} actionable opportunities/week, ${scenario.projected_freshness_hours}h freshness.\n\nSchedule changes:\n${scheduleLines || 'No schedule changes'}\n\nApply this approved operating plan?`);
+  const ok = confirm(`${scenario.label} plan\n\nProjected: ${moneyText(scenario.projected_daily_cost)}/day, ${moneyText(scenario.projected_monthly_cost)}/month, ~${Number(scenario.projected_actionable_per_week).toFixed(1)} actionable opportunities/week, ${scenario.projected_freshness_hours}h freshness.\nCoverage: ${scenario.coverage || 'current coverage'}\nDust: up to ${scenario.projected_dust_runs_per_day || 0} investigations/day.\n\nAgent changes:\n${scheduleLines || 'No schedule changes'}\n\nApply this approved operating plan?`);
   if (!ok) return;
   await api('POST', `/control-tower/scenarios/${key}/apply`, { confirm: true });
   flash(`${scenario.label} operating plan applied`);

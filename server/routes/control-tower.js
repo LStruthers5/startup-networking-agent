@@ -213,65 +213,102 @@ function buildScenarios(agents, summary) {
     const schedule = json(a.schedule_json, {});
     return schedule.cadence && schedule.cadence !== 'on-demand';
   });
-  const observedDaily = scheduled.reduce((sum, a) => sum + money(a.cost_30d) / 30, 0);
-  const configuredDaily = scheduled.reduce((sum, a) => {
-    const constraints = json(a.plan_constraints, {});
-    return sum + money(constraints.estimated_cost_per_run_usd || 0.05);
-  }, 0);
-  const currentDaily = money(summary.today?.cost) || observedDaily || Math.max(0.15, configuredDaily);
-  const actionablePerDollar = summary.today?.cost > 0
-    ? Number(summary.today.actionable || 0) / money(summary.today.cost)
-    : 1.5;
-  const adaptiveSchedule = scheduled.find(agent => ['event-discovery', 'autonomous-drafts'].includes(agent.agent_key));
-  const currentMultiplier = Number(json(adaptiveSchedule?.schedule_json, {}).frequency_multiplier || 1);
-  const make = (key, label, multiplier, freshnessHours) => {
-    const daily = currentDaily * multiplier;
+  const profiles = {
+    lean: {
+      label: 'Lean', monitor_hours: 12, audit_hours: 12, candidate_limit: 1,
+      dust_daily_limit: 1, dust_cooldown_days: 14, relationship_limit: 4,
+      follow_up_limit: 6, learning_days: 14, yield_multiplier: 0.72,
+    },
+    current: {
+      label: 'Current', monitor_hours: 6, audit_hours: 6, candidate_limit: 2,
+      dust_daily_limit: 3, dust_cooldown_days: 7, relationship_limit: 8,
+      follow_up_limit: 12, learning_days: 7, yield_multiplier: 1,
+    },
+    aggressive: {
+      label: 'Aggressive', monitor_hours: 3, audit_hours: 3, candidate_limit: 4,
+      dust_daily_limit: 5, dust_cooldown_days: 3, relationship_limit: 12,
+      follow_up_limit: 20, learning_days: 7, yield_multiplier: 1.65,
+    },
+  };
+  const runRate = (agentKey, profile) => {
+    if (['event-discovery', 'company-signal-monitor'].includes(agentKey)) return 24 / profile.monitor_hours;
+    if (agentKey === 'evidence-auditor') return 24 / profile.audit_hours;
+    if (agentKey === 'opportunity-investigator') return profile.dust_daily_limit;
+    if (['daily-candidate-ranking', 'autonomous-drafts', 'relationship-pathfinder', 'follow-up-strategist'].includes(agentKey)) return 1;
+    if (['outcome-learning', 'agent-portfolio-manager', 'weekly-recap'].includes(agentKey)) return 1 / profile.learning_days;
+    return 0;
+  };
+  const proposedSchedule = (agent, profile, key) => {
+    const current = json(agent.schedule_json, {});
+    const next = { ...current, scenario: key };
+    if (['event-discovery', 'company-signal-monitor'].includes(agent.agent_key)) next.interval_hours = profile.monitor_hours;
+    if (agent.agent_key === 'evidence-auditor') next.interval_hours = profile.audit_hours;
+    if (['daily-candidate-ranking', 'autonomous-drafts'].includes(agent.agent_key)) next.candidate_limit = profile.candidate_limit;
+    if (agent.agent_key === 'opportunity-investigator') {
+      next.daily_limit = profile.dust_daily_limit;
+      next.cooldown_days = profile.dust_cooldown_days;
+      next.min_signal_count = key === 'aggressive' ? 1 : 2;
+    }
+    if (agent.agent_key === 'relationship-pathfinder') next.batch_limit = profile.relationship_limit;
+    if (agent.agent_key === 'follow-up-strategist') next.batch_limit = profile.follow_up_limit;
+    if (['outcome-learning', 'agent-portfolio-manager'].includes(agent.agent_key)) next.interval_days = profile.learning_days;
+    return next;
+  };
+  const describe = (agentKey, schedule) => {
+    if (['event-discovery', 'company-signal-monitor', 'evidence-auditor'].includes(agentKey)) return `every ${schedule.interval_hours || 6} hours`;
+    if (['daily-candidate-ranking', 'autonomous-drafts'].includes(agentKey)) return `${schedule.candidate_limit || 2} companies each morning`;
+    if (agentKey === 'opportunity-investigator') return `up to ${schedule.daily_limit || 3} Dust investigations/day · ${schedule.cooldown_days || 7}d cooldown`;
+    if (agentKey === 'relationship-pathfinder') return `${schedule.batch_limit || 8} relationship paths/day`;
+    if (agentKey === 'follow-up-strategist') return `${schedule.batch_limit || 12} follow-ups/day`;
+    if (['outcome-learning', 'agent-portfolio-manager'].includes(agentKey)) return `every ${schedule.interval_days || 7} days`;
+    return schedule.cadence || 'scheduled';
+  };
+  const make = (key) => {
+    const profile = profiles[key];
+    const configuredDaily = scheduled.reduce((sum, agent) => {
+      const constraints = json(agent.plan_constraints, {});
+      const unitCost = money(constraints.estimated_cost_per_run_usd || 0.05);
+      return sum + unitCost * runRate(agent.agent_key, profile);
+    }, 0);
+    const observedDaily = scheduled.reduce((sum, agent) => sum + money(agent.cost_30d) / 30, 0);
+    const baselineDaily = key === 'current' && observedDaily > 0 ? observedDaily : configuredDaily;
+    const daily = Math.max(0.05, baselineDaily);
     const month = daily * 30.4;
+    const baselineYield = summary.today?.cost > 0
+      ? Number(summary.today.actionable || 0) / money(summary.today.cost)
+      : 1.5;
     return {
-      key, label, multiplier,
+      key, label: profile.label,
       projected_daily_cost: daily,
       projected_monthly_cost: month,
-      projected_actionable_per_week: Math.max(0, daily * actionablePerDollar * 7),
-      projected_freshness_hours: freshnessHours,
+      projected_actionable_per_week: Math.max(0, daily * baselineYield * 7 * profile.yield_multiplier),
+      projected_freshness_hours: profile.monitor_hours,
+      projected_dust_runs_per_day: profile.dust_daily_limit,
+      coverage: `${profile.candidate_limit} ranked companies/day · ${profile.relationship_limit} relationship paths/day`,
       within_monthly_ceiling: !summary.budget.monthly_ceiling || month <= summary.budget.monthly_ceiling,
-      plan_risk: month > summary.budget.monthly_ceiling ? 'ceiling' : multiplier > 1.5 ? 'rate-limit-headroom' : 'low',
+      plan_risk: month > summary.budget.monthly_ceiling ? 'ceiling' : key === 'aggressive' ? 'rate-limit-headroom' : 'low',
       changes: scheduled.map(agent => {
         const current = json(agent.schedule_json, {});
-        if (agent.agent_key === 'event-discovery') {
-          return {
-            agent_key: agent.agent_key,
-            current: current.cadence || 'every-6-hours',
-            proposed: `every ${Math.max(2, Math.round(6 / multiplier))} hours`,
-            proposed_multiplier: multiplier,
-          };
-        }
-        if (agent.agent_key === 'autonomous-drafts' || agent.agent_key === 'daily-candidate-ranking') {
-          return {
-            agent_key: agent.agent_key,
-            current: '2 companies each morning',
-            proposed: `${Math.max(1, Math.min(5, Math.round(2 * multiplier)))} companies each morning`,
-            proposed_multiplier: multiplier,
-          };
-        }
+        const proposed = proposedSchedule(agent, profile, key);
         return {
           agent_key: agent.agent_key,
-          current: current.cadence || 'scheduled',
-          proposed: current.cadence || 'scheduled',
-          proposed_multiplier: 1,
+          current: describe(agent.agent_key, current),
+          proposed: describe(agent.agent_key, proposed),
+          proposed_schedule: proposed,
         };
       }),
     };
   };
-  return [
-    make('lean', 'Lean', 0.65, 24),
-    make('current', 'Current', currentMultiplier, Math.max(2, Math.round(12 / currentMultiplier))),
-    make('aggressive', 'Aggressive', 1.8, 6),
-  ];
+  return [make('lean'), make('current'), make('aggressive')];
 }
 
 async function loadScenarios() {
   const [agents, settings, day, month] = await Promise.all([
-    query('SELECT * FROM agent_registry WHERE status=\'active\''),
+    query(`SELECT r.*,
+      (SELECT COALESCE(SUM(COALESCE(exact_cost_usd,estimated_cost_usd,0)),0)
+       FROM agent_runs ar WHERE ar.agent_key=r.agent_key
+         AND ar.created_at >= to_char(CURRENT_DATE - INTERVAL '30 days','YYYY-MM-DD')) AS cost_30d
+      FROM agent_registry r WHERE r.status='active'`),
     queryOne(`SELECT * FROM control_tower_settings WHERE owner_id='local'`),
     queryOne(`SELECT COALESCE(SUM(COALESCE(exact_cost_usd,estimated_cost_usd,0)),0) AS cost, COALESCE(SUM(actionable_count),0) AS actionable FROM agent_runs WHERE created_at >= to_char(CURRENT_DATE,'YYYY-MM-DD')`),
     queryOne(`SELECT COALESCE(SUM(COALESCE(exact_cost_usd,estimated_cost_usd,0)),0) AS cost FROM agent_runs WHERE created_at >= to_char(date_trunc('month',NOW() AT TIME ZONE 'UTC'),'YYYY-MM-DD HH24:MI:SS')`),
@@ -301,14 +338,11 @@ router.post('/scenarios/:key/apply', async (req, res) => {
   if (!scenario.within_monthly_ceiling) {
     return res.status(402).json({ error: 'This scenario exceeds the hard monthly ceiling. Raise the ceiling explicitly before applying it.' });
   }
-  const multiplier = req.params.key === 'lean' ? 0.65 : req.params.key === 'aggressive' ? 1.8 : 1;
-  const agents = await query(`SELECT * FROM agent_registry WHERE status='active'`);
-  for (const agent of agents) {
-    const schedule = json(agent.schedule_json, {});
-    if (!schedule.cadence || schedule.cadence === 'on-demand') continue;
-    schedule.frequency_multiplier = ['event-discovery', 'autonomous-drafts', 'daily-candidate-ranking'].includes(agent.agent_key) ? multiplier : 1;
-    schedule.scenario = req.params.key;
-    await execute('UPDATE agent_registry SET schedule_json=$1, updated_at=$2 WHERE agent_key=$3', [JSON.stringify(schedule), nowText(), agent.agent_key]);
+  for (const change of scenario.changes) {
+    await execute(
+      'UPDATE agent_registry SET schedule_json=$1, updated_at=$2 WHERE agent_key=$3',
+      [JSON.stringify(change.proposed_schedule || {}), nowText(), change.agent_key]
+    );
   }
   res.json({ ok: true, scenario: req.params.key });
 });

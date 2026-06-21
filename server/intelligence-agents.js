@@ -401,24 +401,56 @@ async function runAgentPortfolioManager() {
   });
 }
 
+async function agentIsDue(agentKey, intervalHours) {
+  const lastRun = await queryOne(
+    `SELECT completed_at FROM agent_runs
+     WHERE agent_key=$1 AND status='completed'
+     ORDER BY completed_at DESC LIMIT 1`,
+    [agentKey]
+  );
+  if (!lastRun?.completed_at) return true;
+  const completed = new Date(String(lastRun.completed_at).replace(' ', 'T') + 'Z').getTime();
+  return (Date.now() - completed) / 3_600_000 >= intervalHours;
+}
+
 async function runIntelligenceCycle() {
-  const monitored = await runCompanySignalMonitor();
-  const audited = await runEvidenceAuditor();
-  const candidates = await query(
+  const [monitorAgent, auditAgent, investigatorAgent] = await Promise.all([
+    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='company-signal-monitor'`),
+    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='evidence-auditor'`),
+    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='opportunity-investigator'`),
+  ]);
+  const monitorSchedule = typeof monitorAgent?.schedule_json === 'string' ? JSON.parse(monitorAgent.schedule_json || '{}') : (monitorAgent?.schedule_json || {});
+  const auditSchedule = typeof auditAgent?.schedule_json === 'string' ? JSON.parse(auditAgent.schedule_json || '{}') : (auditAgent?.schedule_json || {});
+  const investigatorSchedule = typeof investigatorAgent?.schedule_json === 'string' ? JSON.parse(investigatorAgent.schedule_json || '{}') : (investigatorAgent?.schedule_json || {});
+  const monitorDue = await agentIsDue('company-signal-monitor', Number(monitorSchedule.interval_hours || 6));
+  const auditDue = await agentIsDue('evidence-auditor', Number(auditSchedule.interval_hours || 6));
+  const monitored = monitorDue ? await runCompanySignalMonitor(Number(monitorSchedule.batch_limit || 6)) : [];
+  const audited = auditDue ? await runEvidenceAuditor(Number(auditSchedule.batch_limit || 30)) : [];
+  const dailyLimit = Math.max(0, Number(investigatorSchedule.daily_limit || 3));
+  const cooldownDays = Math.max(1, Number(investigatorSchedule.cooldown_days || 7));
+  const minSignals = Math.max(1, Number(investigatorSchedule.min_signal_count || 2));
+  const investigatedToday = await queryOne(
+    `SELECT COUNT(*) AS n FROM agent_runs
+     WHERE agent_key='opportunity-investigator'
+       AND created_at >= to_char(CURRENT_DATE,'YYYY-MM-DD')`
+  );
+  const remainingInvestigations = Math.max(0, dailyLimit - Number(investigatedToday?.n || 0));
+  const candidates = remainingInvestigations ? await query(
     `SELECT c.id,COUNT(s.id) AS signal_count,MAX(s.confidence) AS confidence
      FROM companies c JOIN agent_signals s ON s.company_id=c.id
      WHERE s.status='new' AND s.created_at >= to_char(CURRENT_DATE - INTERVAL '7 days','YYYY-MM-DD')
        AND c.status NOT IN ('passed','archived')
      GROUP BY c.id,c.score
-     HAVING COUNT(s.id)>=2 OR (COALESCE(c.score,0)>=4 AND MAX(s.confidence)>=0.65)
-     ORDER BY COUNT(s.id) DESC,MAX(s.confidence) DESC LIMIT 3`
-  );
+     HAVING COUNT(s.id)>=$1 OR (COALESCE(c.score,0)>=4 AND MAX(s.confidence)>=0.65)
+     ORDER BY COUNT(s.id) DESC,MAX(s.confidence) DESC LIMIT $2`,
+    [minSignals, remainingInvestigations]
+  ) : [];
   const dust = [];
   for (const candidate of candidates) {
     const recent = await queryOne(
       `SELECT id FROM agent_runs WHERE agent_key='opportunity-investigator' AND company_id=$1
-       AND created_at >= to_char(CURRENT_DATE - INTERVAL '7 days','YYYY-MM-DD') LIMIT 1`,
-      [candidate.id]
+       AND created_at >= to_char(CURRENT_DATE - ($2 * INTERVAL '1 day'),'YYYY-MM-DD') LIMIT 1`,
+      [candidate.id, cooldownDays]
     );
     if (!recent) {
       try { dust.push(await runOpportunityInvestigator(candidate.id)); } catch (error) {
@@ -426,7 +458,14 @@ async function runIntelligenceCycle() {
       }
     }
   }
-  return { monitored: monitored.length, audited: audited.length, investigated: dust.length };
+  return {
+    monitored: monitored.length,
+    audited: audited.length,
+    investigated: dust.length,
+    monitor_due: monitorDue,
+    audit_due: auditDue,
+    dust_remaining_today: Math.max(0, remainingInvestigations - dust.length),
+  };
 }
 
 module.exports = {

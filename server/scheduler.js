@@ -83,7 +83,7 @@ async function runDailyJob() {
   const deskAgent = await queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='autonomous-drafts'`);
   const schedule = typeof deskAgent?.schedule_json === 'string' ? JSON.parse(deskAgent.schedule_json || '{}') : (deskAgent?.schedule_json || {});
   const multiplier = Number(schedule.frequency_multiplier || 1);
-  const candidateCount = Math.max(1, Math.min(5, Math.round(2 * multiplier)));
+  const candidateCount = Math.max(1, Math.min(6, Number(schedule.candidate_limit || Math.round(2 * multiplier))));
   const companies = await pickDailyCandidates(candidateCount);
 
   // Step 1: autonomously source targets → find emails → write drafts → save to DB
@@ -126,7 +126,7 @@ async function runSignalMonitorJob() {
   if (monitor?.status !== 'active') return { events: 0, skipped: 'paused' };
   const schedule = typeof monitor?.schedule_json === 'string' ? JSON.parse(monitor.schedule_json || '{}') : (monitor?.schedule_json || {});
   const multiplier = Math.max(0.25, Number(schedule.frequency_multiplier || 1));
-  const intervalHours = Math.max(2, 6 / multiplier);
+  const intervalHours = Math.max(2, Number(schedule.interval_hours || 6 / multiplier));
   const lastRun = await queryOne(`
     SELECT completed_at FROM agent_runs
     WHERE agent_key='event-discovery' AND status='completed'
@@ -152,8 +152,14 @@ async function runWeeklyJob() {
 }
 
 async function runDailyIntelligenceJob() {
-  const paths = await runRelationshipPathfinder();
-  const followUps = await runFollowUpStrategist();
+  const [pathAgent, followUpAgent] = await Promise.all([
+    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='relationship-pathfinder'`),
+    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='follow-up-strategist'`),
+  ]);
+  const pathSchedule = typeof pathAgent?.schedule_json === 'string' ? JSON.parse(pathAgent.schedule_json || '{}') : (pathAgent?.schedule_json || {});
+  const followUpSchedule = typeof followUpAgent?.schedule_json === 'string' ? JSON.parse(followUpAgent.schedule_json || '{}') : (followUpAgent?.schedule_json || {});
+  const paths = await runRelationshipPathfinder(Number(pathSchedule.batch_limit || 8));
+  const followUps = await runFollowUpStrategist(Number(followUpSchedule.batch_limit || 12));
   console.log(`[Scheduler] Daily intelligence produced ${paths.length} relationship paths and ${followUps.length} follow-up recommendations`);
   return { relationship_paths: paths.length, follow_up_recommendations: followUps.length };
 }
@@ -175,7 +181,8 @@ function startScheduler() {
   }
   // Broad monitoring continues throughout the day; findings enter the river for human review.
   cron.schedule('*/15 * * * *', () => runSignalMonitorJob().catch(e => console.error('[Scheduler] Monitor error:', e.message)), { timezone: 'America/Los_Angeles' });
-  cron.schedule('35 */6 * * *', () => runIntelligenceCycle().catch(e => console.error('[Scheduler] Intelligence cycle error:', e.message)), { timezone: 'America/Los_Angeles' });
+  // Poll frequently; each intelligence agent consults its applied scenario interval before running.
+  cron.schedule('*/15 * * * *', () => runIntelligenceCycle().catch(e => console.error('[Scheduler] Intelligence cycle error:', e.message)), { timezone: 'America/Los_Angeles' });
   cron.schedule('40 7 * * *', () => runDailyIntelligenceJob().catch(e => console.error('[Scheduler] Daily intelligence error:', e.message)), { timezone: 'America/Los_Angeles' });
   cron.schedule('40 6 * * 1', () => runWeeklyLearningJob().catch(e => console.error('[Scheduler] Weekly learning error:', e.message)), { timezone: 'America/Los_Angeles' });
 
