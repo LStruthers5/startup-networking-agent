@@ -371,6 +371,18 @@ async function initSchema() {
     ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS source_refs JSONB DEFAULT '[]';
     ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS owner_id TEXT DEFAULT 'local';
 
+    CREATE TABLE IF NOT EXISTS calendar_connections (
+      id SERIAL PRIMARY KEY,
+      provider TEXT DEFAULT 'google',
+      account_email TEXT,
+      access_token TEXT,
+      refresh_token TEXT,
+      token_expiry TEXT,
+      scope TEXT,
+      connected_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'),
+      owner_id TEXT DEFAULT 'local'
+    );
+
     CREATE TABLE IF NOT EXISTS preference_events (
       id SERIAL PRIMARY KEY,
       category TEXT,

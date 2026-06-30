@@ -33,6 +33,7 @@ const NATIVE_AGENTS = [
   { key: 'resume-parser', name: 'Resume Parser', purpose: 'Extract structured career context from a resume.', capabilities: ['extraction'], schedule: {}, outputs: ['profile'] },
   { key: 'investment-thesis-researcher', name: 'Investment Thesis Researcher', purpose: 'Research what an investor really cares about — sectors, stage, pattern of bets, and stated thesis.', capabilities: ['research', 'exa-search', 'thesis-synthesis'], schedule: { cadence: 'daily', cron: '5 6 * * *', interval_hours: 24, batch_limit: 4 }, outputs: ['person', 'claim'], displayInRoster: true },
   { key: 'sourcing-fit-scorer', name: 'Sourcing Fit Scorer', purpose: 'Score a company against every known investor thesis and surface who in the pool would actually care.', capabilities: ['ranking', 'matching'], schedule: { cadence: 'event-triggered' }, dependencies: ['investment-thesis-researcher'], outputs: ['recommendation'], displayInRoster: true },
+  { key: 'calendar-cross-reference', name: 'Calendar Cross-Reference', purpose: 'Match attendees on your upcoming calendar events against your investor pool.', capabilities: ['matching', 'calendar'], schedule: { cadence: 'daily', cron: '0 6 * * *' }, outputs: ['recommendation'], displayInRoster: true },
 ];
 
 function safeJson(value, fallback = {}) {

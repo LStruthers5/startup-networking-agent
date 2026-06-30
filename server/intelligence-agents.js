@@ -592,6 +592,49 @@ ${JSON.stringify(investors.map(i => ({ id: i.id, name: i.name, firm: i.firm, the
   });
 }
 
+async function runCalendarCrossReference(days = 7) {
+  const { listUpcomingEvents } = require('./google-calendar');
+  let events = [];
+  try { events = await listUpcomingEvents(days); } catch (_) { return []; }
+  if (!events.length) return [];
+
+  const investors = await query(
+    `SELECT id,name,firm,role,investor_type,thesis_profile,relationship_status FROM investors WHERE confirmed=1`
+  );
+  if (!investors.length) return [];
+
+  return executeAgent('calendar-cross-reference', {
+    trigger: 'scheduled',
+    input: { event_count: events.length },
+  }, async () => {
+    const matches = await askJson(`For each calendar event, identify which of these investors are plausibly attending,
+based on attendee names/emails matching investor names or firm domains. Only match when there's a real textual
+overlap — never guess. Return only JSON:
+[{"event_title":"","event_start":"","investor_id":1,"matched_on":"name|email|firm","confidence":0.0,"why":"one sentence on why this matters given their thesis or relationship status"}]
+
+EVENTS:
+${JSON.stringify(events.map(e => ({ title: e.title, start: e.start, attendees: e.attendees })))}
+
+INVESTORS:
+${JSON.stringify(investors.map(i => ({ id: i.id, name: i.name, firm: i.firm, role: i.role, relationship_status: i.relationship_status, thesis: i.thesis_profile })))}`, 1400);
+
+    const results = Array.isArray(matches) ? matches : [];
+    return results.filter(m => m.investor_id && m.confidence >= 0.5).map(m => {
+      const inv = investors.find(i => i.id === m.investor_id);
+      return {
+        title: `${inv?.name || 'Investor'} may be at ${m.event_title}`,
+        summary: `${m.event_start ? m.event_start + ' — ' : ''}${m.why || ''}`,
+        signal_type: 'calendar_match',
+        entity_type: 'investor',
+        entity_id: m.investor_id,
+        confidence: Number(m.confidence),
+        actionable: true,
+        data: { investor_id: m.investor_id, investor_name: inv?.name, event_title: m.event_title, event_start: m.event_start, matched_on: m.matched_on },
+      };
+    });
+  });
+}
+
 async function curateTunerFeed(limit = 24) {
   const [companies, investors, events, signals, paths, history] = await Promise.all([
     query(`SELECT id,name,sector,stage,description,score FROM companies
@@ -874,6 +917,8 @@ async function runIntelligenceCycle() {
   const discovered = discoveryDue ? await runCompanyDiscovery(Number(discoverySchedule.batch_limit || 6)) : [];
   const thesisDue = await agentIsDue('investment-thesis-researcher', 24);
   const thesisRefreshed = thesisDue ? await runInvestmentThesisResearcher(4) : [];
+  const calendarDue = await agentIsDue('calendar-cross-reference', 24);
+  const calendarMatched = calendarDue ? await runCalendarCrossReference(7) : [];
   const dailyLimit = Math.max(0, Number(investigatorSchedule.daily_limit || 3));
   const cooldownDays = Math.max(1, Number(investigatorSchedule.cooldown_days || 7));
   const minSignals = Math.max(1, Number(investigatorSchedule.min_signal_count || 2));
@@ -923,11 +968,13 @@ async function runIntelligenceCycle() {
     investigated: dust.length,
     thesis_refreshed: thesisRefreshed.length,
     fit_scored: fitScored.length,
+    calendar_matched: calendarMatched.length,
     monitor_due: monitorDue,
     audit_due: auditDue,
     curator_due: curatorDue,
     discovery_due: discoveryDue,
     thesis_due: thesisDue,
+    calendar_due: calendarDue,
     dust_remaining_today: Math.max(0, remainingInvestigations - dust.length),
   };
 }
@@ -942,6 +989,7 @@ module.exports = {
   runFollowUpStrategist,
   runInvestmentThesisResearcher,
   runSourcingFitScorer,
+  runCalendarCrossReference,
   curateTunerFeed,
   runOutcomeLearning,
   runAgentPortfolioManager,

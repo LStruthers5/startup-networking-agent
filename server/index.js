@@ -48,6 +48,7 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/drafts', require('./routes/drafts'));
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/control-tower', require('./routes/control-tower'));
+app.use('/api/calendar', require('./routes/calendar'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
