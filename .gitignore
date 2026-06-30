@@ -51,3 +51,4 @@ frontend/.env.local
 # Claude Design handoff bundle (source export, not app code)
 design/
 Pixel art water animation-handoff.zip
+output/
