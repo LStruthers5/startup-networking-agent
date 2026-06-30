@@ -11,6 +11,8 @@ const {
   runOpportunityInvestigator,
   runRelationshipPathfinder,
   runFollowUpStrategist,
+  runInvestmentThesisResearcher,
+  runSourcingFitScorer,
   runOutcomeLearning,
   runAgentPortfolioManager,
   runIntelligenceCycle,
@@ -171,13 +173,15 @@ router.post('/agents/:agentKey/run', async (req, res) => {
     'opportunity-investigator': () => runOpportunityInvestigator(Number(req.body.company_id)),
     'relationship-pathfinder': () => runRelationshipPathfinder(Number(req.body.limit || 8)),
     'follow-up-strategist': () => runFollowUpStrategist(Number(req.body.limit || 12)),
+    'investment-thesis-researcher': () => runInvestmentThesisResearcher(Number(req.body.limit || 4)),
+    'sourcing-fit-scorer': () => runSourcingFitScorer(Number(req.body.company_id)),
     'outcome-learning': () => runOutcomeLearning(),
     'agent-portfolio-manager': () => runAgentPortfolioManager(),
     'intelligence-cycle': () => runIntelligenceCycle(),
   };
   const runner = runners[req.params.agentKey];
   if (!runner) return res.status(404).json({ error: 'Runnable intelligence agent not found' });
-  if (req.params.agentKey === 'opportunity-investigator' && !req.body.company_id) {
+  if (['opportunity-investigator', 'sourcing-fit-scorer'].includes(req.params.agentKey) && !req.body.company_id) {
     return res.status(400).json({ error: 'company_id required' });
   }
   try {

@@ -31,6 +31,8 @@ const NATIVE_AGENTS = [
   { key: 'weekly-recap', name: 'Weekly Planner', purpose: 'Summarize pipeline health and propose weekly priorities.', capabilities: ['planning', 'recommendation'], schedule: { cadence: 'weekly', cron: '0 7 * * 1' }, outputs: ['recommendation'] },
   { key: 'profile-refiner', name: 'Taste Profiler', purpose: 'Distill Tuner choices into an inspectable preference profile.', capabilities: ['preferences', 'summarization'], schedule: {}, outputs: ['profile'] },
   { key: 'resume-parser', name: 'Resume Parser', purpose: 'Extract structured career context from a resume.', capabilities: ['extraction'], schedule: {}, outputs: ['profile'] },
+  { key: 'investment-thesis-researcher', name: 'Investment Thesis Researcher', purpose: 'Research what an investor really cares about — sectors, stage, pattern of bets, and stated thesis.', capabilities: ['research', 'exa-search', 'thesis-synthesis'], schedule: { cadence: 'daily', cron: '5 6 * * *', interval_hours: 24, batch_limit: 4 }, outputs: ['person', 'claim'], displayInRoster: true },
+  { key: 'sourcing-fit-scorer', name: 'Sourcing Fit Scorer', purpose: 'Score a company against every known investor thesis and surface who in the pool would actually care.', capabilities: ['ranking', 'matching'], schedule: { cadence: 'event-triggered' }, dependencies: ['investment-thesis-researcher'], outputs: ['recommendation'], displayInRoster: true },
 ];
 
 function safeJson(value, fallback = {}) {

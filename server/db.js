@@ -330,6 +330,13 @@ async function initSchema() {
     ALTER TABLE investors ADD COLUMN IF NOT EXISTS source_company_id INTEGER;
     ALTER TABLE investors ADD COLUMN IF NOT EXISTS investor_type TEXT DEFAULT 'VC';
     ALTER TABLE investors ADD COLUMN IF NOT EXISTS linkedin_url TEXT DEFAULT '';
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS thesis_profile TEXT;
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS thesis_sectors JSONB DEFAULT '[]';
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS thesis_stages JSONB DEFAULT '[]';
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS thesis_avoid TEXT DEFAULT '';
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS thesis_sources JSONB DEFAULT '[]';
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS thesis_confidence NUMERIC DEFAULT 0;
+    ALTER TABLE investors ADD COLUMN IF NOT EXISTS thesis_refined_at TEXT;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS channel TEXT DEFAULT 'email';
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS linkedin_url TEXT DEFAULT '';
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS outreach_prefs JSONB DEFAULT '{}';

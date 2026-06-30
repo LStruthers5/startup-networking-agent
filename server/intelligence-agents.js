@@ -480,6 +480,118 @@ ${JSON.stringify(actions)}`, 1500);
   });
 }
 
+async function runInvestmentThesisResearcher(limit = 4) {
+  const investors = await query(
+    `SELECT id,name,firm,role,investor_type,stage_focus,sector_focus,portfolio_companies
+     FROM investors
+     WHERE confirmed=1
+       AND (thesis_refined_at IS NULL OR thesis_refined_at < to_char(NOW() - INTERVAL '30 days','YYYY-MM-DD HH24:MI:SS'))
+     ORDER BY thesis_refined_at ASC NULLS FIRST, tier ASC LIMIT $1`,
+    [limit]
+  );
+  if (!investors.length) return [];
+  return executeAgent('investment-thesis-researcher', {
+    trigger: 'scheduled',
+    input: { investor_ids: investors.map(i => i.id) },
+  }, async () => {
+    const results = [];
+    for (const investor of investors) {
+      let evidence = '';
+      const sources = [];
+      try {
+        const search = await trackedExaSearch({
+          query: `"${investor.name}" ${investor.firm || ''} investment thesis portfolio companies writes about invests in`,
+          num_results: 6,
+          text: { maxCharacters: 800 },
+        });
+        for (const r of (search.results || [])) sources.push({ title: r.title, url: r.url });
+        evidence = (search.results || []).map(r => `- ${r.title}: ${r.text || ''}`).join('\n');
+      } catch (_) {}
+
+      const thesis = await askJson(`Based on the evidence below, synthesize what this investor actually looks for when deciding to invest.
+Be specific and grounded only in the evidence provided — if evidence is thin, say so via a low confidence score rather than inventing detail.
+Return only JSON:
+{
+  "thesis_profile": "120-180 word synthesis of what this investor cares about, the kinds of founders/companies/problems that excite them, and how they tend to engage",
+  "sectors": ["sector1","sector2"],
+  "stages": ["pre-seed","seed"],
+  "avoid": "short note on what they explicitly avoid or pass on, if evident",
+  "confidence": 0.0
+}
+
+INVESTOR: ${investor.name} | ${investor.firm || ''} | ${investor.role || ''} | ${investor.investor_type || 'VC'}
+KNOWN STAGE/SECTOR FOCUS: ${[investor.stage_focus, investor.sector_focus].filter(Boolean).join(' / ') || 'unknown'}
+KNOWN PORTFOLIO: ${investor.portfolio_companies || 'unknown'}
+
+EVIDENCE:
+${evidence || '(no public evidence found)'}`, 900);
+
+      if (!thesis) continue;
+      const ts = nowText();
+      await execute(
+        `UPDATE investors SET thesis_profile=$1, thesis_sectors=$2, thesis_stages=$3, thesis_avoid=$4,
+         thesis_sources=$5, thesis_confidence=$6, thesis_refined_at=$7 WHERE id=$8`,
+        [
+          thesis.thesis_profile || '', JSON.stringify(thesis.sectors || []), JSON.stringify(thesis.stages || []),
+          thesis.avoid || '', JSON.stringify(sources), Math.max(0, Math.min(1, Number(thesis.confidence || 0))),
+          ts, investor.id,
+        ]
+      );
+      results.push({
+        title: `Thesis refreshed: ${investor.name}`,
+        summary: thesis.thesis_profile,
+        signal_type: 'investor_thesis',
+        entity_type: 'investor',
+        entity_id: investor.id,
+        confidence: Number(thesis.confidence || 0.5),
+        actionable: false,
+        data: { investor_id: investor.id, ...thesis },
+      });
+    }
+    return results;
+  });
+}
+
+async function runSourcingFitScorer(companyId) {
+  const [company, investors] = await Promise.all([
+    queryOne('SELECT * FROM companies WHERE id=$1', [companyId]),
+    query(`SELECT id,name,firm,role,investor_type,thesis_profile,thesis_sectors,thesis_stages,relationship_status
+           FROM investors WHERE confirmed=1 AND thesis_profile IS NOT NULL AND thesis_profile!='' LIMIT 60`),
+  ]);
+  if (!company || !investors.length) return [];
+  return executeAgent('sourcing-fit-scorer', {
+    companyId,
+    trigger: 'event',
+    input: { company_id: companyId, investor_count: investors.length },
+  }, async () => {
+    const result = await askJson(`Score how well this company fits each investor's stated thesis. Use ONLY the thesis text given — do not invent fit.
+Return only the investors worth flagging (score >= 0.55), ranked highest first. Return only JSON:
+[{"investor_id":1,"fit_score":0.0,"rationale":"one sentence — be specific about the thesis match"}]
+
+COMPANY:
+${JSON.stringify({ name: company.name, sector: company.sector, stage: company.stage, description: company.description })}
+
+INVESTORS:
+${JSON.stringify(investors.map(i => ({ id: i.id, name: i.name, firm: i.firm, thesis: i.thesis_profile, sectors: i.thesis_sectors, stages: i.thesis_stages })))}`, 1200);
+
+    const fits = Array.isArray(result) ? result : [];
+    return fits.filter(f => f.investor_id && f.fit_score >= 0.55).map(f => {
+      const inv = investors.find(i => i.id === f.investor_id);
+      return {
+        title: `${inv?.name || 'Investor'} fits ${company.name}`,
+        company_id: companyId,
+        summary: f.rationale,
+        signal_type: 'investor_fit',
+        entity_type: 'investor',
+        entity_id: f.investor_id,
+        confidence: Number(f.fit_score),
+        actionable: true,
+        data: { investor_id: f.investor_id, investor_name: inv?.name, firm: inv?.firm, fit_score: f.fit_score },
+      };
+    });
+  });
+}
+
 async function curateTunerFeed(limit = 24) {
   const [companies, investors, events, signals, paths, history] = await Promise.all([
     query(`SELECT id,name,sector,stage,description,score FROM companies
@@ -760,6 +872,8 @@ async function runIntelligenceCycle() {
   const audited = auditDue ? await runEvidenceAuditor(Number(auditSchedule.batch_limit || 30)) : [];
   const curated = curatorDue ? await runCompanyProfileCurator(Number(curatorSchedule.batch_limit || 4)) : [];
   const discovered = discoveryDue ? await runCompanyDiscovery(Number(discoverySchedule.batch_limit || 6)) : [];
+  const thesisDue = await agentIsDue('investment-thesis-researcher', 24);
+  const thesisRefreshed = thesisDue ? await runInvestmentThesisResearcher(4) : [];
   const dailyLimit = Math.max(0, Number(investigatorSchedule.daily_limit || 3));
   const cooldownDays = Math.max(1, Number(investigatorSchedule.cooldown_days || 7));
   const minSignals = Math.max(1, Number(investigatorSchedule.min_signal_count || 2));
@@ -792,16 +906,28 @@ async function runIntelligenceCycle() {
       }
     }
   }
+  // Score sourcing fit for companies whose intelligence profile just got refreshed
+  const fitScored = [];
+  for (const item of curated.slice(0, 4)) {
+    const companyId = item?.data?.company_id || item?.entity_id;
+    if (!companyId) continue;
+    try { fitScored.push(...(await runSourcingFitScorer(companyId))); } catch (error) {
+      console.warn('[IntelligenceCycle] Sourcing fit scoring skipped:', error.message);
+    }
+  }
   return {
     monitored: monitored.length,
     audited: audited.length,
     curated: curated.length,
     discovered: discovered.length,
     investigated: dust.length,
+    thesis_refreshed: thesisRefreshed.length,
+    fit_scored: fitScored.length,
     monitor_due: monitorDue,
     audit_due: auditDue,
     curator_due: curatorDue,
     discovery_due: discoveryDue,
+    thesis_due: thesisDue,
     dust_remaining_today: Math.max(0, remainingInvestigations - dust.length),
   };
 }
@@ -814,6 +940,8 @@ module.exports = {
   runOpportunityInvestigator,
   runRelationshipPathfinder,
   runFollowUpStrategist,
+  runInvestmentThesisResearcher,
+  runSourcingFitScorer,
   curateTunerFeed,
   runOutcomeLearning,
   runAgentPortfolioManager,
