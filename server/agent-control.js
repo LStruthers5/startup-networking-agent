@@ -34,6 +34,10 @@ const NATIVE_AGENTS = [
   { key: 'investment-thesis-researcher', name: 'Investment Thesis Researcher', purpose: 'Research what an investor really cares about — sectors, stage, pattern of bets, and stated thesis.', capabilities: ['research', 'exa-search', 'thesis-synthesis'], schedule: { cadence: 'daily', cron: '5 6 * * *', interval_hours: 24, batch_limit: 4 }, outputs: ['person', 'claim'], displayInRoster: true },
   { key: 'sourcing-fit-scorer', name: 'Sourcing Fit Scorer', purpose: 'Score a company against every known investor thesis and surface who in the pool would actually care.', capabilities: ['ranking', 'matching'], schedule: { cadence: 'event-triggered' }, dependencies: ['investment-thesis-researcher'], outputs: ['recommendation'], displayInRoster: true },
   { key: 'calendar-cross-reference', name: 'Calendar Cross-Reference', purpose: 'Match attendees on your upcoming calendar events against your investor pool.', capabilities: ['matching', 'calendar'], schedule: { cadence: 'daily', cron: '0 6 * * *' }, outputs: ['recommendation'], displayInRoster: true },
+  { key: 'gmail-lead-scout', name: 'Gmail Lead Scout', purpose: 'Scan inbox subjects and senders for mentions of tracked companies and investors — intros, replies, newsletter signals.', capabilities: ['matching', 'email'], schedule: { cadence: 'daily', cron: '10 6 * * *' }, outputs: ['recommendation'], displayInRoster: true },
+  { key: 'gmail-style-learner', name: 'Gmail Style Learner', purpose: 'Distill your Sent-folder writing style into a voice profile that shapes outreach drafts.', capabilities: ['email', 'summarization'], schedule: {}, outputs: ['profile'] },
+  { key: 'agent-orchestrator', name: 'Master Orchestrator', purpose: 'Decide which research agents to run each cycle based on staleness, backlog, recent yield, and remaining budget — the loop that runs the other loops.', capabilities: ['planning', 'orchestration'], schedule: { cadence: 'every-15-min', cron: '*/15 * * * *' }, outputs: ['recommendation'], displayInRoster: true },
+  { key: 'lead-momentum-tracker', name: 'Lead Momentum Tracker', purpose: 'Track sustained promise across signal cycles and alert when a lead crosses the high-conviction threshold, with a low-stakes and a high-reward reachout path.', capabilities: ['momentum', 'synthesis', 'alerting'], schedule: { cadence: 'every-12-hours', cron: '30 */12 * * *', interval_hours: 12, batch_limit: 20 }, outputs: ['recommendation'], displayInRoster: true },
 ];
 
 function safeJson(value, fallback = {}) {
@@ -116,6 +120,16 @@ async function monthlySpend() {
     FROM agent_runs
     WHERE status IN ('completed','failed','partial')
       AND created_at >= to_char(date_trunc('month', NOW() AT TIME ZONE 'UTC'), 'YYYY-MM-DD HH24:MI:SS')
+  `);
+  return Number(row?.total || 0);
+}
+
+async function todaySpend() {
+  const row = await queryOne(`
+    SELECT COALESCE(SUM(COALESCE(exact_cost_usd, estimated_cost_usd, 0)),0) AS total
+    FROM agent_runs
+    WHERE status IN ('completed','failed','partial')
+      AND created_at >= to_char(CURRENT_DATE, 'YYYY-MM-DD HH24:MI:SS')
   `);
   return Number(row?.total || 0);
 }
@@ -300,4 +314,6 @@ module.exports = {
   trackedExaSearch,
   checkBudget,
   normalizeSignals,
+  monthlySpend,
+  todaySpend,
 };

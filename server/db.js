@@ -5,6 +5,19 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')
     ? { rejectUnauthorized: false }
     : false,
+  // A public Postgres proxy (vs. localhost or Railway's internal network) drops idle connections far
+  // more often — proactively recycle them rather than holding many open and waiting for a drop.
+  max: 10,
+  idleTimeoutMillis: 20000,
+  connectionTimeoutMillis: 10000,
+  keepAlive: true,
+});
+
+// Without this, an idle client erroring (e.g. the remote proxy dropping a stale connection) has no
+// listener and Node's default 'error' behavior is to throw and crash the whole process. This is the
+// single most common cause of a bare "Connection terminated unexpectedly" crash with pg-pool.
+pool.on('error', (err) => {
+  console.error('[DB] Idle client error (pool recovering):', err.message);
 });
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -339,9 +352,30 @@ async function initSchema() {
     ALTER TABLE investors ADD COLUMN IF NOT EXISTS thesis_refined_at TEXT;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS channel TEXT DEFAULT 'email';
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS linkedin_url TEXT DEFAULT '';
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS stakes_tier TEXT DEFAULT 'standard';
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS scheduled_send_at TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS investor_email_source TEXT;
+
+    CREATE TABLE IF NOT EXISTS firm_email_patterns (
+      id SERIAL PRIMARY KEY,
+      firm TEXT NOT NULL,
+      domain TEXT UNIQUE,
+      pattern TEXT NOT NULL,
+      example_email TEXT,
+      confirmed_count INTEGER DEFAULT 1,
+      discovered_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'),
+      updated_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS outreach_prefs JSONB DEFAULT '{}';
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS taste_profile TEXT;
     ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS taste_refined_at TEXT;
+    ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS writing_style_profile TEXT;
+    ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS writing_style_refined_at TEXT;
+    ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS writing_style_examples JSONB DEFAULT '[]';
+    ALTER TABLE companies ADD COLUMN IF NOT EXISTS momentum_score NUMERIC DEFAULT 0;
+    ALTER TABLE companies ADD COLUMN IF NOT EXISTS momentum_updated_at TEXT;
+    ALTER TABLE companies ADD COLUMN IF NOT EXISTS momentum_streak INTEGER DEFAULT 0;
+    ALTER TABLE companies ADD COLUMN IF NOT EXISTS hot_lead_alerted_at TEXT;
     ALTER TABLE agent_registry ADD COLUMN IF NOT EXISTS display_in_roster INTEGER DEFAULT 0;
     ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS agent_key TEXT;
     ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS agent_version INTEGER DEFAULT 1;
@@ -390,6 +424,18 @@ async function initSchema() {
       right_json JSONB,
       choice TEXT,
       created_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+    );
+
+    CREATE TABLE IF NOT EXISTS gmail_connections (
+      id SERIAL PRIMARY KEY,
+      provider TEXT DEFAULT 'google',
+      account_email TEXT,
+      access_token TEXT,
+      refresh_token TEXT,
+      token_expiry TEXT,
+      scope TEXT,
+      connected_at TEXT DEFAULT to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'),
+      owner_id TEXT DEFAULT 'local'
     );
 
     INSERT INTO control_tower_settings (owner_id)

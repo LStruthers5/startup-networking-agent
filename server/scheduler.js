@@ -1,14 +1,12 @@
 const cron = require('node-cron');
 const { query, queryOne, today, daysFromNow } = require('./db');
-const { runAutonomousDraftGeneration, runWeeklyRecap, rankCompaniesByTaste, runEventDiscovery } = require('./agents');
+const { runAutonomousDraftGeneration, runWeeklyRecap, rankCompaniesByTaste } = require('./agents');
 const {
-  runIntelligenceCycle,
-  runRelationshipPathfinder,
-  runFollowUpStrategist,
+  runMasterOrchestrator,
   runOutcomeLearning,
   runAgentPortfolioManager,
 } = require('./intelligence-agents');
-const { sendMorningBriefing, sendWeeklyRecap: sendWeeklyEmail } = require('./email');
+const { sendMorningBriefing, sendWeeklyRecap: sendWeeklyEmail, sendDraftEmail } = require('./email');
 
 // Pick 2 companies that haven't been suggested recently
 async function pickDailyCandidates(n = 2) {
@@ -121,28 +119,6 @@ async function runDailyJob() {
   return { autoDrafts: autoDrafts.length, pendingDrafts: pendingDrafts.length, events: upcomingEvents.length };
 }
 
-async function runSignalMonitorJob() {
-  const monitor = await queryOne(`SELECT schedule_json,status FROM agent_registry WHERE agent_key='event-discovery'`);
-  if (monitor?.status !== 'active') return { events: 0, skipped: 'paused' };
-  const schedule = typeof monitor?.schedule_json === 'string' ? JSON.parse(monitor.schedule_json || '{}') : (monitor?.schedule_json || {});
-  const multiplier = Math.max(0.25, Number(schedule.frequency_multiplier || 1));
-  const intervalHours = Math.max(2, Number(schedule.interval_hours || 6 / multiplier));
-  const lastRun = await queryOne(`
-    SELECT completed_at FROM agent_runs
-    WHERE agent_key='event-discovery' AND status='completed'
-    ORDER BY completed_at DESC LIMIT 1
-  `);
-  if (lastRun?.completed_at) {
-    const elapsedHours = (Date.now() - new Date(lastRun.completed_at.replace(' ', 'T') + 'Z').getTime()) / 3_600_000;
-    if (elapsedHours < intervalHours) return { events: 0, skipped: 'not-due', next_in_hours: intervalHours - elapsedHours };
-  }
-  const trackedInvestors = await query('SELECT * FROM investors WHERE track_events=1 ORDER BY name');
-  if (!trackedInvestors.length) return { events: 0 };
-  const newEvents = await runEventDiscovery(trackedInvestors);
-  console.log(`[Scheduler] Event monitor found ${newEvents.length} new signal(s)`);
-  return { events: newEvents.length };
-}
-
 async function runWeeklyJob() {
   if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
   const stats = await getPipelineStats();
@@ -151,24 +127,34 @@ async function runWeeklyJob() {
   console.log('[Scheduler] Weekly recap sent.');
 }
 
-async function runDailyIntelligenceJob() {
-  const [pathAgent, followUpAgent] = await Promise.all([
-    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='relationship-pathfinder'`),
-    queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='follow-up-strategist'`),
-  ]);
-  const pathSchedule = typeof pathAgent?.schedule_json === 'string' ? JSON.parse(pathAgent.schedule_json || '{}') : (pathAgent?.schedule_json || {});
-  const followUpSchedule = typeof followUpAgent?.schedule_json === 'string' ? JSON.parse(followUpAgent.schedule_json || '{}') : (followUpAgent?.schedule_json || {});
-  const paths = await runRelationshipPathfinder(Number(pathSchedule.batch_limit || 8));
-  const followUps = await runFollowUpStrategist(Number(followUpSchedule.batch_limit || 12));
-  console.log(`[Scheduler] Daily intelligence produced ${paths.length} relationship paths and ${followUps.length} follow-up recommendations`);
-  return { relationship_paths: paths.length, follow_up_recommendations: followUps.length };
-}
-
 async function runWeeklyLearningJob() {
   const outcomes = await runOutcomeLearning();
   const portfolio = await runAgentPortfolioManager();
   console.log(`[Scheduler] Weekly learning produced ${outcomes.length} outcome reviews and ${portfolio.length} portfolio recommendations`);
   return { outcomes: outcomes.length, portfolio: portfolio.length };
+}
+
+// Fires only for drafts explicitly marked 'low' stakes at creation time (cold reach, lowest investor
+// tier, real email on file — never a warm-intro path) whose cancel window has elapsed and that haven't
+// been cancelled. This is deliberately pure, deterministic SQL — no LLM judgment sits in the send path.
+async function runScheduledAutoSends() {
+  const due = await query(
+    `SELECT * FROM drafts
+     WHERE status='pending' AND stakes_tier='low' AND scheduled_send_at IS NOT NULL
+       AND scheduled_send_at <= to_char(NOW() AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS')
+       AND investor_email IS NOT NULL`
+  );
+  let sent = 0;
+  for (const draft of due) {
+    try {
+      await sendDraftEmail(draft);
+      sent++;
+      console.log(`[AutoSend] Sent low-stakes draft to ${draft.investor_name} (${draft.investor_email})`);
+    } catch (error) {
+      console.error(`[AutoSend] Failed for draft ${draft.id}:`, error.message);
+    }
+  }
+  return { checked: due.length, sent };
 }
 
 function startScheduler() {
@@ -179,21 +165,21 @@ function startScheduler() {
   } else {
     console.log('[Scheduler] No RESEND_API_KEY — email jobs disabled; research monitors remain active.');
   }
-  // Broad monitoring continues throughout the day; findings enter the river for human review.
-  cron.schedule('*/15 * * * *', () => runSignalMonitorJob().catch(e => console.error('[Scheduler] Monitor error:', e.message)), { timezone: 'America/Los_Angeles' });
-  // Poll frequently; each intelligence agent consults its applied scenario interval before running.
-  cron.schedule('*/15 * * * *', () => runIntelligenceCycle().catch(e => console.error('[Scheduler] Intelligence cycle error:', e.message)), { timezone: 'America/Los_Angeles' });
-  cron.schedule('40 7 * * *', () => runDailyIntelligenceJob().catch(e => console.error('[Scheduler] Daily intelligence error:', e.message)), { timezone: 'America/Los_Angeles' });
+  // Master Orchestrator: one LLM decision per tick over which research agents are worth running,
+  // given staleness, backlog, recent yield, and remaining budget — replaces the old fixed per-agent crons.
+  cron.schedule('*/15 * * * *', () => runMasterOrchestrator().catch(e => console.error('[Scheduler] Orchestrator error:', e.message)), { timezone: 'America/Los_Angeles' });
   cron.schedule('40 6 * * 1', () => runWeeklyLearningJob().catch(e => console.error('[Scheduler] Weekly learning error:', e.message)), { timezone: 'America/Los_Angeles' });
+  if (process.env.RESEND_API_KEY) {
+    cron.schedule('*/15 * * * *', () => runScheduledAutoSends().catch(e => console.error('[Scheduler] Auto-send error:', e.message)), { timezone: 'America/Los_Angeles' });
+  }
 
-  console.log('[Scheduler] Started — monitoring, intelligence, daily planning, and weekly learning (PT)');
+  console.log('[Scheduler] Started — master orchestrator, daily planning, low-stakes auto-send, and weekly learning (PT)');
 }
 
 module.exports = {
   startScheduler,
   runDailyJob,
   runWeeklyJob,
-  runSignalMonitorJob,
-  runDailyIntelligenceJob,
   runWeeklyLearningJob,
+  runScheduledAutoSends,
 };

@@ -11,6 +11,13 @@ const express = require('express');
 const path = require('path');
 const { initSchema } = require('./db');
 
+// Express 4 does not catch a rejected promise thrown from an async route handler — an unhandled
+// rejection anywhere (a transient DB error on the remote Postgres proxy, a flaky external API call)
+// would otherwise crash the whole server. Log it and keep the process alive instead.
+process.on('unhandledRejection', (err) => {
+  console.error('[Server] Unhandled rejection (continuing):', err?.message || err);
+});
+
 const app = express();
 app.use(express.json());
 
@@ -18,7 +25,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   // allow uptime checks and one-click approve/skip links from email (token is the auth)
   if (req.path === '/api/health') return next();
-  if (req.path.startsWith('/api/drafts/approve/') || req.path.startsWith('/api/drafts/skip/')) return next();
+  if (req.path.startsWith('/api/drafts/approve/') || req.path.startsWith('/api/drafts/skip/') || req.path.startsWith('/api/drafts/cancel-auto-send/')) return next();
 
   const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
   if (!AUTH_PASSWORD) return next(); // no password set → open (dev mode)
@@ -49,6 +56,7 @@ app.use('/api/drafts', require('./routes/drafts'));
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/control-tower', require('./routes/control-tower'));
 app.use('/api/calendar', require('./routes/calendar'));
+app.use('/api/gmail', require('./routes/gmail'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -77,8 +85,22 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
+// Connecting over a public Postgres proxy (rather than localhost or Railway's internal network) is
+// noticeably flakier — a transient connection drop during boot shouldn't require a manual restart.
+async function initSchemaWithRetry(retries = 3, delayMs = 2000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await initSchema();
+    } catch (err) {
+      if (attempt === retries) throw err;
+      console.warn(`[DB] Init attempt ${attempt}/${retries} failed (${err.message}) — retrying in ${delayMs}ms`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 // Init DB then start server
-initSchema()
+initSchemaWithRetry()
   .then(() => require('./agent-control').ensureAgentRegistry())
   .then(() => {
     app.listen(PORT, () => {

@@ -565,6 +565,8 @@ async function loadUserProfile() {
       preferredTone: p.preferred_tone || '',
       emailSignature: p.email_signature || name || firstName,
       taste: p.taste_profile || '',
+      writingStyle: p.writing_style_profile || '',
+      writingStyleExamples: parse(p.writing_style_examples),
       linkedinUrl: p.linkedin_url || '',
       portfolioUrl: p.portfolio_url || '',
     };
@@ -658,6 +660,8 @@ async function runOutreachDraft(company, investor, userProfile = null, channel =
     preferredTone: '',
     emailSignature: 'Luke Struthers',
     taste: '',
+    writingStyle: '',
+    writingStyleExamples: [],
     linkedinUrl: '',
   };
 
@@ -684,16 +688,23 @@ async function runOutreachDraft(company, investor, userProfile = null, channel =
   ].filter(Boolean).join('\n');
 
   const voiceBlock = profile.taste
-    ? `VOICE & PREFERENCES — learned from ${profile.name}'s own "this or that" choices. Follow this closely; it defines the tone and the kind of ask ${profile.name} is comfortable making:\n${profile.taste}\n`
+    ? `STRATEGY PREFERENCES — learned from ${profile.name}'s own "this or that" choices. This governs WHAT kind of ask to make and how direct to be, not the sentence-level voice:\n${profile.taste}\n`
     : (profile.preferredTone ? `Preferred tone: ${profile.preferredTone}\n` : '');
+
+  const exampleEmails = Array.isArray(profile.writingStyleExamples) ? profile.writingStyleExamples.filter(e => e && e.body) : [];
+  const writingStyleBlock = (profile.writingStyle || exampleEmails.length)
+    ? `HOW ${profile.name.toUpperCase()} ACTUALLY WRITES — learned from ${profile.name}'s own sent emails:
+${profile.writingStyle || ''}
+${exampleEmails.length ? `\nREAL EMAILS ${profile.name.toUpperCase()} HAS ACTUALLY SENT — match this exact register, not a "cold outreach" register. Copy how these open and close, the sentence length, the directness, the punctuation habits. Do NOT write a generic hook-based opener unless these examples actually do that:\n${exampleEmails.map((e, i) => `[Example ${i + 1}] Subject: ${e.subject || '(none)'}\n${e.body}`).join('\n---\n')}` : ''}
+`
+    : '';
 
   const isInmail = channel === 'inmail';
   const channelInstructions = isInmail
     ? `FORMAT — LinkedIn InMail:
-- Subject line: max 200 characters, specific and human (not salesy)
+- Subject line: max 200 characters
 - Body: 80–120 words MAX. InMail is read on mobile; keep it tight.
-- No email conventions (no "Best," sign-off needed — LinkedIn shows your name automatically)
-- Casual but purposeful. Sound like a person, not a PR blast.
+- No email sign-off needed — LinkedIn shows your name automatically.
 - End with a clear, low-pressure question or ask on its own line.
 Output format:
 SUBJECT: <subject line>
@@ -704,19 +715,21 @@ SUBJECT: <subject line>
 - Close with: ${profile.emailSignature}
 Output ONLY the message text.`;
 
-  const prompt = `You are writing a cold outreach message on behalf of ${profile.name}${profile.fullName && profile.fullName !== profile.name ? ` (${profile.fullName})` : ''}.
+  const prompt = `Write an outreach message on behalf of ${profile.name}${profile.fullName && profile.fullName !== profile.name ? ` (${profile.fullName})` : ''}, addressed to the investor below.
+
+The single most important instruction: this must read as something ${profile.name} actually wrote, not as a cold-outreach template with the name changed. If the real sent-email examples below exist, they are the ground truth for voice — match them, don't "improve" on them with marketing-style hooks, forced enthusiasm, or a punchier opener than ${profile.name} would actually write. If ${profile.name}'s real emails are short and direct, be short and direct. If they skip small talk, skip it. Never write "I hope this message finds you well," never invent a "hook," never sound like a templated cold email — sound like ${profile.name} dashed this off between other things.
 
 ABOUT ${(profile.name || '').toUpperCase()}:
 ${aboutLines || '- An ambitious early-career professional breaking into the startup ecosystem.'}
 
+${writingStyleBlock}
 ${voiceBlock}
 ${channelInstructions}
 
-Rules:
-1. Open with a specific, genuine hook — reference their firm's investment in ${company.name} or something from the activity below
-2. Establish who ${profile.name} is in 1 sentence, grounded ONLY in the real background above (never invent credentials)
-3. Make an ask that matches ${profile.name}'s comfort level from the voice preferences above
-4. Sound human. No "I hope this message finds you well." No buzzwords.
+Ground rules:
+1. Reference something specific and real about ${company.name} or the investor's activity below — a real detail, not a manufactured compliment.
+2. Establish who ${profile.name} is in at most 1 sentence, grounded ONLY in the real background above (never invent credentials).
+3. Make an ask that matches ${profile.name}'s comfort level from the strategy preferences above.
 
 Target: ${investor.name} | ${investor.firm} | ${investor.role || 'Investor'}${investor.investor_type ? ` | ${investor.investor_type}` : ''}
 Company context: ${company.name} — ${company.sector || ''} startup — "${company.description || 'no description'}"
@@ -747,10 +760,137 @@ ${recentActivity ? `Recent activity found:\n${recentActivity}` : '(no recent act
 // ─── AUTONOMOUS DRAFT GENERATION ───────────────────────────────────────────
 // Called nightly by the scheduler. Picks targets from runQueueSuggestions,
 // finds emails, writes personalized drafts, saves to drafts table.
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const EMAIL_SKIP_LIST = ['noreply', 'no-reply', 'support', 'info@', 'hello@', 'contact@', 'privacy@', 'press@', 'jobs@', 'careers@', 'media@'];
+const NON_FIRM_HOSTS = ['linkedin.com', 'crunchbase.com', 'twitter.com', 'x.com', 'facebook.com', 'wikipedia.org', 'instagram.com'];
+
+// Resolves a VC firm's own website domain, so email search can be scoped to where a partner's
+// real contact info is most likely published — their own team/about page — instead of open web search.
+async function resolveFirmDomain(firmName) {
+  if (!firmName) return null;
+  try {
+    const data = await trackedExaSearch({ query: `${firmName} venture capital official website`, num_results: 3 });
+    for (const result of (data.results || [])) {
+      try {
+        const host = new URL(result.url).hostname.replace(/^www\./, '');
+        if (host && !NON_FIRM_HOSTS.some(b => host.includes(b))) return host;
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return null;
+}
+
+// Detects which convention a confirmed real email follows (first / first.last / flast / etc.), so
+// it can be applied to other people at the same firm without searching for each one individually —
+// the single biggest lever real email-sourcing tools use.
+function inferEmailPattern(email, firstName, lastName) {
+  const local = email.split('@')[0].toLowerCase();
+  if (!firstName) return null;
+  if (lastName && local === `${firstName}.${lastName}`) return 'first.last';
+  if (lastName && local === `${firstName}_${lastName}`) return 'first_last';
+  if (lastName && local === `${firstName}${lastName}`) return 'firstlast';
+  if (lastName && local === `${firstName[0]}${lastName}`) return 'flast';
+  if (lastName && local === `${firstName}${lastName[0]}`) return 'firstl';
+  if (lastName && local === `${lastName}.${firstName}`) return 'last.first';
+  if (local === firstName) return 'first';
+  return null;
+}
+
+function applyEmailPattern(pattern, firstName, lastName, domain) {
+  if (!firstName || !domain) return null;
+  const map = {
+    'first.last': lastName && `${firstName}.${lastName}`,
+    'first_last': lastName && `${firstName}_${lastName}`,
+    'firstlast': lastName && `${firstName}${lastName}`,
+    'flast': lastName && `${firstName[0]}${lastName}`,
+    'firstl': lastName && `${firstName}${lastName[0]}`,
+    'last.first': lastName && `${lastName}.${firstName}`,
+    'first': firstName,
+  };
+  const local = map[pattern];
+  return local ? `${local}@${domain}` : null;
+}
+
+async function getFirmEmailPattern(domain) {
+  if (!domain) return null;
+  const { queryOne } = require('./db');
+  return queryOne('SELECT * FROM firm_email_patterns WHERE domain=$1', [domain]);
+}
+
+async function saveFirmEmailPattern(firmName, domain, pattern, exampleEmail) {
+  if (!domain || !pattern) return;
+  const { execute } = require('./db');
+  await execute(
+    `INSERT INTO firm_email_patterns (firm, domain, pattern, example_email)
+     VALUES ($1,$2,$3,$4)
+     ON CONFLICT (domain) DO UPDATE SET
+       pattern=EXCLUDED.pattern, example_email=EXCLUDED.example_email,
+       confirmed_count=firm_email_patterns.confirmed_count+1,
+       updated_at=to_char(NOW() AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS')`,
+    [firmName, domain, pattern, exampleEmail]
+  ).catch(() => {});
+}
+
+// Finds an email for a specific person. Checks firm pattern memory first (a high-confidence
+// unverified guess, once we've ever confirmed one real email at that firm); otherwise searches for
+// a real, confirmed address — never fabricates one from nothing. Learns the firm's pattern from
+// whatever it confirms, so the next person at the same firm skips straight to a pattern guess.
+// Returns { email, source: 'found'|'pattern' } or null.
+async function findInvestorEmail(target, firmName) {
+  if (!process.env.EXA_API_KEY) return null;
+  const nameParts = String(target.name || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts[nameParts.length - 1] || '';
+  if (!firstName) return null;
+
+  const domain = await resolveFirmDomain(firmName);
+
+  const knownPattern = await getFirmEmailPattern(domain);
+  if (knownPattern) {
+    const guess = applyEmailPattern(knownPattern.pattern, firstName, lastName, domain);
+    if (guess) return { email: guess, source: 'pattern' };
+  }
+
+  const queries = [];
+  if (domain) {
+    queries.push(`site:${domain} "${target.name}" team`);
+    queries.push(`site:${domain} "${target.name}" contact`);
+  }
+  queries.push(`"${target.name}" "${firmName}" email contact`);
+
+  for (const q of queries) {
+    try {
+      const data = await trackedExaSearch({ query: q, num_results: 5, text: { maxCharacters: 3000 } });
+      for (const result of (data.results || [])) {
+        const blob = `${result.text || ''} ${result.url}`;
+        const emails = (blob.match(EMAIL_REGEX) || []).filter(e => !EMAIL_SKIP_LIST.some(s => e.toLowerCase().includes(s)));
+        if (!emails.length) continue;
+        // Prefer an email whose local-part actually contains their name — a team page can list
+        // several colleagues' addresses, and we want theirs, not whoever else is on the page.
+        const nameMatch = emails.find(e => {
+          const local = e.split('@')[0].toLowerCase();
+          return local.includes(firstName) || (lastName && local.includes(lastName));
+        });
+        const found = nameMatch
+          // A single plausible address on their own firm's domain, on a page that actually mentions
+          // them by name, is reasonable confidence even without an exact local-part match.
+          || (domain && emails.length === 1 && (result.text || '').toLowerCase().includes(firstName) ? emails[0] : null);
+        if (found) {
+          if (domain) {
+            const pattern = inferEmailPattern(found, firstName, lastName);
+            if (pattern) await saveFirmEmailPattern(firmName, domain, pattern, found);
+          }
+          return { email: found, source: 'found' };
+        }
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
 async function runAutonomousDraftGeneration(companies, userProfile = null) {
   const crypto = require('crypto');
   const { execute, queryOne, today } = require('./db');
-  const EXA_KEY = process.env.EXA_API_KEY;
   const savedDrafts = [];
 
   // Get structured investor targets for each company (runs Exa firm search internally)
@@ -776,27 +916,11 @@ async function runAutonomousDraftGeneration(companies, userProfile = null) {
       continue;
     }
 
-    // Find email via Exa
-    let email = null;
-    if (EXA_KEY) {
-      try {
-        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-        const skipList = ['noreply', 'no-reply', 'support', 'info@', 'hello@', 'contact@', 'privacy@', 'press@', 'jobs@'];
-        const searchQueries = [
-          `"${target.name}" "${target.firm}" email contact`,
-          `"${target.name}" site:linkedin.com email`,
-        ];
-        emailSearch: for (const q of searchQueries) {
-          const data = await trackedExaSearch({ query: q, num_results: 5, text: { maxCharacters: 500 } });
-          for (const result of (data.results || [])) {
-            const blob = `${result.text || ''} ${result.url}`;
-            const emails = blob.match(emailRegex) || [];
-            const found = emails.find(e => !skipList.some(s => e.toLowerCase().includes(s)));
-            if (found) { email = found; break emailSearch; }
-          }
-        }
-      } catch (_) {}
-    }
+    // Find email — scoped to the firm's own domain (team/contact pages) first, then a broader
+    // named search. Never guesses or constructs an address; only returns something actually found.
+    const emailResult = await findInvestorEmail(target, target.firm);
+    const email = emailResult?.email || null;
+    const emailSource = emailResult?.source || null;
 
     // Generate personalized draft (InMail by default)
     let draft = null;
@@ -809,15 +933,29 @@ async function runAutonomousDraftGeneration(companies, userProfile = null) {
 
     const token = crypto.randomBytes(32).toString('hex');
     const linkedinUrl = target.linkedin_url || '';
+
+    // Low-stakes = a cold reach (never a warm intro through an existing contact) to the lowest-priority
+    // investor tier, and only when we found a REAL confirmed email — a pattern-derived guess is not
+    // enough to qualify for auto-send, since it's unverified. Anything using a real relationship, a
+    // higher-priority target, or an unconfirmed email always stays fully manual.
+    const AUTO_SEND_CANCEL_WINDOW_HOURS = 3;
+    const isWarmPath = target === card.warm;
+    const tier = Number(target.tier || 5);
+    const isLowStakes = !isWarmPath && tier >= 4 && emailSource === 'found';
+    const scheduledSendAt = isLowStakes
+      ? new Date(Date.now() + AUTO_SEND_CANCEL_WINDOW_HOURS * 3600000).toISOString().replace('T', ' ').slice(0, 19)
+      : null;
+
     await execute(
-      `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, approve_token, channel, linkedin_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [company.id, target.name, email || null,
-       draft.subject, draft.body, token, draft.channel || 'inmail', linkedinUrl]
+      `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, approve_token, channel, linkedin_url, stakes_tier, scheduled_send_at, investor_email_source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [company.id, target.name, email,
+       draft.subject, draft.body, token, draft.channel || 'inmail', linkedinUrl,
+       isLowStakes ? 'low' : 'standard', scheduledSendAt, emailSource]
     );
 
-    savedDrafts.push({ company: company.name, investor: target.name, hasEmail: !!email, channel: draft.channel });
-    console.log(`[AutoDraft] ${target.name} @ ${target.firm} — email: ${email || 'not found'}`);
+    savedDrafts.push({ company: company.name, investor: target.name, hasEmail: !!email, emailSource, channel: draft.channel, stakesTier: isLowStakes ? 'low' : 'standard' });
+    console.log(`[AutoDraft] ${target.name} @ ${target.firm} — email: ${email || 'not found'}${emailSource === 'pattern' ? ' (pattern guess, unverified)' : ''}`);
   }
 
   return savedDrafts;

@@ -81,7 +81,7 @@ Never commit:
 ## Action Queue Rules
 
 - Agent outputs should inform action items, but action items must remain human-in-the-loop.
-- Never send outreach automatically.
+- Outreach only sends automatically for drafts explicitly marked `stakes_tier='low'` at creation time (cold reach — never a warm-intro path — to the lowest investor priority tier, with a real email on file), and only after a 3-hour cancel window the user can cancel from either the app or the email notice. Every other draft — any warm intro, any higher-priority target, or anything without a confirmed email — always requires an explicit human approval click. The send trigger itself (`runScheduledAutoSends` in `server/scheduler.js`) is pure deterministic SQL, never an LLM decision.
 - Avoid duplicate open action items for the same target and action type.
 - Preserve user-entered action notes, statuses, due dates, and outreach drafts when rebuilding queues.
 - Prioritize actions that create useful conversations or unblock outreach.

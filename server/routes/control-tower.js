@@ -11,12 +11,15 @@ const {
   runOpportunityInvestigator,
   runRelationshipPathfinder,
   runFollowUpStrategist,
+  runLeadMomentumTracker,
   runInvestmentThesisResearcher,
   runSourcingFitScorer,
   runCalendarCrossReference,
+  runGmailLeadScout,
   runOutcomeLearning,
   runAgentPortfolioManager,
   runIntelligenceCycle,
+  runMasterOrchestrator,
 } = require('../intelligence-agents');
 
 const money = value => Number(value || 0);
@@ -28,7 +31,7 @@ const json = (value, fallback) => {
 
 router.get('/summary', async (req, res) => {
   try {
-    const [settings, today, month, sinceVisit, signalStats, failures, agents] = await Promise.all([
+    const [settings, today, month, trailing7, topAgents7d, sinceVisit, signalStats, failures, agents] = await Promise.all([
       queryOne(`SELECT * FROM control_tower_settings WHERE owner_id='local'`),
       queryOne(`
         SELECT COUNT(*) AS runs,
@@ -42,6 +45,18 @@ router.get('/summary', async (req, res) => {
           COALESCE(SUM(COALESCE(exact_cost_usd, estimated_cost_usd, 0)),0) AS cost
         FROM agent_runs
         WHERE created_at >= to_char(date_trunc('month', NOW() AT TIME ZONE 'UTC'), 'YYYY-MM-DD HH24:MI:SS')`),
+      queryOne(`
+        SELECT COALESCE(SUM(COALESCE(exact_cost_usd, estimated_cost_usd, 0)),0) AS cost,
+          COUNT(DISTINCT to_char(created_at::timestamp, 'YYYY-MM-DD')) AS active_days
+        FROM agent_runs
+        WHERE created_at >= to_char(CURRENT_DATE - INTERVAL '6 days', 'YYYY-MM-DD')`),
+      query(`
+        SELECT agent_key, COALESCE(SUM(COALESCE(exact_cost_usd, estimated_cost_usd, 0)),0) AS cost, COUNT(*) AS runs
+        FROM agent_runs
+        WHERE created_at >= to_char(CURRENT_DATE - INTERVAL '6 days', 'YYYY-MM-DD')
+        GROUP BY agent_key
+        HAVING COALESCE(SUM(COALESCE(exact_cost_usd, estimated_cost_usd, 0)),0) > 0
+        ORDER BY cost DESC LIMIT 4`),
       queryOne(`
         SELECT COUNT(*) AS runs,
           COALESCE(SUM(COALESCE(exact_cost_usd, estimated_cost_usd, 0)),0) AS cost
@@ -82,9 +97,13 @@ router.get('/summary', async (req, res) => {
     const dailyTarget = money(settings?.daily_target_usd);
     const ceiling = money(settings?.monthly_ceiling_usd);
     const monthCost = money(month?.cost);
-    const dayOfMonth = new Date().getUTCDate();
     const daysInMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0)).getUTCDate();
-    const forecast = dayOfMonth ? (monthCost / dayOfMonth) * daysInMonth : monthCost;
+    // A trailing-7-day daily average is far less noisy than month-to-date ÷ day-of-month, which can
+    // wildly overstate the forecast on the 1st-3rd of a month if even one day ran heavier than usual
+    // (e.g. testing a batch of agents at once).
+    const activeDays = Math.max(1, Number(trailing7?.active_days || 0));
+    const avgDailyCost = money(trailing7?.cost) / activeDays;
+    const forecast = avgDailyCost * daysInMonth;
 
     res.json({
       today: {
@@ -100,6 +119,10 @@ router.get('/summary', async (req, res) => {
         monthly_ceiling: ceiling,
         month_spend: monthCost,
         monthly_forecast: forecast,
+        forecast_basis: `avg of $${avgDailyCost.toFixed(2)}/day over the last ${activeDays} active day${activeDays === 1 ? '' : 's'}`,
+        avg_daily_cost: avgDailyCost,
+        active_days: activeDays,
+        top_cost_drivers: (topAgents7d || []).map(a => ({ agent_key: a.agent_key, cost: money(a.cost), runs: Number(a.runs) })),
         remaining: Math.max(0, ceiling - monthCost),
         utilization: ceiling ? monthCost / ceiling : 0,
         forecast_over_ceiling: ceiling > 0 && forecast > ceiling,
@@ -174,12 +197,15 @@ router.post('/agents/:agentKey/run', async (req, res) => {
     'opportunity-investigator': () => runOpportunityInvestigator(Number(req.body.company_id)),
     'relationship-pathfinder': () => runRelationshipPathfinder(Number(req.body.limit || 8)),
     'follow-up-strategist': () => runFollowUpStrategist(Number(req.body.limit || 12)),
+    'lead-momentum-tracker': () => runLeadMomentumTracker(Number(req.body.limit || 20)),
     'investment-thesis-researcher': () => runInvestmentThesisResearcher(Number(req.body.limit || 4)),
     'sourcing-fit-scorer': () => runSourcingFitScorer(Number(req.body.company_id)),
     'calendar-cross-reference': () => runCalendarCrossReference(Number(req.body.days || 7)),
+    'gmail-lead-scout': () => runGmailLeadScout(Number(req.body.days || 3), Number(req.body.limit || 40)),
     'outcome-learning': () => runOutcomeLearning(),
     'agent-portfolio-manager': () => runAgentPortfolioManager(),
     'intelligence-cycle': () => runIntelligenceCycle(),
+    'agent-orchestrator': () => runMasterOrchestrator(),
   };
   const runner = runners[req.params.agentKey];
   if (!runner) return res.status(404).json({ error: 'Runnable intelligence agent not found' });

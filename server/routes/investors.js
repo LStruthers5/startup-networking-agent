@@ -17,10 +17,13 @@ router.get('/', async (req, res) => {
 //   2. investors.firm              → individual investors grouped by firm
 router.get('/firms', async (req, res) => {
   try {
-    const [companies, investors] = await Promise.all([
+    const [companies, investors, patterns] = await Promise.all([
       query('SELECT id, name, sector, stage, status, investor_firms FROM companies WHERE investor_firms IS NOT NULL AND investor_firms != \'\''),
       query('SELECT * FROM investors ORDER BY firm, relationship_status, name'),
+      query('SELECT firm, domain, pattern, example_email, confirmed_count FROM firm_email_patterns'),
     ]);
+    const patternByFirm = {};
+    for (const p of patterns) patternByFirm[p.firm.toLowerCase().trim()] = p;
 
     const firmMap = {}; // key: lowercase firm name
 
@@ -62,6 +65,8 @@ router.get('/firms', async (req, res) => {
           : best;
       }, 'none');
 
+      const emailPattern = patternByFirm[f.name.toLowerCase().trim()] || null;
+
       // Does user have a warm contact at this firm via the Contacts table? (resolved client-side)
       return {
         name: f.name,
@@ -71,6 +76,12 @@ router.get('/firms', async (req, res) => {
         best_relationship: bestRel,
         pipeline_count: f.pipeline_companies.length,
         individual_count: f.individuals.length,
+        email_pattern: emailPattern ? {
+          pattern: emailPattern.pattern,
+          domain: emailPattern.domain,
+          example: emailPattern.example_email,
+          confirmed_count: emailPattern.confirmed_count,
+        } : null,
       };
     }).sort((a, b) =>
       // Sort: most pipeline companies first, then alphabetically

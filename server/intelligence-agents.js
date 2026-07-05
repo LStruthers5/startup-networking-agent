@@ -1,11 +1,22 @@
-const { query, queryOne, execute, nowText, today, daysFromNow } = require('./db');
+const { query, queryOne, execute, nowText, today, daysFromNow, daysAgo } = require('./db');
 const {
+  NATIVE_AGENTS,
   executeAgent,
   trackedAnthropicClient,
   trackedExaSearch,
   recordProviderUsage,
+  monthlySpend,
+  todaySpend,
 } = require('./agent-control');
 const { extractDustPayload, dustPayloadToSignals } = require('./dust-response');
+
+// Records a real "checked, nothing to do" completed run instead of silently returning [] before ever
+// calling executeAgent. Without this, an agent that keeps finding nothing due never gets a completed_at
+// timestamp, so the roster shows it as having never run and the orchestrator treats it as perpetually
+// overdue — even though it's actually being checked on schedule and correctly finding nothing to act on.
+function emptyRun(agentKey, input = {}) {
+  return executeAgent(agentKey, { trigger: 'scheduled', input: { ...input, skipped: 'nothing to act on' } }, async () => []);
+}
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -102,7 +113,7 @@ async function runCompanySignalMonitor(limit = 6) {
      LIMIT $1`,
     [limit]
   );
-  if (!companies.length) return [];
+  if (!companies.length) return emptyRun('company-signal-monitor');
   return executeAgent('company-signal-monitor', {
     trigger: 'scheduled',
     input: { companies: companies.map(c => ({ id: c.id, name: c.name, website: c.website, sector: c.sector })) },
@@ -148,7 +159,7 @@ async function runEvidenceAuditor(limit = 30) {
      LIMIT $1`,
     [limit]
   );
-  if (!signals.length) return [];
+  if (!signals.length) return emptyRun('evidence-auditor');
   return executeAgent('evidence-auditor', {
     trigger: 'scheduled',
     input: { signal_ids: signals.map(s => s.id) },
@@ -292,7 +303,7 @@ async function runCompanyProfileCurator(limit = 4) {
      LIMIT $1`,
     [limit]
   );
-  if (!companies.length) return [];
+  if (!companies.length) return emptyRun('company-profile-curator');
   const userProfile = await queryOne('SELECT taste_profile FROM user_profile ORDER BY id LIMIT 1');
   return executeAgent('company-profile-curator', {
     trigger: 'scheduled',
@@ -411,7 +422,7 @@ async function runRelationshipPathfinder(limit = 8) {
     query(`SELECT * FROM investors WHERE confirmed=1 ORDER BY relationship_status DESC,last_touched DESC NULLS LAST LIMIT 100`),
     queryOne('SELECT taste_profile,outreach_prefs FROM user_profile ORDER BY id LIMIT 1'),
   ]);
-  if (!companies.length) return [];
+  if (!companies.length) return emptyRun('relationship-pathfinder');
   return executeAgent('relationship-pathfinder', {
     trigger: 'scheduled',
     input: { company_ids: companies.map(c => c.id) },
@@ -443,7 +454,7 @@ async function runFollowUpStrategist(limit = 12) {
     ORDER BY a.due_date ASC NULLS LAST LIMIT $2`,
     [daysFromNow(3), limit]
   ), queryOne('SELECT taste_profile,outreach_prefs FROM user_profile ORDER BY id LIMIT 1')]);
-  if (!actions.length) return [];
+  if (!actions.length) return emptyRun('follow-up-strategist');
   return executeAgent('follow-up-strategist', {
     trigger: 'scheduled',
     input: { action_ids: actions.map(a => a.id) },
@@ -480,6 +491,126 @@ ${JSON.stringify(actions)}`, 1500);
   });
 }
 
+const MOMENTUM_DECAY = 0.75;
+const MOMENTUM_THRESHOLD = 6;
+const MOMENTUM_STREAK_REQUIRED = 2;
+const MOMENTUM_BASELINE_DAYS = 3;
+const MOMENTUM_REALERT_DAYS = 21;
+
+// Tracks whether a company keeps showing new promise across cycles (momentum), rather than reacting
+// to any single signal. Decays quietly when a company goes cold; compounds when it keeps producing
+// fresh actionable evidence. Only alerts once a company has stayed above threshold for at least
+// MOMENTUM_STREAK_REQUIRED consecutive checks — a single high-signal cycle is never enough on its own.
+async function runLeadMomentumTracker(limit = 20) {
+  const companies = await query(
+    `SELECT c.id, c.name, c.sector, c.stage, c.description, c.last_funding, c.funding_amount,
+            c.momentum_score, c.momentum_updated_at, c.momentum_streak, c.hot_lead_alerted_at
+     FROM companies c
+     WHERE c.status NOT IN ('passed','archived')
+       AND EXISTS (
+         SELECT 1 FROM agent_signals s
+         WHERE s.company_id = c.id AND s.actionable = 1
+           AND s.created_at >= to_char(NOW() - INTERVAL '14 days', 'YYYY-MM-DD HH24:MI:SS')
+       )
+     ORDER BY c.momentum_score DESC NULLS LAST LIMIT $1`,
+    [limit]
+  );
+  if (!companies.length) return emptyRun('lead-momentum-tracker');
+
+  return executeAgent('lead-momentum-tracker', {
+    trigger: 'scheduled',
+    input: { company_ids: companies.map(c => c.id) },
+  }, async () => {
+    const alerts = [];
+    for (const company of companies) {
+      // First-ever check for a company only looks back a few days, not the full candidate window —
+      // otherwise a company with pre-existing signal density would spike over threshold in one lump
+      // sum on cycle one, which is a cold-start artifact, not real sustained momentum.
+      const since = company.momentum_updated_at || `${daysAgo(MOMENTUM_BASELINE_DAYS)} 00:00:00`;
+      const recentSignals = await query(
+        `SELECT title, summary, signal_type, confidence, created_at FROM agent_signals
+         WHERE company_id=$1 AND actionable=1 AND created_at > $2
+         ORDER BY created_at DESC LIMIT 20`,
+        [company.id, since]
+      );
+      const oldMomentum = Number(company.momentum_score || 0);
+      const avgConfidence = recentSignals.length
+        ? recentSignals.reduce((sum, s) => sum + Number(s.confidence || 0.5), 0) / recentSignals.length
+        : 0;
+      const newMomentum = Math.round((oldMomentum * MOMENTUM_DECAY + recentSignals.length * avgConfidence * 2) * 100) / 100;
+      const newStreak = newMomentum >= MOMENTUM_THRESHOLD ? Number(company.momentum_streak || 0) + 1 : 0;
+      await execute(
+        'UPDATE companies SET momentum_score=$1, momentum_updated_at=$2, momentum_streak=$3 WHERE id=$4',
+        [newMomentum, nowText(), newStreak, company.id]
+      );
+
+      const alertedRecently = company.hot_lead_alerted_at
+        && (Date.now() - new Date(String(company.hot_lead_alerted_at).replace(' ', 'T') + 'Z').getTime()) / 86_400_000 < MOMENTUM_REALERT_DAYS;
+      if (newStreak < MOMENTUM_STREAK_REQUIRED || alertedRecently || !process.env.RESEND_API_KEY) continue;
+
+      const [intel, path, investorFits, contacts] = await Promise.all([
+        queryOne('SELECT hiring_summary, why_now, open_questions, warnings, preference_fit, sources FROM company_intelligence WHERE company_id=$1', [company.id]),
+        queryOne(`SELECT title, summary, data_json FROM agent_signals WHERE company_id=$1 AND agent_key='relationship-pathfinder' ORDER BY created_at DESC LIMIT 1`, [company.id]),
+        query(`SELECT title, summary, data_json FROM agent_signals WHERE company_id=$1 AND agent_key='sourcing-fit-scorer' ORDER BY confidence DESC LIMIT 3`, [company.id]),
+        query(`SELECT name, firm, how_i_know_them FROM contacts`),
+      ]);
+
+      const packageResult = await askJson(`You're briefing the user on a lead that has kept showing genuine promise across
+multiple monitoring cycles (momentum score ${newMomentum}, threshold ${MOMENTUM_THRESHOLD}) — this is not a one-off signal,
+it's sustained. Write a tight, honest brief. Do not invent facts not present in the evidence below.
+
+Return ONLY valid JSON:
+{
+  "what_we_know": ["short factual bullet", "..."],
+  "open_questions": ["short bullet naming what's still unknown", "..."],
+  "low_stakes_reachout": {"angle":"a low-pressure move worth auto-drafting (e.g. warm comment, light-touch note)", "channel":"email|linkedin", "why_low_stakes":"why this carries little downside"},
+  "high_reward_reachout": {"angle":"the highest-leverage move available", "path":"specifically who/how, grounded only in the evidence given", "why_high_reward":"why this is worth doing personally rather than automating"}
+}
+
+COMPANY:
+${JSON.stringify({ name: company.name, sector: company.sector, stage: company.stage, description: company.description, last_funding: company.last_funding, funding_amount: company.funding_amount })}
+
+RECENT ACTIONABLE SIGNALS (this cycle):
+${JSON.stringify(recentSignals.map(s => ({ type: s.signal_type, title: s.title, summary: s.summary, confidence: s.confidence })))}
+
+COMPANY INTELLIGENCE (if curated):
+${JSON.stringify(intel || {})}
+
+RELATIONSHIP PATH (if mapped):
+${JSON.stringify(path || {})}
+
+INVESTOR FIT MATCHES (if scored):
+${JSON.stringify(investorFits || [])}
+
+YOUR EXISTING CONTACTS (for warm-path grounding only — do not invent a relationship not implied here):
+${JSON.stringify(contacts || [])}`, 1400);
+
+      if (!packageResult?.what_we_know?.length) continue;
+
+      const { sendHotLeadAlert } = require('./email');
+      try {
+        await sendHotLeadAlert(company, packageResult, newMomentum);
+        await execute('UPDATE companies SET hot_lead_alerted_at=$1 WHERE id=$2', [nowText(), company.id]);
+      } catch (error) {
+        console.warn('[LeadMomentumTracker] Hot lead email failed:', error.message);
+      }
+
+      alerts.push({
+        title: `High-conviction lead: ${company.name}`,
+        summary: `Momentum ${newMomentum} — ${packageResult.what_we_know[0] || 'sustained signal across cycles'}`,
+        signal_type: 'hot_lead',
+        entity_type: 'company',
+        entity_id: company.id,
+        company_id: company.id,
+        confidence: Math.min(0.95, newMomentum / 10),
+        actionable: true,
+        data: { momentum: newMomentum, ...packageResult },
+      });
+    }
+    return alerts;
+  });
+}
+
 async function runInvestmentThesisResearcher(limit = 4) {
   const investors = await query(
     `SELECT id,name,firm,role,investor_type,stage_focus,sector_focus,portfolio_companies
@@ -489,7 +620,7 @@ async function runInvestmentThesisResearcher(limit = 4) {
      ORDER BY thesis_refined_at ASC NULLS FIRST, tier ASC LIMIT $1`,
     [limit]
   );
-  if (!investors.length) return [];
+  if (!investors.length) return emptyRun('investment-thesis-researcher');
   return executeAgent('investment-thesis-researcher', {
     trigger: 'scheduled',
     input: { investor_ids: investors.map(i => i.id) },
@@ -558,7 +689,7 @@ async function runSourcingFitScorer(companyId) {
     query(`SELECT id,name,firm,role,investor_type,thesis_profile,thesis_sectors,thesis_stages,relationship_status
            FROM investors WHERE confirmed=1 AND thesis_profile IS NOT NULL AND thesis_profile!='' LIMIT 60`),
   ]);
-  if (!company || !investors.length) return [];
+  if (!company || !investors.length) return company ? emptyRun('sourcing-fit-scorer', { company_id: companyId }) : [];
   return executeAgent('sourcing-fit-scorer', {
     companyId,
     trigger: 'event',
@@ -596,12 +727,12 @@ async function runCalendarCrossReference(days = 7) {
   const { listUpcomingEvents } = require('./google-calendar');
   let events = [];
   try { events = await listUpcomingEvents(days); } catch (_) { return []; }
-  if (!events.length) return [];
+  if (!events.length) return emptyRun('calendar-cross-reference');
 
   const investors = await query(
     `SELECT id,name,firm,role,investor_type,thesis_profile,relationship_status FROM investors WHERE confirmed=1`
   );
-  if (!investors.length) return [];
+  if (!investors.length) return emptyRun('calendar-cross-reference');
 
   return executeAgent('calendar-cross-reference', {
     trigger: 'scheduled',
@@ -632,6 +763,52 @@ ${JSON.stringify(investors.map(i => ({ id: i.id, name: i.name, firm: i.firm, rol
         data: { investor_id: m.investor_id, investor_name: inv?.name, event_title: m.event_title, event_start: m.event_start, matched_on: m.matched_on },
       };
     });
+  });
+}
+
+async function runGmailLeadScout(days = 3, limit = 40) {
+  const { listRecentInboxMessages } = require('./gmail');
+  let messages = [];
+  try { messages = await listRecentInboxMessages(days, limit); } catch (_) { return []; }
+  if (!messages.length) return emptyRun('gmail-lead-scout');
+
+  const [companies, investors] = await Promise.all([
+    query(`SELECT id,name FROM companies WHERE status NOT IN ('passed','archived')`),
+    query(`SELECT id,name,firm FROM investors WHERE confirmed=1`),
+  ]);
+  if (!companies.length && !investors.length) return emptyRun('gmail-lead-scout');
+
+  return executeAgent('gmail-lead-scout', {
+    trigger: 'scheduled',
+    input: { message_count: messages.length },
+  }, async () => {
+    const matches = await askJson(`For each inbox message, identify whether it plausibly relates to one of these tracked
+companies or investors, based on real textual overlap in the subject, sender, or snippet — never guess. Look for
+intro requests, replies from an investor, or newsletter/press mentions of a tracked company.
+Return only JSON:
+[{"message_subject":"","message_from":"","match_type":"company|investor","matched_id":1,"matched_name":"","confidence":0.0,"why":"one sentence on why this matters"}]
+
+MESSAGES:
+${JSON.stringify(messages.map(m => ({ subject: m.subject, from: m.from, snippet: m.snippet })))}
+
+COMPANIES:
+${JSON.stringify(companies)}
+
+INVESTORS:
+${JSON.stringify(investors.map(i => ({ id: i.id, name: i.name, firm: i.firm })))}`, 1800);
+
+    const results = Array.isArray(matches) ? matches : [];
+    return results.filter(m => m.matched_id && m.confidence >= 0.5).map(m => ({
+      title: `${m.matched_name || 'Tracked target'} mentioned in inbox: ${m.message_subject}`,
+      summary: `From ${m.message_from} — ${m.why || ''}`,
+      signal_type: 'email_signal',
+      entity_type: m.match_type === 'investor' ? 'investor' : 'company',
+      entity_id: m.matched_id,
+      company_id: m.match_type === 'company' ? m.matched_id : null,
+      confidence: Number(m.confidence),
+      actionable: true,
+      data: { matched_id: m.matched_id, matched_name: m.matched_name, match_type: m.match_type, subject: m.message_subject, from: m.message_from },
+    }));
   });
 }
 
@@ -894,6 +1071,240 @@ async function agentIsDue(agentKey, intervalHours) {
   return (Date.now() - completed) / 3_600_000 >= intervalHours;
 }
 
+const ORCHESTRATOR_CANDIDATES = [
+  'event-discovery',
+  'company-signal-monitor',
+  'evidence-auditor',
+  'company-profile-curator',
+  'company-discovery',
+  'investment-thesis-researcher',
+  'calendar-cross-reference',
+  'gmail-lead-scout',
+  'relationship-pathfinder',
+  'follow-up-strategist',
+  'lead-momentum-tracker',
+];
+
+function intervalHoursForSchedule(schedule) {
+  if (schedule.interval_hours) return Number(schedule.interval_hours);
+  const cadence = schedule.cadence || '';
+  const everyMatch = cadence.match(/every-(\d+)-hours?/);
+  if (everyMatch) return Number(everyMatch[1]);
+  if (cadence === 'hourly') return 1;
+  if (cadence === 'daily') return 24;
+  if (cadence === 'weekly') return 168;
+  return 24;
+}
+
+async function gatherOrchestratorState() {
+  const [settings, spentToday, spentMonth, backlogSignals, backlogDrafts, backlogOverdue] = await Promise.all([
+    queryOne(`SELECT daily_target_usd, monthly_ceiling_usd FROM control_tower_settings WHERE owner_id='local'`),
+    todaySpend(),
+    monthlySpend(),
+    queryOne(`SELECT COUNT(*) AS n FROM agent_signals WHERE status='new' AND actionable=1`),
+    queryOne(`SELECT COUNT(*) AS n FROM drafts WHERE status='pending'`),
+    queryOne(`SELECT COUNT(*) AS n FROM actions WHERE completed=0 AND due_date IS NOT NULL AND due_date <= $1`, [today()]),
+  ]);
+
+  const agents = [];
+  for (const key of ORCHESTRATOR_CANDIDATES) {
+    const def = NATIVE_AGENTS.find(a => a.key === key);
+    if (!def) continue;
+    const registry = await queryOne(`SELECT status, schedule_json FROM agent_registry WHERE agent_key=$1`, [key]);
+    const schedule = typeof registry?.schedule_json === 'string' ? JSON.parse(registry.schedule_json || '{}') : (registry?.schedule_json || def.schedule || {});
+    const intervalHours = intervalHoursForSchedule(schedule);
+    const lastRun = await queryOne(
+      `SELECT completed_at, actionable_count, output_count FROM agent_runs
+       WHERE agent_key=$1 AND status='completed' ORDER BY completed_at DESC LIMIT 1`,
+      [key]
+    );
+    const hoursSinceLastRun = lastRun?.completed_at
+      ? (Date.now() - new Date(String(lastRun.completed_at).replace(' ', 'T') + 'Z').getTime()) / 3_600_000
+      : null;
+    agents.push({
+      agent_key: key,
+      purpose: def.purpose,
+      status: registry?.status || 'active',
+      interval_hours: intervalHours,
+      hours_since_last_run: hoursSinceLastRun === null ? null : Math.round(hoursSinceLastRun * 10) / 10,
+      overdue_ratio: hoursSinceLastRun === null ? null : Math.round((hoursSinceLastRun / intervalHours) * 100) / 100,
+      last_run_actionable_count: lastRun?.actionable_count ?? null,
+      last_run_output_count: lastRun?.output_count ?? null,
+      batch_limit: schedule.batch_limit || null,
+    });
+  }
+
+  return {
+    agents,
+    budget: {
+      daily_target_usd: Number(settings?.daily_target_usd || 2),
+      spent_today_usd: Math.round(spentToday * 100) / 100,
+      monthly_ceiling_usd: Number(settings?.monthly_ceiling_usd || 60),
+      spent_month_usd: Math.round(spentMonth * 100) / 100,
+    },
+    backlog: {
+      new_actionable_signals: Number(backlogSignals?.n || 0),
+      pending_drafts: Number(backlogDrafts?.n || 0),
+      overdue_actions: Number(backlogOverdue?.n || 0),
+    },
+  };
+}
+
+async function decideOrchestratorPlan(state) {
+  const decisions = await askJson(`You are the scheduling brain for an autonomous networking-intelligence system.
+Each agent below runs on its own cadence, but you decide whether it actually runs THIS cycle.
+
+Never run an agent whose status is not "active". Prefer running agents that are meaningfully overdue
+(overdue_ratio well above 1.0) or that unblock a real backlog (new_actionable_signals, pending_drafts,
+overdue_actions). Deprioritize or skip agents whose last run produced little (low last_run_actionable_count
+and last_run_output_count) if the daily budget is under pressure (spent_today_usd approaching daily_target_usd,
+or spent_month_usd approaching monthly_ceiling_usd). An agent that has never run (hours_since_last_run is null)
+should generally run. Never invent agents not in the list.
+
+STATE:
+${JSON.stringify(state, null, 2)}
+
+Return ONLY valid JSON:
+[{"agent_key":"","run":true,"reason":"one short sentence"}]`, 1600);
+
+  return Array.isArray(decisions) ? decisions : [];
+}
+
+// The master loop: one LLM decision per cycle over which research agents are worth running right now,
+// given staleness, backlog pressure, recent yield, and remaining budget — replacing a fixed cron-per-agent
+// schedule with a single point of judgment. Never touches outreach sending; only read/research agents.
+async function runMasterOrchestrator() {
+  const state = await gatherOrchestratorState();
+  const activeCandidates = state.agents.filter(a => a.status === 'active');
+  if (!activeCandidates.length) return { ran: [], skipped: [], reasoning: 'No active candidate agents.' };
+
+  return executeAgent('agent-orchestrator', {
+    trigger: 'scheduled',
+    input: { candidate_count: activeCandidates.length, budget: state.budget, backlog: state.backlog },
+  }, async () => {
+    const decisions = await decideOrchestratorPlan(state);
+    const decisionByKey = new Map(decisions.map(d => [d.agent_key, d]));
+
+    // Hard cooldown floor — never re-run within half an agent's own interval, regardless of the model's call.
+    const toRun = ORCHESTRATOR_CANDIDATES.filter(key => {
+      const info = state.agents.find(a => a.agent_key === key);
+      if (!info || info.status !== 'active') return false;
+      if (!decisionByKey.get(key)?.run) return false;
+      if (info.hours_since_last_run != null && info.hours_since_last_run < info.interval_hours * 0.5) return false;
+      return true;
+    });
+
+    const cycleStart = nowText();
+    const results = {};
+    let curatedOutput = [];
+    for (const key of toRun) {
+      try {
+        if (key === 'event-discovery') {
+          const { runEventDiscovery } = require('./agents');
+          const trackedInvestors = await query('SELECT * FROM investors WHERE track_events=1 ORDER BY name');
+          results[key] = trackedInvestors.length ? (await runEventDiscovery(trackedInvestors)).length : 0;
+        } else {
+          const info = state.agents.find(a => a.agent_key === key);
+          const runner = {
+            'company-signal-monitor': () => runCompanySignalMonitor(Number(info?.batch_limit || 6)),
+            'evidence-auditor': () => runEvidenceAuditor(Number(info?.batch_limit || 30)),
+            'company-profile-curator': () => runCompanyProfileCurator(Number(info?.batch_limit || 4)),
+            'company-discovery': () => runCompanyDiscovery(Number(info?.batch_limit || 6)),
+            'investment-thesis-researcher': () => runInvestmentThesisResearcher(Number(info?.batch_limit || 4)),
+            'calendar-cross-reference': () => runCalendarCrossReference(7),
+            'gmail-lead-scout': () => runGmailLeadScout(3, 40),
+            'relationship-pathfinder': () => runRelationshipPathfinder(Number(info?.batch_limit || 8)),
+            'follow-up-strategist': () => runFollowUpStrategist(Number(info?.batch_limit || 12)),
+            'lead-momentum-tracker': () => runLeadMomentumTracker(Number(info?.batch_limit || 20)),
+          }[key];
+          const output = runner ? await runner() : [];
+          results[key] = output.length;
+          if (key === 'company-profile-curator') curatedOutput = output;
+        }
+      } catch (error) {
+        results[key] = { error: error.message };
+      }
+    }
+
+    // Opportunity escalation and sourcing-fit scoring always get a light pass — they self-limit via
+    // daily caps and cooldowns already, so they don't need their own orchestrator decision.
+    let investigated = [];
+    try {
+      const investigatorAgent = await queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='opportunity-investigator'`);
+      const investigatorSchedule = typeof investigatorAgent?.schedule_json === 'string' ? JSON.parse(investigatorAgent.schedule_json || '{}') : (investigatorAgent?.schedule_json || {});
+      const dailyLimit = Math.max(0, Number(investigatorSchedule.daily_limit || 3));
+      const minSignals = Math.max(1, Number(investigatorSchedule.min_signal_count || 2));
+      const investigatedToday = await queryOne(
+        `SELECT COUNT(*) AS n FROM agent_runs WHERE agent_key='opportunity-investigator' AND created_at >= to_char(CURRENT_DATE,'YYYY-MM-DD HH24:MI:SS')`
+      );
+      const remaining = Math.max(0, dailyLimit - Number(investigatedToday?.n || 0));
+      if (remaining) {
+        const candidates = await query(
+          `SELECT c.id,COUNT(s.id) AS signal_count,MAX(s.confidence) AS confidence
+           FROM companies c JOIN agent_signals s ON s.company_id=c.id
+           WHERE s.status='new' AND s.created_at >= to_char(CURRENT_DATE - INTERVAL '7 days','YYYY-MM-DD')
+             AND c.status NOT IN ('passed','archived')
+           GROUP BY c.id,c.score
+           HAVING COUNT(s.id)>=$1 OR (COALESCE(c.score,0)>=4 AND MAX(s.confidence)>=0.65)
+           ORDER BY COUNT(s.id) DESC,MAX(s.confidence) DESC LIMIT $2`,
+          [minSignals, remaining]
+        );
+        for (const candidate of candidates) {
+          try { investigated.push(...(await runOpportunityInvestigator(candidate.id))); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    // Score sourcing fit for companies whose intelligence profile just got refreshed this cycle —
+    // mirrors what the old runIntelligenceCycle did, restored here so curator output keeps flowing
+    // into investor-fit matching instead of dead-ending.
+    let fitScored = [];
+    for (const item of curatedOutput.slice(0, 4)) {
+      const companyId = item?.data?.company_id || item?.entity_id;
+      if (!companyId) continue;
+      try { fitScored.push(...(await runSourcingFitScorer(companyId))); } catch (_) {}
+    }
+
+    const skipped = ORCHESTRATOR_CANDIDATES.filter(k => !toRun.includes(k));
+
+    // Feature the cycle's actual findings, not just which agents ran — a plain-language digest of
+    // what's genuinely new and worth attention in the information river this cycle.
+    const freshSignals = await query(
+      `SELECT s.title, s.summary, s.signal_type, s.confidence, c.name AS company_name
+       FROM agent_signals s LEFT JOIN companies c ON c.id=s.company_id
+       WHERE s.created_at > $1 AND s.actionable=1 AND s.agent_key NOT IN ('agent-orchestrator','evidence-auditor')
+       ORDER BY s.confidence DESC LIMIT 25`,
+      [cycleStart]
+    );
+
+    let digest = toRun.length
+      ? `Ran ${toRun.join(', ')}.${skipped.length ? ` Skipped ${skipped.join(', ')}.` : ''}`
+      : 'Nothing was due or worth running this cycle.';
+    if (freshSignals.length) {
+      const synthesized = await askJson(`Write a short, plain-language digest of what's genuinely worth this user's attention from
+this monitoring cycle's fresh findings. Group related items, lead with the most important, skip anything trivial.
+Do not just list agent names — synthesize what actually happened. 2-4 sentences max.
+
+FRESH FINDINGS THIS CYCLE:
+${JSON.stringify(freshSignals.map(s => ({ company: s.company_name, type: s.signal_type, title: s.title, summary: s.summary, confidence: s.confidence })))}
+
+Return ONLY valid JSON: {"digest":"the 2-4 sentence summary"}`, 700);
+      if (synthesized?.digest) digest = synthesized.digest;
+    }
+
+    return {
+      title: 'Master Orchestrator cycle',
+      summary: digest,
+      decisions,
+      ran: toRun,
+      results,
+      investigated: investigated.length,
+      fit_scored: fitScored.length,
+      fresh_signal_count: freshSignals.length,
+    };
+  });
+}
+
 async function runIntelligenceCycle() {
   const [monitorAgent, auditAgent, investigatorAgent, curatorAgent, discoveryAgent] = await Promise.all([
     queryOne(`SELECT schedule_json FROM agent_registry WHERE agent_key='company-signal-monitor'`),
@@ -919,6 +1330,8 @@ async function runIntelligenceCycle() {
   const thesisRefreshed = thesisDue ? await runInvestmentThesisResearcher(4) : [];
   const calendarDue = await agentIsDue('calendar-cross-reference', 24);
   const calendarMatched = calendarDue ? await runCalendarCrossReference(7) : [];
+  const gmailDue = await agentIsDue('gmail-lead-scout', 24);
+  const gmailMatched = gmailDue ? await runGmailLeadScout(3, 40) : [];
   const dailyLimit = Math.max(0, Number(investigatorSchedule.daily_limit || 3));
   const cooldownDays = Math.max(1, Number(investigatorSchedule.cooldown_days || 7));
   const minSignals = Math.max(1, Number(investigatorSchedule.min_signal_count || 2));
@@ -969,12 +1382,14 @@ async function runIntelligenceCycle() {
     thesis_refreshed: thesisRefreshed.length,
     fit_scored: fitScored.length,
     calendar_matched: calendarMatched.length,
+    gmail_matched: gmailMatched.length,
     monitor_due: monitorDue,
     audit_due: auditDue,
     curator_due: curatorDue,
     discovery_due: discoveryDue,
     thesis_due: thesisDue,
     calendar_due: calendarDue,
+    gmail_due: gmailDue,
     dust_remaining_today: Math.max(0, remainingInvestigations - dust.length),
   };
 }
@@ -987,11 +1402,14 @@ module.exports = {
   runOpportunityInvestigator,
   runRelationshipPathfinder,
   runFollowUpStrategist,
+  runLeadMomentumTracker,
   runInvestmentThesisResearcher,
   runSourcingFitScorer,
   runCalendarCrossReference,
+  runGmailLeadScout,
   curateTunerFeed,
   runOutcomeLearning,
   runAgentPortfolioManager,
   runIntelligenceCycle,
+  runMasterOrchestrator,
 };

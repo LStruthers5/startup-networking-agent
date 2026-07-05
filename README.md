@@ -26,7 +26,7 @@ npm start
 
 The Node app uses PostgreSQL via `DATABASE_URL` and serves the UI at `http://localhost:3000` by default. The existing Python/React prototype below remains a separate application stack.
 
-Optional Dust setup requires `DUST_API_KEY` and `DUST_WORKSPACE_ID`. Dust workspace allowances, trigger allowances, and programmatic credits are entered in the Control Tower settings because they are separate economic buckets. No agent sends outreach automatically; prepared drafts still require human approval.
+Optional Dust setup requires `DUST_API_KEY` and `DUST_WORKSPACE_ID`. Dust workspace allowances, trigger allowances, and programmatic credits are entered in the Control Tower settings because they are separate economic buckets. Almost every draft still requires human approval — the one exception is a narrow, explicit auto-send tier: cold reaches (never a warm intro) to the lowest investor priority tier, only once a real email is on file, send automatically after a 3-hour cancel window. Anything above that tier always waits for a click.
 
 The app is designed for manual Crunchbase Pro CSV exports. It does not use Crunchbase APIs, scraping, email sending, LinkedIn automation, authentication, or paid integrations.
 

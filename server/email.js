@@ -24,6 +24,7 @@ function buildMorningHtml({ pendingDrafts = [], upcomingEvents = [], overdueActi
   const surface = '#ffffff';
   const border = '#b2d9bc';
   const text = '#0d1e30';
+  const gold = '#a17a1a';
 
   function sectionHead(label, color) {
     return `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${color};margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid ${border}">${label}</div>`;
@@ -35,15 +36,33 @@ function buildMorningHtml({ pendingDrafts = [], upcomingEvents = [], overdueActi
   if (pendingDrafts.length > 0) {
     const cards = pendingDrafts.map(d => {
       const isInmail = (d.channel || 'inmail') === 'inmail';
+      const isAutoScheduled = Boolean(d.scheduled_send_at);
       const channelBadge = isInmail
         ? `<span style="background:#0a66c2;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">LinkedIn InMail</span>`
         : `<span style="background:${muted};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">Email</span>`;
-      const actionBtn = isInmail
+      const autoBadge = isAutoScheduled
+        ? `<span style="background:${gold};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">Low-stakes · auto-sending</span>`
+        : '';
+      const autoNotice = isAutoScheduled
+        ? `<div style="font-size:12px;color:${gold};background:#fdf6e3;border:1px solid #e9d8a6;border-radius:6px;padding:8px 12px;margin-bottom:12px">
+             This will send automatically at <strong>${d.scheduled_send_at} UTC</strong> unless you cancel it —
+             a cold reach to a lower-priority target with a real email on file. Anything using a warm intro or a higher-priority target always waits for your click.
+             <a href="${APP_URL()}/api/drafts/cancel-auto-send/${d.approve_token}" style="color:${gold};font-weight:700">Cancel auto-send</a>
+           </div>`
+        : '';
+      const sendNowBtn = d.investor_email
+        ? `<a href="${APP_URL()}/api/drafts/approve/${d.approve_token}"
+             style="background:${green};color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;margin-right:10px;display:inline-block">
+             Send Now
+           </a>`
+        : '';
+      const linkedinBtn = isInmail
         ? `<a href="${d.linkedin_url || 'https://linkedin.com'}" target="_blank"
              style="background:#0a66c2;color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;margin-right:10px;display:inline-block">
              Open LinkedIn Profile
            </a>`
-        : `<a href="${APP_URL()}/api/drafts/approve/${d.approve_token}"
+        : '';
+      const actionBtn = sendNowBtn + linkedinBtn || `<a href="${APP_URL()}/api/drafts/approve/${d.approve_token}"
              style="background:${green};color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;margin-right:10px;display:inline-block">
              Approve &amp; Send
            </a>`;
@@ -51,10 +70,11 @@ function buildMorningHtml({ pendingDrafts = [], upcomingEvents = [], overdueActi
       return `
       <div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:16px 18px;margin-bottom:10px">
         <div style="font-weight:700;font-size:14px;color:${text};margin-bottom:2px">
-          ${d.investor_name || 'Unknown Contact'}${d.company_name ? ` &mdash; re: ${d.company_name}` : ''}${channelBadge}
+          ${d.investor_name || 'Unknown Contact'}${d.company_name ? ` &mdash; re: ${d.company_name}` : ''}${channelBadge}${autoBadge}
         </div>
         <div style="font-size:12px;color:${muted};margin-bottom:10px">Subject: ${d.subject}</div>
         <div style="font-size:13px;color:${text};line-height:1.65;border-left:3px solid ${green};padding-left:12px;margin-bottom:14px;white-space:pre-wrap">${d.body}</div>
+        ${autoNotice}
         <div>
           ${actionBtn}
           <a href="${APP_URL()}/api/drafts/skip/${d.approve_token}"
@@ -236,4 +256,107 @@ async function sendWeeklyRecap(agentOutput) {
   return data;
 }
 
-module.exports = { sendMorningBriefing, sendWeeklyRecap };
+// Shared by the manual "Approve & Send" link and the low-stakes auto-send cron — one send path,
+// one place that records the outcome, whichever route triggers it.
+async function sendDraftEmail(draft) {
+  const resend = getResend();
+  const { execute, queryOne } = require('./db');
+
+  const { error } = await resend.emails.send({
+    from: process.env.FROM_EMAIL || 'onboarding@resend.dev',
+    to: draft.investor_email,
+    subject: draft.subject,
+    text: draft.body,
+  });
+  if (error) throw new Error(JSON.stringify(error));
+
+  await execute('UPDATE drafts SET status=$1 WHERE id=$2', ['sent', draft.id]);
+  const sourceSignal = draft.company_id
+    ? await queryOne('SELECT id,run_id FROM agent_signals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1', [draft.company_id])
+    : null;
+  await execute(
+    `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
+     VALUES ($1,$2,$3,'outreach_sent',$4,$5)`,
+    [
+      sourceSignal?.run_id || null, sourceSignal?.id || null, draft.company_id, draft.investor_name || '',
+      JSON.stringify({ draft_id: draft.id, delivery: 'email', auto_sent: draft.stakes_tier === 'low' }),
+    ]
+  );
+}
+
+async function sendHotLeadAlert(company, brief, momentum) {
+  const resend = getResend();
+  const { execute } = require('./db');
+  const recipient = RECIPIENT();
+
+  const green = '#2f9e44', deepGreen = '#16351f', muted = '#4a7c59';
+  const bg = '#eef6e8', surface = '#ffffff', border = '#b2d9bc', text = '#0d1e30', gold = '#a17a1a';
+
+  const list = (items, color) => (items || []).map(i => `
+    <div style="padding:9px 12px;border-left:3px solid ${color};margin-bottom:6px;font-size:13px;color:${text};background:${surface};border-radius:0 6px 6px 0">${i}</div>
+  `).join('') || `<div style="font-size:13px;color:${muted}">None noted.</div>`;
+
+  const low = brief.low_stakes_reachout || {};
+  const high = brief.high_reward_reachout || {};
+
+  const html = `<!DOCTYPE html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+</head><body style="margin:0;padding:0;background:#c8e6c9;font-family:system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+<div style="max-width:640px;margin:32px auto;background:${surface};border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(13,48,20,.12)">
+
+  <div style="background:linear-gradient(135deg,#16351f 0%,#2f9e44 70%,#8ce99a 100%);padding:28px 32px">
+    <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:6px">NETWORKING RIVER &middot; HIGH-CONVICTION LEAD</div>
+    <div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:4px">${company.name}</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.75)">${company.sector || ''}${company.stage ? ' &middot; ' + company.stage : ''} &middot; momentum ${momentum}</div>
+  </div>
+
+  <div style="padding:28px 32px">
+    <p style="font-size:14px;color:${text};line-height:1.6;margin:0 0 24px">
+      This is the lead we're developing — it's kept showing real promise across several monitoring cycles, not just a one-off signal.
+    </p>
+
+    <div style="margin-bottom:24px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${deepGreen};margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid ${border}">What We Know</div>
+      ${list(brief.what_we_know, green)}
+    </div>
+
+    <div style="margin-bottom:24px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${muted};margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid ${border}">What We Don't Know Yet</div>
+      ${list(brief.open_questions, muted)}
+    </div>
+
+    <div style="margin-bottom:24px;background:${bg};border:1px solid ${border};border-radius:8px;padding:16px 18px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${muted};margin-bottom:8px">Low-Stakes Path — We'll Develop This For You</div>
+      <div style="font-size:13px;color:${text};line-height:1.6"><strong>${low.angle || ''}</strong></div>
+      ${low.channel ? `<div style="font-size:12px;color:${muted};margin-top:4px">via ${low.channel}</div>` : ''}
+      ${low.why_low_stakes ? `<div style="font-size:12px;color:${muted};margin-top:6px">${low.why_low_stakes}</div>` : ''}
+    </div>
+
+    <div style="margin-bottom:8px;background:#fdf6e3;border:1px solid #e9d8a6;border-radius:8px;padding:16px 18px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${gold};margin-bottom:8px">High-Reward Path — Worth Doing Yourself</div>
+      <div style="font-size:13px;color:${text};line-height:1.6"><strong>${high.angle || ''}</strong></div>
+      ${high.path ? `<div style="font-size:12px;color:${text};margin-top:6px">${high.path}</div>` : ''}
+      ${high.why_high_reward ? `<div style="font-size:12px;color:${muted};margin-top:6px">${high.why_high_reward}</div>` : ''}
+    </div>
+  </div>
+
+  <div style="padding:16px 32px;border-top:1px solid ${border};font-size:11px;color:${muted};text-align:center">
+    Networking River &middot; Auto-generated &middot;
+    <a href="${APP_URL()}" style="color:${green};text-decoration:none">Open River</a>
+  </div>
+</div></body></html>`;
+
+  const subject = `High-conviction lead: ${company.name}`;
+  const { data, error } = await resend.emails.send({ from: FROM, to: recipient, subject, html });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+
+  await execute(
+    `INSERT INTO email_log (email_type, recipient, subject, status, resend_id, company_ids)
+     VALUES ('hot_lead_alert', $1, $2, 'sent', $3, $4)`,
+    [recipient, subject, data?.id || null, String(company.id)]
+  );
+
+  return data;
+}
+
+module.exports = { sendMorningBriefing, sendWeeklyRecap, sendHotLeadAlert, sendDraftEmail };

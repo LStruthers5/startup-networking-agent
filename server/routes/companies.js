@@ -21,6 +21,12 @@ function inFocus(sector = '') {
   return FOCUS_SECTORS.some(f => s.includes(f));
 }
 
+// Strips protocol/www/trailing slash so a website can be compared reliably regardless of how it
+// was originally entered.
+function normalizeDomain(url) {
+  return (url || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '').trim().toLowerCase();
+}
+
 // Parse investor firm names from Crunchbase columns, deduplicated and cleaned
 function parseInvestorFirms(row) {
   const raw = [
@@ -64,6 +70,30 @@ router.get('/', async (req, res) => {
   res.json(rows);
 });
 
+// GET /api/companies/enrichment-queue — companies missing key Crunchbase-sourced fields, so the
+// user can copy the list of names into Crunchbase's own search/list tool instead of looking each up
+// one by one, then re-import the resulting export (which now backfills every empty field, not just
+// investor_firms — see the /import handler).
+router.get('/enrichment-queue', async (req, res) => {
+  const rows = await query(
+    `SELECT id, name, website, sector, stage, score,
+       (founded_year IS NULL OR founded_year='') AS missing_founded,
+       (last_funding IS NULL OR last_funding='') AS missing_funding_stage,
+       (funding_amount IS NULL OR funding_amount='') AS missing_amount,
+       (investor_firms IS NULL OR investor_firms='') AS missing_investors
+     FROM companies
+     WHERE status NOT IN ('passed','archived')
+       AND (
+         founded_year IS NULL OR founded_year=''
+         OR last_funding IS NULL OR last_funding=''
+         OR funding_amount IS NULL OR funding_amount=''
+         OR investor_firms IS NULL OR investor_firms=''
+       )
+     ORDER BY score DESC NULLS LAST, name ASC`
+  );
+  res.json(rows);
+});
+
 router.post('/import', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -89,19 +119,37 @@ router.post('/import', upload.single('file'), async (req, res) => {
       const mapped = mapCrunchbaseRow(row);
       if (!mapped.name) continue;
 
-      const existing = await client.query(
-        'SELECT id, investor_firms FROM companies WHERE name = $1',
-        [mapped.name]
-      );
+      // Match by domain first when we have one — it's a far more reliable join key than name,
+      // since generic/short company names (Temple, Ampa, Coa) collide with unrelated companies
+      // constantly, but domains don't. Falls back to exact name match when no domain is available.
+      const mappedDomain = normalizeDomain(mapped.website);
+      let existing;
+      if (mappedDomain) {
+        existing = await client.query(
+          `SELECT id, investor_firms FROM companies
+           WHERE website IS NOT NULL AND website != ''
+             AND LOWER(REGEXP_REPLACE(REGEXP_REPLACE(website, '^https?://(www\\.)?', ''), '/.*$', '')) = $1`,
+          [mappedDomain]
+        );
+      }
+      if (!existing || !existing.rows[0]) {
+        existing = await client.query('SELECT id, investor_firms FROM companies WHERE name = $1', [mapped.name]);
+      }
 
       if (existing.rows[0]) {
-        // Backfill investor_firms for existing entries that don't have it
-        if (mapped.investor_firms) {
-          await client.query(
-            `UPDATE companies SET investor_firms = $1
-             WHERE id = $2 AND (investor_firms IS NULL OR investor_firms = '')`,
-            [mapped.investor_firms, existing.rows[0].id]
-          );
+        // Backfill any enrichment field that's currently empty — this is what makes the
+        // "export a target list, re-import the Crunchbase CSV" loop actually fill gaps rather
+        // than just skip already-known companies.
+        const backfillFields = ['investor_firms', 'founded_year', 'last_funding', 'funding_amount', 'location', 'description'];
+        const sets = [], vals = [];
+        for (const field of backfillFields) {
+          if (!mapped[field]) continue;
+          sets.push(`${field} = COALESCE(NULLIF(${field}, ''), $${vals.length + 1})`);
+          vals.push(mapped[field]);
+        }
+        if (sets.length) {
+          vals.push(existing.rows[0].id);
+          await client.query(`UPDATE companies SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
         }
         skipped++;
         continue;

@@ -226,7 +226,10 @@
   .agent-list-head { display:grid;grid-template-columns:minmax(0,1fr) 68px 70px 28px;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.9px; }
   .agent-econ-row { display:grid;grid-template-columns:minmax(0,1fr) 68px 70px 28px;gap:12px;align-items:center; }
   .agent-econ-name { font-size:13px;font-weight:700;letter-spacing:-.15px; }
-  .agent-econ-purpose { color:var(--muted);font-size:11px;line-height:1.4;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .agent-econ-purpose { color:var(--muted);font-size:11px;line-height:1.4;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer; }
+  .agent-econ-purpose.expanded { white-space:normal;overflow:visible;text-overflow:clip; }
+  .river-summary { cursor:pointer;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden; }
+  .river-summary.expanded { display:block;-webkit-line-clamp:unset;overflow:visible; }
   .agent-econ-number { font-variant-numeric:tabular-nums;text-align:right;font-size:12px; }
   .agent-menu { padding:1px 4px;border:0;background:transparent;color:var(--muted);border-radius:0;font-size:17px;line-height:1; }
   .agent-menu:hover { color:var(--text);opacity:1; }
@@ -585,6 +588,8 @@
     <input type="text" id="searchInput" placeholder="Filter by name, sector&hellip;" style="width:220px">
   </div>
 
+  <div id="enrichmentBanner" style="display:none;margin-bottom:14px"></div>
+
   <div class="table-wrap">
     <table id="companyTable">
       <thead>
@@ -905,6 +910,19 @@
     <div id="calendarStatus" style="font-size:13px;color:var(--muted)">Checking connection&hellip;</div>
   </div>
 
+  <!-- Gmail -->
+  <div class="card" id="gmailConnectCard" style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px">Gmail</div>
+    <div id="gmailStatus" style="font-size:13px;color:var(--muted)">Checking connection&hellip;</div>
+    <div id="gmailStyleSection" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="font-size:13px;color:var(--muted)" id="gmailStyleMeta">Learn how you actually write from your Sent folder, so drafts sound like you.</div>
+        <button class="btn-secondary btn-sm" id="gmailStyleBtn" onclick="learnWritingStyle()" style="white-space:nowrap">Learn my writing style</button>
+      </div>
+      <div id="gmailStyleProfile" style="display:none;margin-top:10px;font-size:13px;color:var(--text);white-space:pre-wrap;background:var(--bg-alt,rgba(0,0,0,0.03));padding:12px;border-radius:8px"></div>
+    </div>
+  </div>
+
   <!-- Bio / Identity -->
   <div class="card" style="margin-bottom:20px">
     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:16px">Identity</div>
@@ -1091,6 +1109,41 @@ let companySort = { key: 'score', direction: 'desc' };
 async function loadCompanies() {
   allCompanies = await api('GET', '/companies');
   renderCompanyView();
+  loadEnrichmentBanner();
+}
+
+let enrichmentQueue = [];
+
+function normalizeWebsite(url) {
+  return (url || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '').trim();
+}
+
+async function loadEnrichmentBanner() {
+  const el = document.getElementById('enrichmentBanner');
+  if (!el) return;
+  try {
+    enrichmentQueue = await api('GET', '/companies/enrichment-queue');
+    if (!enrichmentQueue.length) { el.style.display = 'none'; return; }
+    const withDomain = enrichmentQueue.filter(c => normalizeWebsite(c.website)).length;
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--bg-alt,rgba(0,0,0,.03));border:1px solid var(--border);border-radius:8px;padding:12px 16px">
+        <div style="font-size:13px;color:var(--text)">
+          <strong>${enrichmentQueue.length}</strong> compan${enrichmentQueue.length===1?'y is':'ies are'} missing funding/founding/investor info.
+          ${withDomain} of them have a website on file — copying domains instead of names avoids Crunchbase matching the wrong company for generic/short names (e.g. "Temple" matching an unrelated manufacturer). Paste into Crunchbase's search or a saved List, export the CSV, then re-import it here to backfill.
+        </div>
+        <button class="btn-secondary btn-sm" onclick="copyEnrichmentNames()">Copy domains for Crunchbase</button>
+      </div>`;
+  } catch (err) {
+    el.style.display = 'none';
+  }
+}
+
+function copyEnrichmentNames() {
+  const lines = enrichmentQueue.map(c => normalizeWebsite(c.website) || `${c.name} (no website on file — verify manually)`);
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    flash(`${enrichmentQueue.length} entries copied — paste into Crunchbase`);
+  });
 }
 
 function compareCompanyValues(a, b, key) {
@@ -1671,9 +1724,19 @@ async function loadDraftQueue() {
     }
     el.innerHTML = drafts.map(d => {
       const isInmail = (d.channel || 'inmail') === 'inmail';
+      const isAutoScheduled = Boolean(d.scheduled_send_at);
       const badge = isInmail
         ? `<span style="background:#0a66c2;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">InMail</span>`
         : `<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">Email</span>`;
+      const autoBadge = isAutoScheduled
+        ? `<span style="background:#a17a1a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">Auto-sending</span>`
+        : '';
+      const autoNotice = isAutoScheduled
+        ? `<div style="font-size:11px;color:#a17a1a;background:#fdf6e3;border:1px solid #e9d8a6;border-radius:6px;padding:6px 10px;margin-bottom:10px">
+             Auto-sends at ${d.scheduled_send_at} UTC unless cancelled — low-stakes cold reach with a real email on file.
+             <button class="btn-ghost btn-sm" style="padding:0;color:#a17a1a;text-decoration:underline" onclick="cancelAutoSendInUI(${d.id}, this)">Cancel auto-send</button>
+           </div>`
+        : '';
       const copyId = `draft-copy-${d.id}`;
       const linkedinBtn = d.linkedin_url
         ? `<a href="${d.linkedin_url}" target="_blank" class="btn-secondary btn-sm" style="text-decoration:none">Open Profile</a>`
@@ -1681,10 +1744,11 @@ async function loadDraftQueue() {
       return `
       <div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:var(--surface)">
         <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px">
-          ${d.investor_name || 'Unknown'}${d.company_name ? ` — re: ${d.company_name}` : ''}${badge}
+          ${d.investor_name || 'Unknown'}${d.company_name ? ` — re: ${d.company_name}` : ''}${badge}${autoBadge}
         </div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${d.subject}</div>
         <div style="font-size:13px;line-height:1.65;border-left:3px solid var(--accent);padding-left:10px;margin-bottom:12px;white-space:pre-wrap;color:var(--text)">${d.body}</div>
+        ${autoNotice}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-primary btn-sm" id="${copyId}" onclick="copyDraft(${d.id},'${encodeURIComponent(d.subject + '\\n\\n' + d.body)}')">Copy for LinkedIn</button>
           ${linkedinBtn}
@@ -1715,6 +1779,18 @@ async function skipDraftInUI(id, btn) {
   } catch (err) {
     btn.disabled = false; btn.textContent = 'Skip';
     flash('Skip failed: ' + err.message, false);
+  }
+}
+
+async function cancelAutoSendInUI(id, btn) {
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  try {
+    await api('POST', `/drafts/${id}/cancel-auto-send`, {});
+    flash('Auto-send cancelled — now a normal pending draft');
+    loadDraftQueue();
+  } catch (err) {
+    btn.disabled = false; btn.textContent = 'Cancel auto-send';
+    flash('Could not cancel: ' + err.message, false);
   }
 }
 
@@ -1759,12 +1835,26 @@ function renderTowerBudget(budget, dust) {
     dust.trigger_allowance == null ? '' : `trigger allowance ${dust.trigger_allowance}`,
   ].filter(Boolean);
   const dustLine = dustParts.join(' · ');
+  const prettyAgent = key => key.replace(/^dust:.*/, 'Dust agent').split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+  const drivers = (budget.top_cost_drivers || []);
+  const driversHtml = drivers.length
+    ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:6px">Where it's going (last ${budget.active_days} active day${budget.active_days===1?'':'s'})</div>
+        ${drivers.map(d => `
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text);padding:2px 0">
+            <span>${prettyAgent(d.agent_key)} <span style="color:var(--muted)">· ${d.runs} run${d.runs===1?'':'s'}</span></span>
+            <span style="font-variant-numeric:tabular-nums">${moneyText(d.cost)}</span>
+          </div>`).join('')}
+      </div>`
+    : '';
   document.getElementById('towerBudget').innerHTML = `
     <div class="econ-line" style="align-items:flex-end"><strong style="font-size:25px;letter-spacing:-.8px">${moneyText(budget.month_spend)}</strong><span>${pct}% of ${moneyText(budget.monthly_ceiling)}</span></div>
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-top:2px">Spent this month</div>
     <div class="budget-bar"><div class="budget-fill ${cls}" style="width:${pct}%"></div></div>
-    <div class="econ-sub">Forecast ${moneyText(budget.monthly_forecast)} · target ${moneyText(budget.daily_target)}/day</div>
+    <div class="econ-sub"><strong>Monthly forecast:</strong> ${moneyText(budget.monthly_forecast)}/mo &nbsp;·&nbsp; <strong>Daily target:</strong> ${moneyText(budget.daily_target)}/day</div>
+    <div class="econ-sub" style="color:var(--muted);font-size:11px">Forecast based on ${budget.forecast_basis || 'recent daily spend'}</div>
     <div class="econ-sub">${dustLine}</div>
+    ${driversHtml}
     <div style="display:flex;gap:6px;margin:14px 0 6px">
       <button class="btn-ghost btn-sm" onclick="editAgentBudget()">Edit guardrails →</button>
       ${budget.forecast_over_ceiling ? '<span style="color:var(--danger);font-size:11px;align-self:center">Forecast exceeds ceiling</span>' : ''}
@@ -1813,7 +1903,7 @@ function renderAgentEconomics(agents) {
     <div class="agent-econ-row">
       <div>
         <div class="agent-econ-name">${agent.name || agent.agent_key} <span style="font-size:8px;color:var(--accent);text-transform:uppercase;letter-spacing:.7px">${agent.provider || 'native'} · v${agent.current_version||1}</span></div>
-        <div class="agent-econ-purpose">${agent.purpose || (agent.actionable ? agent.actionable+' actionable opportunities' : 'Ready for its first run')}</div>
+        <div class="agent-econ-purpose" onclick="this.classList.toggle('expanded')" title="Click to expand">${agent.purpose || (agent.actionable ? agent.actionable+' actionable opportunities' : 'Ready for its first run')}</div>
       </div>
       <div class="agent-econ-number">${agent.runs}</div>
       <div class="agent-econ-number">${moneyText(agent.cost)}</div>
@@ -1835,6 +1925,9 @@ function openAgentActions(agentKey, provider, status, version) {
     'investment-thesis-researcher',
     'sourcing-fit-scorer',
     'calendar-cross-reference',
+    'gmail-lead-scout',
+    'agent-orchestrator',
+    'lead-momentum-tracker',
   ];
   const actions = [
     provider === 'dust' || runnableNative.includes(agentKey) ? 'run' : null,
@@ -1928,7 +2021,7 @@ function renderInformationRiver(items) {
         <span style="color:${item.actionable?'var(--accent)':'var(--muted)'}">${html(item.signal_type)}</span>
       </div>
       <div class="econ-sub">${html(item.agent_name || item.agent_key)} → ${html(item.company_name || item.entity_type || 'research')} · ${Math.round(Number(item.confidence||0)*100)}% confidence</div>
-      <div class="econ-sub">${html(readable(item.summary).slice(0,260))}</div>
+      <div class="econ-sub river-summary" onclick="this.classList.toggle('expanded')" title="Click to expand">${html(readable(item.summary))}</div>
       ${item.source_url ? `<a href="${html(item.source_url)}" target="_blank" style="display:inline-block;margin-top:5px;font-size:11px;color:var(--accent)">View source ↗</a>` : ''}
       ${item.status==='new' ? `<div style="display:flex;gap:6px;margin-top:7px">
         <button class="btn-secondary btn-sm" onclick="decideSignal(${item.id},true)">Useful</button>
@@ -2400,6 +2493,12 @@ function renderFirmCard(firm) {
     `<span class="src-tag src-${t}">${t}</span>`
   ).join('');
 
+  const patternHtml = firm.email_pattern
+    ? `<span class="src-tag" style="background:#fdf6e3;color:#a17a1a;border:1px solid #e9d8a6" title="Learned from a confirmed email at ${esc(firm.email_pattern.example||'')} — applied to new people at this firm as an unverified guess, never auto-sendable">
+        Email pattern: ${firm.email_pattern.pattern}@${firm.email_pattern.domain}
+      </span>`
+    : '';
+
   const companiesHtml = firm.pipeline_companies.map(c =>
     `<span class="firm-company-pill" data-id="${c.id}" data-name="${esc(c.name)}" title="${c.sector||''} · ${c.stage||''}">
       ${c.name}
@@ -2420,6 +2519,7 @@ function renderFirmCard(firm) {
         <span class="firm-count people ${firm.individual_count?'has-people':''}">${firm.individual_count} ${firm.individual_count===1?'person':'people'}</span>
         ${firm.best_relationship !== 'none' ? `<span class="rel-badge ${relCls}">${firm.best_relationship.replace('_',' ')}</span>` : ''}
         ${srcHtml}
+        ${patternHtml}
       </div>
       <span class="firm-expand-icon" id="firm-icon-${key}">${isOpen?'&#9662;':'&#9656;'}</span>
     </div>
@@ -3074,6 +3174,7 @@ async function loadProfile() {
     populateProfileForm({}); // brand-new / unreachable: still render empty deck
   }
   loadCalendarStatus();
+  loadGmailStatus();
 }
 
 async function loadCalendarStatus() {
@@ -3100,6 +3201,80 @@ async function disconnectCalendar() {
   await api('POST', '/calendar/disconnect', {});
   flash('Calendar disconnected');
   loadCalendarStatus();
+}
+
+async function loadGmailStatus() {
+  const el = document.getElementById('gmailStatus');
+  if (!el) return;
+  try {
+    const status = await api('GET', '/gmail/status');
+    if (!status.configured) {
+      el.innerHTML = `<span style="color:var(--muted)">Not configured yet — add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to Railway env vars to enable this.</span>`;
+      document.getElementById('gmailStyleSection').style.display = 'none';
+    } else if (status.connected) {
+      el.innerHTML = `<span style="color:var(--accent);font-weight:600">Connected</span> as ${status.account_email}
+        <button class="btn-secondary btn-sm" style="margin-left:10px" onclick="disconnectGmail()">Disconnect</button>`;
+      document.getElementById('gmailStyleSection').style.display = 'block';
+      const profile = await api('GET', '/profile').catch(() => ({}));
+      showWritingStyle(profile.writing_style_profile, profile.writing_style_refined_at);
+    } else {
+      el.innerHTML = `<a href="/api/gmail/connect" class="btn-primary btn-sm" style="text-decoration:none;display:inline-block">Connect Gmail</a>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px">Once connected, the Gmail Lead Scout checks your inbox against your companies and investors daily, and you can learn your writing style from Sent mail.</div>`;
+      document.getElementById('gmailStyleSection').style.display = 'none';
+    }
+  } catch (err) {
+    el.innerHTML = `<span style="color:var(--danger)">${err.message}</span>`;
+  }
+}
+
+async function disconnectGmail() {
+  if (!confirm('Disconnect Gmail?')) return;
+  await api('POST', '/gmail/disconnect', {});
+  flash('Gmail disconnected');
+  loadGmailStatus();
+}
+
+function showWritingStyle(text, refinedAt) {
+  const el = document.getElementById('gmailStyleProfile');
+  const meta = document.getElementById('gmailStyleMeta');
+  if (!el || !meta) return;
+  if (!text) {
+    el.style.display = 'none';
+    meta.textContent = 'Learn how you actually write from your Sent folder, so drafts sound like you.';
+    return;
+  }
+  el.textContent = text;
+  el.style.display = 'block';
+  meta.textContent = refinedAt ? `Last learned ${refinedAt} UTC` : 'Learned from your sent emails';
+}
+
+async function learnWritingStyle() {
+  const btn = document.getElementById('gmailStyleBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Reading Sent mail…';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  try {
+    const response = await fetch('/api/profile/learn-writing-style', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    });
+    const r = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(r.error || response.statusText || 'Style learning failed');
+    showWritingStyle(r.writing_style_profile, r.writing_style_refined_at);
+    flash('Writing style learned from your Sent folder');
+  } catch (e) {
+    const message = e.name === 'AbortError'
+      ? 'Style learning timed out. Please try again.'
+      : `Could not learn writing style: ${e.message}`;
+    flash(message, false);
+  } finally {
+    clearTimeout(timeout);
+    btn.disabled = false;
+    btn.textContent = 'Learn my writing style';
+  }
 }
 
 async function loadControlTowerPage() {

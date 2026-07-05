@@ -134,23 +134,8 @@ router.get('/approve/:token', async (req, res) => {
       return res.send(noEmailPage(draft));
     }
 
-    const { Resend } = require('resend');
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const { error } = await resend.emails.send({
-      from: process.env.FROM_EMAIL || 'onboarding@resend.dev',
-      to: draft.investor_email,
-      subject: draft.subject,
-      text: draft.body,
-    });
-
-    if (error) throw new Error(JSON.stringify(error));
-    await execute('UPDATE drafts SET status = $1 WHERE id = $2', ['sent', draft.id]);
-    const sourceSignal = draft.company_id ? await queryOne('SELECT id,run_id FROM agent_signals WHERE company_id=$1 ORDER BY created_at DESC LIMIT 1', [draft.company_id]) : null;
-    await execute(
-      `INSERT INTO agent_outcomes (run_id,signal_id,company_id,outcome_type,notes,data_json)
-       VALUES ($1,$2,$3,'outreach_sent',$4,$5)`,
-      [sourceSignal?.run_id || null, sourceSignal?.id || null, draft.company_id, draft.investor_name || '', JSON.stringify({ draft_id: draft.id, delivery: 'email' })]
-    );
+    const { sendDraftEmail } = require('../email');
+    await sendDraftEmail(draft);
     return res.send(confirmPage(
       'Sent',
       `Your message to <strong>${draft.investor_name}</strong> (${draft.investor_email}) has been sent.`
@@ -185,6 +170,26 @@ router.post('/:id/skip', async (req, res) => {
      VALUES ($1,$2,$3,'draft_skipped',$4,$5)`,
     [sourceSignal?.run_id || null, sourceSignal?.id || null, draft.company_id, draft.investor_name || '', JSON.stringify({ draft_id: draft.id })]
   );
+  res.json({ ok: true });
+});
+
+// GET /api/drafts/cancel-auto-send/:token — no-session cancel link for the auto-send email notice
+router.get('/cancel-auto-send/:token', async (req, res) => {
+  const draft = await queryOne('SELECT id, investor_name, scheduled_send_at FROM drafts WHERE approve_token = $1', [req.params.token]);
+  if (!draft) return res.send(confirmPage('Not Found', 'Draft not found.'));
+  if (!draft.scheduled_send_at) {
+    return res.send(confirmPage('Already Handled', `This draft for <strong>${draft.investor_name}</strong> isn't scheduled to auto-send (already sent, cancelled, or skipped).`));
+  }
+  await execute('UPDATE drafts SET scheduled_send_at = NULL WHERE id = $1', [draft.id]);
+  return res.send(confirmPage('Auto-Send Cancelled', `The scheduled send to <strong>${draft.investor_name}</strong> is cancelled. It's now a normal pending draft — approve or skip it manually anytime.`));
+});
+
+// POST /api/drafts/:id/cancel-auto-send — UI cancel (requires session auth)
+router.post('/:id/cancel-auto-send', async (req, res) => {
+  const draft = await queryOne('SELECT id, scheduled_send_at FROM drafts WHERE id=$1', [req.params.id]);
+  if (!draft) return res.status(404).json({ error: 'Draft not found' });
+  if (!draft.scheduled_send_at) return res.status(400).json({ error: 'This draft is not scheduled to auto-send' });
+  await execute('UPDATE drafts SET scheduled_send_at = NULL WHERE id = $1', [req.params.id]);
   res.json({ ok: true });
 });
 

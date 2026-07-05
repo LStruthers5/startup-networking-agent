@@ -376,4 +376,70 @@ ${lines.join('\n')}`
   }
 });
 
+// POST /api/profile/learn-writing-style — distill Sent-folder voice into a writing style profile
+router.post('/learn-writing-style', async (req, res) => {
+  try {
+    const { listRecentSentMessages } = require('../gmail');
+    const messages = await listRecentSentMessages(15);
+    if (!messages.length) {
+      return res.status(400).json({ error: 'No usable sent emails found — connect Gmail and send a few emails first.' });
+    }
+
+    const refined = await executeAgent('gmail-style-learner', {
+      trigger: 'manual',
+      input: { message_count: messages.length },
+    }, async () => {
+      const client = trackedAnthropicClient();
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 700,
+        messages: [{
+          role: 'user',
+          content: `Analyze these emails the user actually sent and describe HOW they write — not what they write about.
+Focus only on structural voice: greeting style, sign-off style, sentence length, directness, formality, punctuation/emoji habits,
+paragraph structure, and how they open and close a message. Ignore topics, names, and specific content.
+
+Return ONLY valid JSON:
+{
+  "summary": "A concise 100-180 word second-person description of the user's writing voice, usable as style guidance for drafting new emails.",
+  "greeting_style": "",
+  "sign_off_style": "",
+  "typical_length": "short|medium|long",
+  "tone": "",
+  "notable_habits": []
+}
+
+SENT EMAILS:
+${JSON.stringify(messages)}`
+        }]
+      });
+      const raw = response.content[0].text.trim();
+      const jsonText = raw.match(/\{[\s\S]*\}/)?.[0] || '{}';
+      return JSON.parse(jsonText);
+    });
+
+    const style = refined.summary || '';
+    if (!style) throw new Error('The style learner returned no usable summary.');
+    const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    // A text description of voice gets diluted fast. Keep a handful of the actual verbatim emails too,
+    // so drafting can anchor on real examples instead of just a summary of them.
+    const examples = messages.slice(0, 3).map(m => ({ subject: m.subject, body: m.body }));
+    const existing = await queryOne('SELECT id FROM user_profile LIMIT 1');
+    if (existing) {
+      await execute(
+        'UPDATE user_profile SET writing_style_profile=$1, writing_style_refined_at=$2, writing_style_examples=$3 WHERE id=$4',
+        [style, ts, JSON.stringify(examples), existing.id]
+      );
+    } else {
+      await execute(
+        'INSERT INTO user_profile (writing_style_profile, writing_style_refined_at, writing_style_examples) VALUES ($1,$2,$3)',
+        [style, ts, JSON.stringify(examples)]
+      );
+    }
+    res.json({ writing_style_profile: style, writing_style_refined_at: ts, count: messages.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
