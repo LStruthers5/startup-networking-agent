@@ -141,6 +141,35 @@ async function listRecentInboxMessages(days = 3, limit = 40) {
   return messages;
 }
 
+// Checks whether a specific sender has emailed us since a given time. Metadata + snippet only —
+// enough to know a reply happened and show a preview, without pulling the full body.
+// afterText is a 'YYYY-MM-DD HH24:MI:SS' UTC string (the drafts.created_at format).
+async function findReplyFrom(senderEmail, afterText) {
+  const client = await getAuthorizedClient();
+  if (!client || !senderEmail) return null;
+  const { google } = require('googleapis');
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  const afterSeconds = Math.floor(new Date(String(afterText).replace(' ', 'T') + 'Z').getTime() / 1000);
+  if (!Number.isFinite(afterSeconds)) return null;
+  const { data } = await gmail.users.messages.list({
+    userId: 'me',
+    q: `from:${senderEmail} after:${afterSeconds}`,
+    maxResults: 3,
+  });
+  const first = (data.messages || [])[0];
+  if (!first) return null;
+  const { data: msg } = await gmail.users.messages.get({
+    userId: 'me', id: first.id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'Date'],
+  });
+  return {
+    id: msg.id,
+    subject: headerValue(msg.payload?.headers, 'Subject'),
+    from: headerValue(msg.payload?.headers, 'From'),
+    date: headerValue(msg.payload?.headers, 'Date'),
+    snippet: msg.snippet || '',
+  };
+}
+
 // Returns recent Sent messages with full plain-text bodies (quotes/signatures stripped) for style learning.
 // Fetches a wider pool than requested since short/near-empty replies (post-stripping) get filtered out —
 // otherwise a run of one-line replies could starve the caller of enough real signal to learn from.
@@ -175,4 +204,4 @@ async function disconnect() {
   await execute(`DELETE FROM gmail_connections WHERE owner_id='local'`);
 }
 
-module.exports = { isConfigured, getAuthUrl, handleCallback, getStatus, listRecentInboxMessages, listRecentSentMessages, disconnect };
+module.exports = { isConfigured, getAuthUrl, handleCallback, getStatus, listRecentInboxMessages, listRecentSentMessages, findReplyFrom, disconnect };

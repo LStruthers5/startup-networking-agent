@@ -38,6 +38,8 @@ const NATIVE_AGENTS = [
   { key: 'gmail-style-learner', name: 'Gmail Style Learner', purpose: 'Distill your Sent-folder writing style into a voice profile that shapes outreach drafts.', capabilities: ['email', 'summarization'], schedule: {}, outputs: ['profile'] },
   { key: 'agent-orchestrator', name: 'Master Orchestrator', purpose: 'Decide which research agents to run each cycle based on staleness, backlog, recent yield, and remaining budget — the loop that runs the other loops.', capabilities: ['planning', 'orchestration'], schedule: { cadence: 'every-15-min', cron: '*/15 * * * *' }, outputs: ['recommendation'], displayInRoster: true },
   { key: 'lead-momentum-tracker', name: 'Lead Momentum Tracker', purpose: 'Track sustained promise across signal cycles and alert when a lead crosses the high-conviction threshold, with a low-stakes and a high-reward reachout path.', capabilities: ['momentum', 'synthesis', 'alerting'], schedule: { cadence: 'every-12-hours', cron: '30 */12 * * *', interval_hours: 12, batch_limit: 20 }, outputs: ['recommendation'], displayInRoster: true },
+  { key: 'reply-detector', name: 'Reply Detector', purpose: 'Watch the inbox for replies to sent outreach and alert immediately — a reply is the most time-sensitive event in the funnel.', capabilities: ['email', 'monitoring', 'alerting'], schedule: { cadence: 'every-2-hours', cron: '5 */2 * * *', interval_hours: 2, batch_limit: 25 }, outputs: ['recommendation'], displayInRoster: true },
+  { key: 'mcp-ingest', name: 'Conversational Ingest', purpose: 'Parse free-form notes sent through the Claude connector into contacts, companies, events, and river signals.', capabilities: ['extraction', 'ingest'], schedule: { cadence: 'on-demand' }, outputs: ['company', 'person', 'event', 'claim'] },
 ];
 
 function safeJson(value, fallback = {}) {
@@ -152,8 +154,24 @@ async function checkBudget(agentKey, estimatedPreflight = 0, planBucket = 'api')
   return { settings, spent, agentKey };
 }
 
+// Master switch. When off, NO agent run proceeds — scheduled, manual, orchestrator, or MCP — because
+// every run funnels through executeAgent. Defaults to on if the setting row/column is missing.
+async function agentsEnabled() {
+  try {
+    const row = await queryOne(`SELECT agents_enabled FROM control_tower_settings WHERE owner_id='local'`);
+    if (!row || row.agents_enabled == null) return true;
+    return row.agents_enabled !== 0 && row.agents_enabled !== false;
+  } catch (_) { return true; }
+}
+
 async function executeAgent(agentKey, options, work) {
   const opts = options || {};
+  // Master kill switch — checked before anything is written, so a paused run leaves no trace.
+  if (!(await agentsEnabled())) {
+    const error = new Error('Agent runs are paused by the master switch. Turn agents back on in the Control Tower.');
+    error.code = 'AGENTS_DISABLED';
+    throw error;
+  }
   const agent = await queryOne('SELECT * FROM agent_registry WHERE agent_key=$1', [agentKey]);
   if (!agent) throw new Error(`Unknown agent: ${agentKey}`);
   if (agent.status !== 'active') throw new Error(`${agent.name} is ${agent.status}`);
@@ -308,6 +326,7 @@ module.exports = {
   NATIVE_AGENTS,
   ensureAgentRegistry,
   executeAgent,
+  agentsEnabled,
   currentRun,
   recordProviderUsage,
   trackedAnthropicClient,

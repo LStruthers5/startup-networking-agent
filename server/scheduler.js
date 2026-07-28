@@ -30,7 +30,7 @@ async function getPendingDrafts(limit = 5) {
      FROM drafts d
      LEFT JOIN companies c ON c.id = d.company_id
      WHERE d.status = 'pending'
-     ORDER BY d.created_at ASC
+     ORDER BY (d.investor_email IS NOT NULL AND d.investor_email != '') DESC, d.created_at ASC
      LIMIT $1`,
     [limit]
   );
@@ -157,20 +157,32 @@ async function runScheduledAutoSends() {
   return { checked: due.length, sent };
 }
 
+// Every scheduled job runs through here. When the master switch is off, the job is skipped silently
+// (executeAgent would block it anyway, but this avoids doing wasted work and logging an error each tick).
+async function guarded(name, fn) {
+  try {
+    const { agentsEnabled } = require('./agent-control');
+    if (!(await agentsEnabled())) return;
+    await fn();
+  } catch (e) {
+    console.error(`[Scheduler] ${name} error:`, e.message);
+  }
+}
+
 function startScheduler() {
   if (process.env.RESEND_API_KEY) {
     // Daily 8am PT: pick companies → source contacts → write drafts → send approval email.
-    cron.schedule('0 8 * * *', () => runDailyJob().catch(e => console.error('[Scheduler] Daily error:', e.message)), { timezone: 'America/Los_Angeles' });
-    cron.schedule('0 7 * * 1', () => runWeeklyJob().catch(e => console.error('[Scheduler] Weekly error:', e.message)), { timezone: 'America/Los_Angeles' });
+    cron.schedule('0 8 * * *', () => guarded('Daily', runDailyJob), { timezone: 'America/Los_Angeles' });
+    cron.schedule('0 7 * * 1', () => guarded('Weekly', runWeeklyJob), { timezone: 'America/Los_Angeles' });
   } else {
     console.log('[Scheduler] No RESEND_API_KEY — email jobs disabled; research monitors remain active.');
   }
   // Master Orchestrator: one LLM decision per tick over which research agents are worth running,
   // given staleness, backlog, recent yield, and remaining budget — replaces the old fixed per-agent crons.
-  cron.schedule('*/15 * * * *', () => runMasterOrchestrator().catch(e => console.error('[Scheduler] Orchestrator error:', e.message)), { timezone: 'America/Los_Angeles' });
-  cron.schedule('40 6 * * 1', () => runWeeklyLearningJob().catch(e => console.error('[Scheduler] Weekly learning error:', e.message)), { timezone: 'America/Los_Angeles' });
+  cron.schedule('*/15 * * * *', () => guarded('Orchestrator', runMasterOrchestrator), { timezone: 'America/Los_Angeles' });
+  cron.schedule('40 6 * * 1', () => guarded('Weekly learning', runWeeklyLearningJob), { timezone: 'America/Los_Angeles' });
   if (process.env.RESEND_API_KEY) {
-    cron.schedule('*/15 * * * *', () => runScheduledAutoSends().catch(e => console.error('[Scheduler] Auto-send error:', e.message)), { timezone: 'America/Los_Angeles' });
+    cron.schedule('*/15 * * * *', () => guarded('Auto-send', runScheduledAutoSends), { timezone: 'America/Los_Angeles' });
   }
 
   console.log('[Scheduler] Started — master orchestrator, daily planning, low-stakes auto-send, and weekly learning (PT)');

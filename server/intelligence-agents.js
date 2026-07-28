@@ -812,6 +812,64 @@ ${JSON.stringify(investors.map(i => ({ id: i.id, name: i.name, firm: i.firm })))
   });
 }
 
+// Watches the inbox for replies to outreach we actually sent (email channel only — LinkedIn replies
+// are invisible to us and get marked manually via the drafts UI). A detected reply is the most
+// time-sensitive event in the funnel, so it also fires an immediate alert email rather than waiting
+// for the morning briefing. Deterministic sender+time matching — no LLM in this path.
+async function runReplyDetector(limit = 25) {
+  const drafts = await query(
+    `SELECT d.*, c.name AS company_name FROM drafts d
+     LEFT JOIN companies c ON c.id=d.company_id
+     WHERE d.status IN ('sent','approved_manual') AND d.investor_email IS NOT NULL
+       AND d.replied_at IS NULL
+     ORDER BY d.created_at DESC LIMIT $1`,
+    [limit]
+  );
+  if (!drafts.length) return emptyRun('reply-detector');
+
+  return executeAgent('reply-detector', {
+    trigger: 'scheduled',
+    input: { draft_ids: drafts.map(d => d.id) },
+  }, async () => {
+    const { findReplyFrom } = require('./gmail');
+    const found = [];
+    for (const draft of drafts) {
+      let reply = null;
+      try { reply = await findReplyFrom(draft.investor_email, draft.created_at); } catch (_) { continue; }
+      if (!reply) continue;
+
+      await execute(`UPDATE drafts SET replied_at=$1, reply_source='auto-detected' WHERE id=$2`, [nowText(), draft.id]);
+      // Bump toward warm — never downgrade someone already met/warm.
+      await execute(
+        `UPDATE investors SET relationship_status='warm', last_touched=$1
+         WHERE LOWER(name)=LOWER($2) AND relationship_status IN ('cold','outreach_sent')`,
+        [nowText(), draft.investor_name]
+      );
+
+      if (process.env.RESEND_API_KEY) {
+        try {
+          const { sendReplyAlert } = require('./email');
+          await sendReplyAlert(draft, reply);
+        } catch (error) {
+          console.warn('[ReplyDetector] Alert email failed:', error.message);
+        }
+      }
+
+      found.push({
+        title: `${draft.investor_name} replied${draft.company_name ? ` — re: ${draft.company_name}` : ''}`,
+        summary: `"${reply.snippet}" — respond while it's hot.`,
+        signal_type: 'reply_received',
+        entity_type: 'investor',
+        company_id: draft.company_id || null,
+        confidence: 0.95,
+        actionable: true,
+        data: { draft_id: draft.id, reply_subject: reply.subject, reply_date: reply.date, from: reply.from },
+      });
+    }
+    return found;
+  });
+}
+
 async function curateTunerFeed(limit = 24) {
   const [companies, investors, events, signals, paths, history] = await Promise.all([
     query(`SELECT id,name,sector,stage,description,score FROM companies
@@ -1083,6 +1141,7 @@ const ORCHESTRATOR_CANDIDATES = [
   'relationship-pathfinder',
   'follow-up-strategist',
   'lead-momentum-tracker',
+  'reply-detector',
 ];
 
 function intervalHoursForSchedule(schedule) {
@@ -1216,6 +1275,7 @@ async function runMasterOrchestrator() {
             'relationship-pathfinder': () => runRelationshipPathfinder(Number(info?.batch_limit || 8)),
             'follow-up-strategist': () => runFollowUpStrategist(Number(info?.batch_limit || 12)),
             'lead-momentum-tracker': () => runLeadMomentumTracker(Number(info?.batch_limit || 20)),
+            'reply-detector': () => runReplyDetector(Number(info?.batch_limit || 25)),
           }[key];
           const output = runner ? await runner() : [];
           results[key] = output.length;
@@ -1407,6 +1467,7 @@ module.exports = {
   runSourcingFitScorer,
   runCalendarCrossReference,
   runGmailLeadScout,
+  runReplyDetector,
   curateTunerFeed,
   runOutcomeLearning,
   runAgentPortfolioManager,

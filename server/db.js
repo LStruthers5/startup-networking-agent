@@ -355,6 +355,15 @@ async function initSchema() {
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS stakes_tier TEXT DEFAULT 'standard';
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS scheduled_send_at TEXT;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS investor_email_source TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS replied_at TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS reply_source TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS inmail_subject TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS inmail_body TEXT;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS email TEXT DEFAULT '';
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS linkedin_url TEXT DEFAULT '';
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS connected_on TEXT DEFAULT '';
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual';
+    ALTER TABLE control_tower_settings ADD COLUMN IF NOT EXISTS agents_enabled INTEGER DEFAULT 1;
 
     CREATE TABLE IF NOT EXISTS firm_email_patterns (
       id SERIAL PRIMARY KEY,

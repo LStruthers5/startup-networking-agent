@@ -28,7 +28,16 @@ The Node app uses PostgreSQL via `DATABASE_URL` and serves the UI at `http://loc
 
 Optional Dust setup requires `DUST_API_KEY` and `DUST_WORKSPACE_ID`. Dust workspace allowances, trigger allowances, and programmatic credits are entered in the Control Tower settings because they are separate economic buckets. Almost every draft still requires human approval — the one exception is a narrow, explicit auto-send tier: cold reaches (never a warm intro) to the lowest investor priority tier, only once a real email is on file, send automatically after a 3-hour cancel window. Anything above that tier always waits for a click.
 
-The app is designed for manual Crunchbase Pro CSV exports. It does not use Crunchbase APIs, scraping, email sending, LinkedIn automation, authentication, or paid integrations.
+The app is designed for manual Crunchbase Pro CSV exports. It does not use Crunchbase APIs, scraping, LinkedIn automation, or paid enrichment integrations.
+
+### Claude connector (MCP)
+
+The Tower exposes an MCP endpoint so any Claude surface can talk to it directly — "here are my notes from tonight's event, add them to my river." Set `MCP_TOKEN` (any long random string) in the environment, then:
+
+- **Claude Code**: `claude mcp add --transport http tower https://<your-railway-domain>/mcp/<MCP_TOKEN>`
+- **claude.ai / desktop / mobile**: Settings → Connectors → add a custom connector with that same URL.
+
+Tools exposed: `ingest_notes` (free-form notes → contacts/companies/events/river signals), `query_pipeline`, `query_river`, `update_company`, `log_interaction`, `list_drafts`, `approve_draft` (sends a real email — only on explicit instruction), `skip_draft`, `run_agent`, `trigger_morning_brief`. The token in the URL is the whole auth — treat the URL as a secret.
 
 ## What It Does
 

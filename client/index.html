@@ -204,6 +204,13 @@
   .tower-metric:last-child { border-right:0;margin-right:0; }
   .tower-metric strong { display:block;font-size:30px;font-weight:600;letter-spacing:-1px;color:var(--text);line-height:1; }
   .tower-metric span { display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.9px;margin-top:9px; }
+  .master-switch { display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none; }
+  .master-switch input { position:absolute;opacity:0;width:0;height:0; }
+  .master-slider { position:relative;width:38px;height:22px;background:var(--border);border-radius:22px;transition:background .2s;flex-shrink:0; }
+  .master-slider::before { content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.25); }
+  .master-switch input:checked + .master-slider { background:var(--accent); }
+  .master-switch input:checked + .master-slider::before { transform:translateX(16px); }
+  .master-switch.off #masterSwitchLabel { color:var(--danger); }
   .budget-bar { height:3px;background:var(--border);border-radius:0;overflow:hidden;margin:12px 0 10px; }
   .budget-fill { height:100%;background:var(--accent);border-radius:0;transition:width .25s; }
   .budget-fill.warn { background:var(--warn); }
@@ -445,6 +452,11 @@
       <h2 style="margin:0">Control Tower</h2>
     </div>
     <div style="display:flex;gap:8px;align-items:center;position:relative">
+      <label class="master-switch" title="Master switch — pause or resume all agent runs">
+        <span id="masterSwitchLabel" style="font-size:12px;font-weight:600;color:var(--muted)">Agents</span>
+        <input type="checkbox" id="masterSwitch" checked onchange="toggleMasterSwitch(this)">
+        <span class="master-slider"></span>
+      </label>
       <button class="btn-secondary btn-sm" id="runsDropdownBtn">Runs Log &#9662;</button>
       <button class="btn-secondary btn-sm" id="refreshQueueBtn">Refresh</button>
       <!-- Runs dropdown -->
@@ -563,6 +575,14 @@
     <span id="loggedCount" style="font-size:12px;color:var(--muted)">&#9662;</span>
   </div>
   <div id="loggedList" style="display:none"></div>
+
+  <!-- OUTREACH LOG -->
+  <div class="wb-section-header">
+    <span class="wb-section-label">Outreach Log</span>
+    <span id="outreachLogSummary" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div id="outreachLogFilters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+  <div id="outreachLogList"></div>
 </div>
 
 <!-- ===== COMPANIES ===== -->
@@ -708,10 +728,18 @@
 
 <!-- ===== CONTACTS ===== -->
 <div class="view" id="view-contacts">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
     <h2>My Contacts</h2>
-    <button class="btn-primary btn-sm" id="showAddContactBtn">+ Add Contact</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary btn-sm" id="importLinkedInBtn">Import LinkedIn Connections</button>
+      <button class="btn-primary btn-sm" id="showAddContactBtn">+ Add Contact</button>
+      <input type="file" id="linkedinCsvInput" accept=".csv" style="display:none">
+    </div>
   </div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:16px">
+    Export your connections from LinkedIn (Settings → Data Privacy → <em>Get a copy of your data</em> → Connections), then upload the CSV here. Emails come through for connections who allow it — those become warm-intro candidates.
+  </div>
+  <div id="linkedinImportStatus" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:8px;font-size:13px"></div>
   <div class="card" id="addContactForm" style="display:none;margin-bottom:16px">
     <h3 id="contactFormTitle">Add Contact</h3>
     <input type="hidden" id="editContactId">
@@ -731,7 +759,7 @@
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Name</th><th>Firm</th><th>Role</th><th>How I Know Them</th><th>Notes</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Firm</th><th>Role</th><th>Email</th><th>How I Know Them</th><th></th></tr></thead>
       <tbody id="contactsBody"></tbody>
     </table>
   </div>
@@ -1719,39 +1747,44 @@ async function loadDraftQueue() {
   try {
     const drafts = await api('GET', '/drafts?status=pending&limit=10');
     if (!drafts.length) {
-      el.innerHTML = '<div class="empty">No pending InMails — generate one from a company card or run the autonomous draft agent.</div>';
+      el.innerHTML = '<div class="empty">No pending outreach — generate one from a company card or run the autonomous draft agent.</div>';
       return;
     }
+    // Collapsed by design: no draft text shown until you click a channel. Each person offers an Email
+    // action (only when a real address was found) and a LinkedIn InMail action (always). API returns
+    // found-email leads first.
     el.innerHTML = drafts.map(d => {
-      const isInmail = (d.channel || 'inmail') === 'inmail';
+      const hasEmail = Boolean(d.investor_email);
       const isAutoScheduled = Boolean(d.scheduled_send_at);
-      const badge = isInmail
-        ? `<span style="background:#0a66c2;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">InMail</span>`
-        : `<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">Email</span>`;
+      const badge = hasEmail
+        ? `<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">Email found</span>`
+        : `<span style="background:#0a66c2;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">LinkedIn only</span>`;
       const autoBadge = isAutoScheduled
         ? `<span style="background:#a17a1a;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:6px">Auto-sending</span>`
         : '';
       const autoNotice = isAutoScheduled
         ? `<div style="font-size:11px;color:#a17a1a;background:#fdf6e3;border:1px solid #e9d8a6;border-radius:6px;padding:6px 10px;margin-bottom:10px">
-             Auto-sends at ${d.scheduled_send_at} UTC unless cancelled — low-stakes cold reach with a real email on file.
+             Auto-sends at ${d.scheduled_send_at} UTC unless cancelled — low-stakes cold reach with a confirmed email.
              <button class="btn-ghost btn-sm" style="padding:0;color:#a17a1a;text-decoration:underline" onclick="cancelAutoSendInUI(${d.id}, this)">Cancel auto-send</button>
            </div>`
         : '';
       const copyId = `draft-copy-${d.id}`;
-      const linkedinBtn = d.linkedin_url
-        ? `<a href="${d.linkedin_url}" target="_blank" class="btn-secondary btn-sm" style="text-decoration:none">Open Profile</a>`
+      const inmailBody = d.inmail_body || d.body || '';
+      const linkedinTarget = d.linkedin_url || `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(d.investor_name || '')}`;
+      const emailBtn = hasEmail
+        ? `<button class="btn-primary btn-sm" onclick="openEmailPreview('${d.approve_token}')">Email</button>`
         : '';
+      const inmailBtn = `<button class="btn-primary btn-sm" id="${copyId}" onclick="copyDraftAndOpen(${d.id},'${encodeURIComponent(inmailBody)}','${encodeURIComponent(linkedinTarget)}')">Copy InMail &amp; Open LinkedIn</button>`;
       return `
       <div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:var(--surface)">
-        <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px">
+        <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:10px">
           ${d.investor_name || 'Unknown'}${d.company_name ? ` — re: ${d.company_name}` : ''}${badge}${autoBadge}
         </div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${d.subject}</div>
-        <div style="font-size:13px;line-height:1.65;border-left:3px solid var(--accent);padding-left:10px;margin-bottom:12px;white-space:pre-wrap;color:var(--text)">${d.body}</div>
         ${autoNotice}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn-primary btn-sm" id="${copyId}" onclick="copyDraft(${d.id},'${encodeURIComponent(d.subject + '\\n\\n' + d.body)}')">Copy for LinkedIn</button>
-          ${linkedinBtn}
+          ${emailBtn}
+          ${inmailBtn}
+          <button class="btn-secondary btn-sm" onclick="markRepliedInUI(${d.id}, this)">They replied</button>
           <button class="btn-secondary btn-sm" onclick="skipDraftInUI(${d.id}, this)">Skip</button>
         </div>
       </div>`;
@@ -1765,9 +1798,44 @@ function copyDraft(id, encoded) {
   const text = decodeURIComponent(encoded);
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById(`draft-copy-${id}`);
-    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy for LinkedIn'; }, 2000); }
-    flash('Draft copied — paste it into LinkedIn InMail');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy Draft'; }, 2000); }
+    flash('Draft copied');
   });
+}
+
+// Opens the email preview page (2-click: reveals the draft, then Send there) in a new tab.
+function openEmailPreview(token) {
+  window.open(`/api/drafts/email/${token}`, '_blank');
+}
+
+// One click: clipboard + LinkedIn profile in a new tab, and the draft is marked handled
+// (approved_manual) so the pending queue only ever shows things not yet acted on.
+async function copyDraftAndOpen(id, encodedBody, encodedUrl) {
+  const text = decodeURIComponent(encodedBody);
+  const url = decodeURIComponent(encodedUrl);
+  try { await navigator.clipboard.writeText(text); } catch (_) {}
+  window.open(url, '_blank');
+  try {
+    await api('PATCH', `/drafts/${id}`, { status: 'approved_manual' });
+    flash('Draft copied — paste it into their InMail. Marked as handled.');
+    const btn = document.getElementById(`draft-copy-${id}`);
+    if (btn) { btn.textContent = 'Copied & opened ✓'; btn.disabled = true; }
+  } catch (err) {
+    flash('Copied and opened, but could not update status: ' + err.message, false);
+  }
+}
+
+async function markRepliedInUI(id, btn) {
+  btn.disabled = true; btn.textContent = 'Marking…';
+  try {
+    await api('POST', `/drafts/${id}/mark-replied`, {});
+    btn.closest('div[style*="border:1px"]').remove();
+    flash('Marked as replied — relationship bumped to warm');
+    loadOutreachLog();
+  } catch (err) {
+    btn.disabled = false; btn.textContent = 'They replied';
+    flash('Could not mark replied: ' + err.message, false);
+  }
 }
 
 async function skipDraftInUI(id, btn) {
@@ -1794,6 +1862,32 @@ async function cancelAutoSendInUI(id, btn) {
   }
 }
 
+function setMasterSwitchUI(on) {
+  const cb = document.getElementById('masterSwitch');
+  const wrap = cb?.closest('.master-switch');
+  const label = document.getElementById('masterSwitchLabel');
+  if (!cb || !wrap || !label) return;
+  cb.checked = on;
+  wrap.classList.toggle('off', !on);
+  label.textContent = on ? 'Agents on' : 'Agents OFF';
+}
+
+async function toggleMasterSwitch(cb) {
+  const on = cb.checked;
+  if (!on && !confirm('Pause ALL agent runs?\n\nNo research, drafting, morning briefing, or auto-sends will run until you turn agents back on.')) {
+    cb.checked = true;
+    return;
+  }
+  setMasterSwitchUI(on);
+  try {
+    await api('PATCH', '/control-tower/settings', { agents_enabled: on ? 1 : 0 });
+    flash(on ? 'Agents resumed' : 'All agents paused', on);
+  } catch (err) {
+    setMasterSwitchUI(!on);
+    flash('Could not change master switch: ' + err.message, false);
+  }
+}
+
 async function loadControlTower() {
   try {
     const lastVisit = localStorage.getItem('controlTowerLastVisit') || '';
@@ -1807,6 +1901,7 @@ async function loadControlTower() {
     loadDraftQueue();
     localStorage.setItem('controlTowerLastVisit', new Date().toISOString().slice(0,19).replace('T',' '));
 
+    setMasterSwitchUI(summary.agents_enabled !== false);
     document.getElementById('towerNewSignals').textContent = summary.signals.new;
     document.getElementById('towerActionable').textContent = summary.signals.actionable;
     document.getElementById('towerStale').textContent = summary.signals.stale;
@@ -1928,6 +2023,7 @@ function openAgentActions(agentKey, provider, status, version) {
     'gmail-lead-scout',
     'agent-orchestrator',
     'lead-momentum-tracker',
+    'reply-detector',
   ];
   const actions = [
     provider === 'dust' || runnableNative.includes(agentKey) ? 'run' : null,
@@ -2102,6 +2198,7 @@ async function loadWorkbench() {
   wbShownIds = [];
   loadUpNext(true);
   loadLogged();
+  loadOutreachLog();
 }
 
 async function loadRadar() {
@@ -2166,6 +2263,79 @@ async function loadLogged() {
         <div style="font-size:12px;color:var(--muted);white-space:nowrap">${fmtDate(a.created_at)}</div>
       </div>`).join('');
   } catch(_) {}
+}
+
+let outreachLogFilter = 'all';
+let outreachLogData = { counts: {}, items: [] };
+
+const OUTREACH_STATUS_META = {
+  sent: { color: 'var(--accent)', label: 'Sent' },
+  pending: { color: '#5a7f9e', label: 'Pending' },
+  approved_manual: { color: '#0a66c2', label: 'Manual send' },
+  skipped: { color: 'var(--muted)', label: 'Skipped' },
+};
+
+async function loadOutreachLog() {
+  try {
+    outreachLogData = await api('GET', '/drafts/log?limit=150');
+    renderOutreachLogFilters();
+    renderOutreachLogList();
+  } catch (e) {
+    document.getElementById('outreachLogList').innerHTML = `<div class="empty" style="color:var(--danger)">${e.message}</div>`;
+  }
+}
+
+function renderOutreachLogFilters() {
+  const c = outreachLogData.counts || {};
+  const total = (c.pending||0) + (c.sent||0) + (c.skipped||0) + (c.approved_manual||0);
+  document.getElementById('outreachLogSummary').textContent = `${total} total · ${c.sent||0} sent · ${c.pending||0} pending`;
+  const tabs = [
+    { key: 'all', label: `All (${total})` },
+    { key: 'pending', label: `Pending (${c.pending||0})` },
+    { key: 'sent', label: `Sent (${c.sent||0})` },
+    { key: 'approved_manual', label: `Manual (${c.approved_manual||0})` },
+    { key: 'skipped', label: `Skipped (${c.skipped||0})` },
+  ];
+  document.getElementById('outreachLogFilters').innerHTML = tabs.map(t => `
+    <button class="btn-secondary btn-sm" onclick="setOutreachLogFilter('${t.key}')"
+      style="${outreachLogFilter===t.key ? 'background:var(--text);color:#fff;border-color:var(--text)' : ''}">${t.label}</button>
+  `).join('');
+}
+
+function setOutreachLogFilter(key) {
+  outreachLogFilter = key;
+  renderOutreachLogFilters();
+  renderOutreachLogList();
+}
+
+function renderOutreachLogList() {
+  const el = document.getElementById('outreachLogList');
+  const items = outreachLogFilter === 'all'
+    ? outreachLogData.items
+    : outreachLogData.items.filter(d => d.status === outreachLogFilter);
+  if (!items.length) { el.innerHTML = '<div class="empty" style="padding:16px">Nothing here yet.</div>'; return; }
+  el.innerHTML = items.map(d => {
+    const meta = OUTREACH_STATUS_META[d.status] || { color: 'var(--muted)', label: d.status };
+    const isLowStakes = d.stakes_tier === 'low';
+    const preview = (d.body || '').replace(/\s+/g, ' ').trim().slice(0, 90);
+    return `
+    <div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--border);align-items:stretch">
+      <div style="width:4px;background:${meta.color};border-radius:2px;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <div style="font-weight:600;font-size:13px">${esc(d.investor_name||'Unknown')}${d.company_name?` <span style="color:var(--muted);font-weight:400">&middot; ${esc(d.company_name)}</span>`:''}</div>
+          <div style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(d.created_at)}</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${html(preview)}${(d.body||'').length>90?'&hellip;':''}</div>
+        <div style="display:flex;gap:8px;margin-top:5px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${meta.color}">${meta.label}</span>
+          <span style="font-size:10px;color:var(--muted)">${(d.channel||'inmail')==='inmail'?'InMail':'Email'}</span>
+          ${isLowStakes?'<span style="font-size:10px;color:#a17a1a;font-weight:700">Low-stakes</span>':''}
+          ${d.replied_at?'<span style="font-size:10px;color:var(--accent);font-weight:700">✓ Replied</span>':''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function skipCard(companyId) { document.querySelector(`.oc[data-cid="${companyId}"]`)?.remove(); }
@@ -2349,18 +2519,21 @@ async function loadContacts() {
   const contacts = await api('GET', '/contacts');
   const tbody = document.getElementById('contactsBody');
   if (!contacts.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No contacts yet.</td></tr>'; return; }
-  tbody.innerHTML = contacts.map(c => `
+  tbody.innerHTML = contacts.map(c => {
+    const liLink = c.linkedin_url ? ` <a href="${c.linkedin_url}" target="_blank" style="color:var(--accent);font-size:11px">in</a>` : '';
+    return `
     <tr>
-      <td>${c.name||'<span style="color:var(--muted)">&mdash;</span>'}</td>
+      <td>${c.name||'<span style="color:var(--muted)">&mdash;</span>'}${liLink}</td>
       <td><strong>${c.firm||'&mdash;'}</strong></td>
       <td style="color:var(--muted)">${c.role||'&mdash;'}</td>
+      <td style="color:var(--muted);font-size:13px">${c.email ? `<a href="mailto:${c.email}" style="color:var(--accent)">${c.email}</a>` : '<span style="color:var(--muted)">&mdash;</span>'}</td>
       <td style="color:var(--muted)">${c.how_i_know_them||'&mdash;'}</td>
-      <td style="color:var(--muted);font-size:13px">${c.notes||''}</td>
       <td>
         <button class="btn-sm btn-secondary edit-contact-btn" data-id="${c.id}">Edit</button>
         <button class="btn-sm btn-danger del-contact-btn" data-id="${c.id}" style="margin-left:4px">&times;</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   tbody.querySelectorAll('.edit-contact-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const c = contacts.find(x => x.id == btn.dataset.id);
@@ -2385,6 +2558,32 @@ document.getElementById('showAddContactBtn').addEventListener('click', () => {
   document.getElementById('addContactForm').style.display = 'block';
 });
 document.getElementById('cancelContactBtn').addEventListener('click', () => { document.getElementById('addContactForm').style.display = 'none'; });
+
+document.getElementById('importLinkedInBtn').addEventListener('click', () => document.getElementById('linkedinCsvInput').click());
+document.getElementById('linkedinCsvInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('linkedinImportStatus');
+  status.style.display = 'block';
+  status.style.background = 'var(--bg-alt,rgba(0,0,0,.03))';
+  status.style.color = 'var(--text)';
+  status.textContent = 'Importing connections…';
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const r = await fetch('/api/contacts/import', { method: 'POST', body: form });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Import failed');
+    status.style.background = 'rgba(47,158,68,.12)';
+    status.innerHTML = `Imported <strong>${j.total}</strong> connections — ${j.added} new, ${j.updated} updated, <strong>${j.withEmail}</strong> with an email address (warm-intro ready).`;
+    loadContacts();
+  } catch (err) {
+    status.style.background = 'rgba(193,51,51,.12)';
+    status.textContent = 'Import failed: ' + err.message;
+  } finally {
+    e.target.value = '';
+  }
+});
 document.getElementById('saveContactBtn').addEventListener('click', async () => {
   const id = document.getElementById('editContactId').value;
   const payload = { name: document.getElementById('cName').value.trim(), firm: document.getElementById('cFirm').value.trim(), role: document.getElementById('cRole').value.trim(), how_i_know_them: document.getElementById('cHow').value.trim(), notes: document.getElementById('cNotes').value.trim() };

@@ -25,7 +25,8 @@ app.use(express.json());
 app.use((req, res, next) => {
   // allow uptime checks and one-click approve/skip links from email (token is the auth)
   if (req.path === '/api/health') return next();
-  if (req.path.startsWith('/api/drafts/approve/') || req.path.startsWith('/api/drafts/skip/') || req.path.startsWith('/api/drafts/cancel-auto-send/')) return next();
+  if (req.path.startsWith('/api/drafts/approve/') || req.path.startsWith('/api/drafts/skip/') || req.path.startsWith('/api/drafts/cancel-auto-send/') || req.path.startsWith('/api/drafts/replied/') || req.path.startsWith('/api/drafts/inmail/') || req.path.startsWith('/api/drafts/email/')) return next();
+  if (req.path.startsWith('/mcp/')) return next(); // MCP connector authenticates via its own token
 
   const AUTH_PASSWORD = process.env.AUTH_PASSWORD;
   if (!AUTH_PASSWORD) return next(); // no password set → open (dev mode)
@@ -57,6 +58,7 @@ app.use('/api/profile', require('./routes/profile'));
 app.use('/api/control-tower', require('./routes/control-tower'));
 app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/gmail', require('./routes/gmail'));
+require('./mcp').mountMcp(app);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

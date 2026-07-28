@@ -32,60 +32,49 @@ function buildMorningHtml({ pendingDrafts = [], upcomingEvents = [], overdueActi
 
   let sections = '';
 
-  // ── InMails Ready to Send ─────────────────────────────────────────────────
+  // ── Outreach Ready to Send ────────────────────────────────────────────────
+  // Collapsed by design: no draft text in the email itself. Each person shows their name/company
+  // and the ways to reach them — an Email button (only when a real address was found) and a LinkedIn
+  // InMail button (always available). Clicking either opens a page that reveals the draft and acts on
+  // it, so you don't read a message until you've decided to. Found-email leads are sorted to the top
+  // upstream (getPendingDrafts), so the most actionable ones lead.
   if (pendingDrafts.length > 0) {
+    const btn = (href, bg2, label) => `<a href="${href}"
+             style="background:${bg2};color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;margin:0 8px 6px 0;display:inline-block">${label}</a>`;
     const cards = pendingDrafts.map(d => {
-      const isInmail = (d.channel || 'inmail') === 'inmail';
+      const hasEmail = Boolean(d.investor_email);
       const isAutoScheduled = Boolean(d.scheduled_send_at);
-      const channelBadge = isInmail
-        ? `<span style="background:#0a66c2;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">LinkedIn InMail</span>`
-        : `<span style="background:${muted};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">Email</span>`;
+      const emailBadge = hasEmail
+        ? `<span style="background:${green};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">Email found</span>`
+        : `<span style="background:#0a66c2;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">LinkedIn only</span>`;
       const autoBadge = isAutoScheduled
-        ? `<span style="background:${gold};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">Low-stakes · auto-sending</span>`
+        ? `<span style="background:${gold};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:8px">Auto-sending</span>`
         : '';
       const autoNotice = isAutoScheduled
-        ? `<div style="font-size:12px;color:${gold};background:#fdf6e3;border:1px solid #e9d8a6;border-radius:6px;padding:8px 12px;margin-bottom:12px">
-             This will send automatically at <strong>${d.scheduled_send_at} UTC</strong> unless you cancel it —
-             a cold reach to a lower-priority target with a real email on file. Anything using a warm intro or a higher-priority target always waits for your click.
+        ? `<div style="font-size:12px;color:${gold};background:#fdf6e3;border:1px solid #e9d8a6;border-radius:6px;padding:8px 12px;margin:6px 0 10px">
+             Auto-sends at <strong>${d.scheduled_send_at} UTC</strong> unless you cancel — a low-stakes cold reach with a confirmed email.
              <a href="${APP_URL()}/api/drafts/cancel-auto-send/${d.approve_token}" style="color:${gold};font-weight:700">Cancel auto-send</a>
            </div>`
         : '';
-      const sendNowBtn = d.investor_email
-        ? `<a href="${APP_URL()}/api/drafts/approve/${d.approve_token}"
-             style="background:${green};color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;margin-right:10px;display:inline-block">
-             Send Now
-           </a>`
-        : '';
-      const linkedinBtn = isInmail
-        ? `<a href="${d.linkedin_url || 'https://linkedin.com'}" target="_blank"
-             style="background:#0a66c2;color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;margin-right:10px;display:inline-block">
-             Open LinkedIn Profile
-           </a>`
-        : '';
-      const actionBtn = sendNowBtn + linkedinBtn || `<a href="${APP_URL()}/api/drafts/approve/${d.approve_token}"
-             style="background:${green};color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:700;margin-right:10px;display:inline-block">
-             Approve &amp; Send
-           </a>`;
+      // Email button first (preview-then-send) when we have an address; LinkedIn InMail always present.
+      const emailBtn = hasEmail ? btn(`${APP_URL()}/api/drafts/email/${d.approve_token}`, green, 'Email') : '';
+      const linkedinBtn = btn(`${APP_URL()}/api/drafts/inmail/${d.approve_token}`, '#0a66c2', 'LinkedIn InMail');
+      const skipBtn = `<a href="${APP_URL()}/api/drafts/skip/${d.approve_token}"
+             style="background:${surface};color:${muted};padding:9px 16px;border-radius:6px;text-decoration:none;font-size:13px;border:1px solid ${border};margin:0 8px 6px 0;display:inline-block">Skip</a>`;
+      const repliedLink = `<a href="${APP_URL()}/api/drafts/replied/${d.approve_token}"
+             style="color:${muted};text-decoration:underline;font-size:12px;display:inline-block;padding:9px 0">They replied</a>`;
 
       return `
-      <div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:16px 18px;margin-bottom:10px">
-        <div style="font-weight:700;font-size:14px;color:${text};margin-bottom:2px">
-          ${d.investor_name || 'Unknown Contact'}${d.company_name ? ` &mdash; re: ${d.company_name}` : ''}${channelBadge}${autoBadge}
+      <div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:14px 18px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:14px;color:${text};margin-bottom:8px">
+          ${d.investor_name || 'Unknown Contact'}${d.company_name ? ` &mdash; re: ${d.company_name}` : ''}${emailBadge}${autoBadge}
         </div>
-        <div style="font-size:12px;color:${muted};margin-bottom:10px">Subject: ${d.subject}</div>
-        <div style="font-size:13px;color:${text};line-height:1.65;border-left:3px solid ${green};padding-left:12px;margin-bottom:14px;white-space:pre-wrap">${d.body}</div>
         ${autoNotice}
-        <div>
-          ${actionBtn}
-          <a href="${APP_URL()}/api/drafts/skip/${d.approve_token}"
-             style="background:${surface};color:${muted};padding:9px 18px;border-radius:6px;text-decoration:none;font-size:13px;border:1px solid ${border};display:inline-block">
-            Skip
-          </a>
-        </div>
+        <div>${emailBtn}${linkedinBtn}${skipBtn}${repliedLink}</div>
       </div>`;
     }).join('');
 
-    sections += `<div style="margin-bottom:28px">${sectionHead('Your InMails Today', green)}${cards}</div>`;
+    sections += `<div style="margin-bottom:28px">${sectionHead('Your Outreach Today', green)}${cards}</div>`;
   }
 
   // ── Companies Ready to Reach ──────────────────────────────────────────────
@@ -284,6 +273,64 @@ async function sendDraftEmail(draft) {
   );
 }
 
+// Immediate alert when someone replies to outreach — the one event that shouldn't wait for the
+// morning briefing. Quotes the original message for instant context.
+async function sendReplyAlert(draft, reply) {
+  const resend = getResend();
+  const { execute } = require('./db');
+  const recipient = RECIPIENT();
+
+  const green = '#2f9e44', deepGreen = '#16351f', muted = '#4a7c59';
+  const surface = '#ffffff', border = '#b2d9bc', text = '#0d1e30';
+  const escapeHtml = s => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const html = `<!DOCTYPE html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+</head><body style="margin:0;padding:0;background:#c8e6c9;font-family:system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+<div style="max-width:640px;margin:32px auto;background:${surface};border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(13,48,20,.12)">
+
+  <div style="background:linear-gradient(135deg,#16351f 0%,#2f9e44 70%,#8ce99a 100%);padding:28px 32px">
+    <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:6px">NETWORKING RIVER &middot; REPLY RECEIVED</div>
+    <div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:4px">${escapeHtml(draft.investor_name)} wrote back</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.75)">${draft.company_name ? `re: ${escapeHtml(draft.company_name)} &middot; ` : ''}${escapeHtml(reply.date || '')}</div>
+  </div>
+
+  <div style="padding:28px 32px">
+    <p style="font-size:14px;color:${text};line-height:1.6;margin:0 0 20px">
+      <strong>Respond while it's hot</strong> — reply speed is the single biggest factor in whether this turns into a meeting.
+    </p>
+
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${deepGreen};margin:0 0 10px;padding-bottom:8px;border-bottom:2px solid ${border}">Their Reply${reply.subject ? ` &mdash; ${escapeHtml(reply.subject)}` : ''}</div>
+      <div style="font-size:14px;color:${text};line-height:1.7;border-left:3px solid ${green};padding-left:12px">${escapeHtml(reply.snippet)}&hellip;</div>
+      <div style="font-size:12px;color:${muted};margin-top:6px">From ${escapeHtml(reply.from || draft.investor_email)}</div>
+    </div>
+
+    <div style="margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${muted};margin:0 0 10px;padding-bottom:8px;border-bottom:2px solid ${border}">What You Originally Sent</div>
+      <div style="font-size:13px;color:${muted};line-height:1.65;white-space:pre-wrap">${escapeHtml(draft.body)}</div>
+    </div>
+  </div>
+
+  <div style="padding:16px 32px;border-top:1px solid ${border};font-size:11px;color:${muted};text-align:center">
+    Networking River &middot; Auto-detected via Gmail &middot;
+    <a href="${APP_URL()}" style="color:${green};text-decoration:none">Open River</a>
+  </div>
+</div></body></html>`;
+
+  const subject = `${draft.investor_name} replied${draft.company_name ? ` — ${draft.company_name}` : ''} — respond now`;
+  const { data, error } = await resend.emails.send({ from: FROM, to: recipient, subject, html });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+
+  await execute(
+    `INSERT INTO email_log (email_type, recipient, subject, status, resend_id, company_ids)
+     VALUES ('reply_alert', $1, $2, 'sent', $3, $4)`,
+    [recipient, subject, data?.id || null, draft.company_id ? String(draft.company_id) : '']
+  );
+
+  return data;
+}
+
 async function sendHotLeadAlert(company, brief, momentum) {
   const resend = getResend();
   const { execute } = require('./db');
@@ -359,4 +406,4 @@ async function sendHotLeadAlert(company, brief, momentum) {
   return data;
 }
 
-module.exports = { sendMorningBriefing, sendWeeklyRecap, sendHotLeadAlert, sendDraftEmail };
+module.exports = { sendMorningBriefing, sendWeeklyRecap, sendHotLeadAlert, sendReplyAlert, sendDraftEmail };

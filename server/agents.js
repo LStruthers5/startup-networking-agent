@@ -701,11 +701,13 @@ ${exampleEmails.length ? `\nREAL EMAILS ${profile.name.toUpperCase()} HAS ACTUAL
 
   const isInmail = channel === 'inmail';
   const channelInstructions = isInmail
-    ? `FORMAT — LinkedIn InMail:
-- Subject line: max 200 characters
-- Body: 80–120 words MAX. InMail is read on mobile; keep it tight.
-- No email sign-off needed — LinkedIn shows your name automatically.
-- End with a clear, low-pressure question or ask on its own line.
+    ? `FORMAT — LinkedIn InMail. This is NOT a shorter email — it's a different register entirely:
+- Body: 50–85 words MAX, 2 short paragraphs at most. InMail is read on a phone between meetings.
+- Pick the ONE sharpest angle from the strategy preferences above and lead with it — no second point,
+  no credentials paragraph. One angle, one sentence of who ${profile.name} is, one ask.
+- Subject line: max 200 characters, plain and specific.
+- No email sign-off — LinkedIn shows your name automatically.
+- End with a clear, low-pressure question on its own line.
 Output format:
 SUBJECT: <subject line>
 ---
@@ -922,17 +924,33 @@ async function runAutonomousDraftGeneration(companies, userProfile = null) {
     const email = emailResult?.email || null;
     const emailSource = emailResult?.source || null;
 
-    // Generate personalized draft (InMail by default)
-    let draft = null;
+    // Every person gets a LinkedIn InMail draft (the always-available path). When a real email
+    // address is found we also generate a distinct email-format draft, so that lead can be worked
+    // either way. No address → no email draft (you can't send to nobody), but the InMail still stands.
+    let inmail = null;
     try {
-      draft = await runOutreachDraft(company, target, userProfile, 'inmail');
+      inmail = await runOutreachDraft(company, target, userProfile, 'inmail');
     } catch (err) {
-      console.error(`[AutoDraft] Draft failed for ${target.name}: ${err.message}`);
+      console.error(`[AutoDraft] InMail draft failed for ${target.name}: ${err.message}`);
       continue;
+    }
+    let emailDraft = null;
+    if (email) {
+      try {
+        emailDraft = await runOutreachDraft(company, target, userProfile, 'email');
+      } catch (err) {
+        console.error(`[AutoDraft] Email draft failed for ${target.name}: ${err.message} — keeping InMail only`);
+      }
     }
 
     const token = crypto.randomBytes(32).toString('hex');
     const linkedinUrl = target.linkedin_url || '';
+
+    // subject/body hold the email variant when we have an address (so the existing send path emails
+    // the right text); otherwise they hold the InMail text to satisfy NOT NULL. inmail_subject/body
+    // always carry the InMail variant regardless.
+    const primary = emailDraft || inmail;
+    const primaryChannel = emailDraft ? 'email' : 'inmail';
 
     // Low-stakes = a cold reach (never a warm intro through an existing contact) to the lowest-priority
     // investor tier, and only when we found a REAL confirmed email — a pattern-derived guess is not
@@ -947,15 +965,16 @@ async function runAutonomousDraftGeneration(companies, userProfile = null) {
       : null;
 
     await execute(
-      `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, approve_token, channel, linkedin_url, stakes_tier, scheduled_send_at, investor_email_source)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      `INSERT INTO drafts (company_id, investor_name, investor_email, subject, body, inmail_subject, inmail_body, approve_token, channel, linkedin_url, stakes_tier, scheduled_send_at, investor_email_source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [company.id, target.name, email,
-       draft.subject, draft.body, token, draft.channel || 'inmail', linkedinUrl,
+       primary.subject, primary.body, inmail.subject, inmail.body,
+       token, primaryChannel, linkedinUrl,
        isLowStakes ? 'low' : 'standard', scheduledSendAt, emailSource]
     );
 
-    savedDrafts.push({ company: company.name, investor: target.name, hasEmail: !!email, emailSource, channel: draft.channel, stakesTier: isLowStakes ? 'low' : 'standard' });
-    console.log(`[AutoDraft] ${target.name} @ ${target.firm} — email: ${email || 'not found'}${emailSource === 'pattern' ? ' (pattern guess, unverified)' : ''}`);
+    savedDrafts.push({ company: company.name, investor: target.name, hasEmail: !!email, emailSource, channels: emailDraft ? ['email', 'inmail'] : ['inmail'], stakesTier: isLowStakes ? 'low' : 'standard' });
+    console.log(`[AutoDraft] ${target.name} @ ${target.firm} — email: ${email || 'not found'}${emailSource === 'pattern' ? ' (pattern guess, unverified)' : ''} — drafts: ${emailDraft ? 'email+inmail' : 'inmail'}`);
   }
 
   return savedDrafts;

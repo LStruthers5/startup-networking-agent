@@ -3,24 +3,7 @@ const router = express.Router();
 const { query, queryOne, execute, nowText } = require('../db');
 const { executeAgent } = require('../agent-control');
 const { extractDustPayload, extractDustText, dustPayloadToSignals } = require('../dust-response');
-const {
-  runCompanySignalMonitor,
-  runCompanyProfileCurator,
-  runCompanyDiscovery,
-  runEvidenceAuditor,
-  runOpportunityInvestigator,
-  runRelationshipPathfinder,
-  runFollowUpStrategist,
-  runLeadMomentumTracker,
-  runInvestmentThesisResearcher,
-  runSourcingFitScorer,
-  runCalendarCrossReference,
-  runGmailLeadScout,
-  runOutcomeLearning,
-  runAgentPortfolioManager,
-  runIntelligenceCycle,
-  runMasterOrchestrator,
-} = require('../intelligence-agents');
+const { buildRunners, COMPANY_SCOPED } = require('../agent-runners');
 
 const money = value => Number(value || 0);
 const json = (value, fallback) => {
@@ -106,6 +89,7 @@ router.get('/summary', async (req, res) => {
     const forecast = avgDailyCost * daysInMonth;
 
     res.json({
+      agents_enabled: settings?.agents_enabled == null ? true : settings.agents_enabled !== 0,
       today: {
         runs: Number(today?.runs || 0),
         cost: money(today?.cost),
@@ -189,33 +173,17 @@ router.patch('/agents/:agentKey', async (req, res) => {
 });
 
 router.post('/agents/:agentKey/run', async (req, res) => {
-  const runners = {
-    'company-signal-monitor': () => runCompanySignalMonitor(Number(req.body.limit || 6)),
-    'company-profile-curator': () => runCompanyProfileCurator(Number(req.body.limit || 4)),
-    'company-discovery': () => runCompanyDiscovery(Number(req.body.limit || 6)),
-    'evidence-auditor': () => runEvidenceAuditor(Number(req.body.limit || 30)),
-    'opportunity-investigator': () => runOpportunityInvestigator(Number(req.body.company_id)),
-    'relationship-pathfinder': () => runRelationshipPathfinder(Number(req.body.limit || 8)),
-    'follow-up-strategist': () => runFollowUpStrategist(Number(req.body.limit || 12)),
-    'lead-momentum-tracker': () => runLeadMomentumTracker(Number(req.body.limit || 20)),
-    'investment-thesis-researcher': () => runInvestmentThesisResearcher(Number(req.body.limit || 4)),
-    'sourcing-fit-scorer': () => runSourcingFitScorer(Number(req.body.company_id)),
-    'calendar-cross-reference': () => runCalendarCrossReference(Number(req.body.days || 7)),
-    'gmail-lead-scout': () => runGmailLeadScout(Number(req.body.days || 3), Number(req.body.limit || 40)),
-    'outcome-learning': () => runOutcomeLearning(),
-    'agent-portfolio-manager': () => runAgentPortfolioManager(),
-    'intelligence-cycle': () => runIntelligenceCycle(),
-    'agent-orchestrator': () => runMasterOrchestrator(),
-  };
+  const runners = buildRunners(req.body || {});
   const runner = runners[req.params.agentKey];
   if (!runner) return res.status(404).json({ error: 'Runnable intelligence agent not found' });
-  if (['opportunity-investigator', 'sourcing-fit-scorer'].includes(req.params.agentKey) && !req.body.company_id) {
+  if (COMPANY_SCOPED.includes(req.params.agentKey) && !req.body.company_id) {
     return res.status(400).json({ error: 'company_id required' });
   }
   try {
     res.json({ output: await runner() });
   } catch (error) {
-    res.status(error.code === 'BUDGET_CEILING' ? 402 : 500).json({ error: error.message });
+    const status = error.code === 'BUDGET_CEILING' ? 402 : error.code === 'AGENTS_DISABLED' ? 423 : 500;
+    res.status(status).json({ error: error.message });
   }
 });
 
@@ -439,7 +407,7 @@ router.get('/settings', async (req, res) => {
 });
 
 router.patch('/settings', async (req, res) => {
-  const allowed = ['daily_target_usd', 'monthly_ceiling_usd', 'dust_workspace_allowance', 'dust_trigger_allowance', 'dust_programmatic_credits_usd', 'dust_credits_remaining_usd', 'timezone'];
+  const allowed = ['daily_target_usd', 'monthly_ceiling_usd', 'dust_workspace_allowance', 'dust_trigger_allowance', 'dust_programmatic_credits_usd', 'dust_credits_remaining_usd', 'timezone', 'agents_enabled'];
   const fields = Object.keys(req.body).filter(key => allowed.includes(key));
   if (!fields.length) return res.status(400).json({ error: 'No valid settings' });
   const sets = fields.map((field, index) => `${field}=$${index + 1}`).join(', ');
